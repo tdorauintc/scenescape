@@ -39,7 +39,7 @@ default: scenescape interface broker install-models scene_common
 scenescape: Makefile.sscapefiles SceneScape.tar scene_common.tar Dockerfile \
 	scenescape-init secrets jslibraries jsm-examples editor-files \
 	cJSON.bundle open_model_zoo.bundle database-dirs user-dirs
-	env BUILDKIT_PROGRESS=plain \
+	time env BUILDKIT_PROGRESS=plain \
 	  docker build $(REBUILDFLAGS) \
 	    --build-arg http_proxy=$(http_proxy) \
 	    --build-arg https_proxy=$(https_proxy) \
@@ -47,44 +47,44 @@ scenescape: Makefile.sscapefiles SceneScape.tar scene_common.tar Dockerfile \
 	    --build-arg CERTDOMAIN=$(CERTDOMAIN) \
 	    --build-arg USER_ID=$$UID \
 	    --build-arg FORCE_VAAPI=$(FORCE_VAAPI) \
-	    --rm -t $(IMAGE):$(VERSION) . \
-	&& docker tag $(IMAGE):$(VERSION) $(IMAGE):latest
+	    --rm -t $(IMAGE):$(VERSION) . > ../scenescape-build.log 2>&1
+	docker tag $(IMAGE):$(VERSION) $(IMAGE):latest
 
 interface: Dockerfile-interface firefox-profile.tar geckodriver.tar.gz scene_common.tar
-	env BUILDKIT_PROGRESS=plain \
+	time env BUILDKIT_PROGRESS=plain \
 	  docker build $(REBUILDFLAGS) -f $< \
 	    --build-arg http_proxy=$(http_proxy) \
 	    --build-arg https_proxy=$(https_proxy) \
 	    --build-arg no_proxy=$(no_proxy) \
-	    --rm -t $(IMAGE)-interface:$(VERSION) . \
-	&& docker tag $(IMAGE)-interface:$(VERSION) $(IMAGE)-interface:latest
+	    --rm -t $(IMAGE)-interface:$(VERSION) . > ../scenescape-interface-build.log 2>&1
+	docker tag $(IMAGE)-interface:$(VERSION) $(IMAGE)-interface:latest
 
 broker: Dockerfile-broker
-	env BUILDKIT_PROGRESS=plain \
+	time env BUILDKIT_PROGRESS=plain \
 	  docker build $(REBUILDFLAGS) -f $< \
 	    --build-arg http_proxy=$(http_proxy) \
 	    --build-arg https_proxy=$(https_proxy) \
 	    --build-arg no_proxy=$(no_proxy) \
-	    --rm -t $(IMAGE)-broker:$(VERSION) . \
-	&& docker tag $(IMAGE)-broker:$(VERSION) $(IMAGE)-broker:latest
+	    --rm -t $(IMAGE)-broker:$(VERSION) . > ../scenescape-broker-build.log 2>&1
+	docker tag $(IMAGE)-broker:$(VERSION) $(IMAGE)-broker:latest
 
 model-installer-img: Dockerfile-model-installer
-	env BUILDKIT_PROGRESS=plain \
+	time env BUILDKIT_PROGRESS=plain \
 	  docker build $(REBUILDFLAGS) -f $< \
 	    --build-arg http_proxy=$(http_proxy) \
 	    --build-arg https_proxy=$(https_proxy) \
 	    --build-arg no_proxy=$(no_proxy) \
-	    --rm -t $(IMAGE)-model-installer:$(VERSION) . \
-	  && docker tag $(IMAGE)-model-installer:$(VERSION) $(IMAGE)-model-installer:latest
+	    --rm -t $(IMAGE)-model-installer:$(VERSION) . > ../scenescape-model-installer-img-build.log 2>&1
+	  docker tag $(IMAGE)-model-installer:$(VERSION) $(IMAGE)-model-installer:latest
 
 sources: Dockerfile-sources
-	env BUILDKIT_PROGRESS=plain \
+	time env BUILDKIT_PROGRESS=plain \
 	  docker build $(REBUILDFLAGS) -f $< \
 	    --build-arg http_proxy=$(http_proxy) \
 	    --build-arg https_proxy=$(https_proxy) \
 	    --build-arg no_proxy=$(no_proxy) \
-	    --rm -t $(IMAGE)-sources:$(VERSION) . \
-	&& docker tag $(IMAGE)-sources:$(VERSION) $(IMAGE)-sources:latest
+	    --rm -t $(IMAGE)-sources:$(VERSION) . > ../scenescape-sources-build.log 2>&1
+	docker tag $(IMAGE)-sources:$(VERSION) $(IMAGE)-sources:latest
 
 scene_common:
 	ln -sf ../scene_common ../autocalibration
@@ -147,14 +147,14 @@ install-models: scenescape model-installer-img \
 	; APPDIR=/workspace \
 	; HOSTDIR=$$PWD \
 	; IMAGE=$(IMAGE)-model-installer:latest \
-	; docker run --rm -v $$HOSTDIR:$$APPDIR:z \
+	; time docker run --rm -v $$HOSTDIR:$$APPDIR:z \
 	             -e HTTP_PROXY=$$http_proxy \
 	             -e HTTPS_PROXY=$$https_proxy \
 	             -e http_proxy=$$http_proxy \
 	             -e https_proxy=$$https_proxy \
 	             -u $$UID \
 	             -l user=$$USER $$IMAGE \
-	             /workspace/docker/install-omz-models $$MODELS --precisions $$PRECISIONS
+	             /workspace/docker/install-omz-models $$MODELS --precisions $$PRECISIONS > ../scenescape-install-models-build.log 2>&1
 
 ../docker-compose.yml: ../sample_data/docker-compose-example.yml
 	sed -e "s/image: scenescape\(-.*\)\?/image: $(IMAGE)\1:$(VERSION)/" $< > $@
