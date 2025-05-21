@@ -225,7 +225,7 @@ echo '########################################'
 echo Building SceneScape
 echo '########################################'
 
-
+make -C docker scene_common
 time make -C docs clean
 time make -C certificates CERTPASS="${CERTPASS}" > certs-build.log 2>&1
 time make -C docker DBPASS="${DBPASS}" > docker-build.log 2>&1

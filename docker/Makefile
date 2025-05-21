@@ -34,7 +34,7 @@ endef
 
 -include Makefile.sscapefiles Makefile.editorfiles Makefile.jsmexamples Makefile.scenecommonfiles
 
-default: scenescape interface broker install-models scene_common
+default: scenescape interface broker install-models # scene_common
 
 scenescape: Makefile.sscapefiles SceneScape.tar scene_common.tar Dockerfile \
 	scenescape-init secrets jslibraries jsm-examples editor-files \
