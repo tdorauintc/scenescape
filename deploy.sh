@@ -228,9 +228,12 @@ echo '########################################'
 make -C docs clean
 make -C certificates CERTPASS="${CERTPASS}"
 make -C docker DBPASS="${DBPASS}"
-make -C autocalibration/docker
-make -C controller/docker
-make -C percebro/docker
+
+make -C autocalibration/docker &
+make -C controller/docker &
+make -C percebro/docker &
+
+wait  # Wait for all background jobs to finish
 
 if sscape/tools/upgrade-database --check ; then
     UPGRADEDB=0
