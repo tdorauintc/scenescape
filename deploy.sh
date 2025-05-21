@@ -228,10 +228,12 @@ echo '########################################'
 make -C docker scene_common
 time make -C docs clean
 time make -C certificates CERTPASS="${CERTPASS}" > certs-build.log 2>&1
-time make -C docker DBPASS="${DBPASS}" > docker-build.log 2>&1
-time make -C autocalibration/docker > autocalibration-build.log 2>&1
-time make -C controller/docker > controller-build.log 2>&1
-time make -C percebro/docker > percebro-build.log 2>&1
+time make -C docker DBPASS="${DBPASS}" > docker-build.log 2>&1 &
+time make -C autocalibration/docker > autocalibration-build.log 2>&1 &
+time make -C controller/docker > controller-build.log 2>&1 &
+time make -C percebro/docker > percebro-build.log 2>&1 &
+
+wait
 
 if sscape/tools/upgrade-database --check ; then
     UPGRADEDB=0
