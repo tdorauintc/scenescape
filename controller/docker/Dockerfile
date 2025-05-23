@@ -11,7 +11,7 @@
 # This software and the related documents are provided as is, with no express
 # or implied warranties, other than those that are expressly stated in the License.
 
-FROM ubuntu:22.04
+FROM ubuntu:22.04 AS build-stage
 
 # We use root for runtime init. The command in ENTRYPOINT will drop to an unprivileged user.
 # hadolint ignore=DL3002
@@ -21,7 +21,9 @@ SHELL ["/bin/bash", "-e", "-o", "pipefail", "-c"]
 
 ARG USER_ID
 ARG CERTDOMAIN=scenescape.intel.com
+ARG OPENCV_VERSION
 
+ENV OPENCV_VERSION=${OPENCV_VERSION:-4.11.0}
 ENV DEBIAN_FRONTEND=noninteractive
 
 # SceneScape requirements #Change this to just controller requirements?
@@ -66,18 +68,19 @@ ENV SCENESCAPE_HOME=/home/$WSUSER/SceneScape
 # Install opencv
 RUN : \
 ; CV_URL=https://github.com/opencv/opencv \
-; CV_VERSION=$(curl -sL -o /dev/null -w '%{url_effective}' "${CV_URL}/releases/latest" | sed -e 's,.*/,,') \
+; echo Latest OpenCV version: $(curl -sL -o /dev/null -w '%{url_effective}' "${CV_URL}/releases/latest" | sed -e 's,.*/,,') \
+; echo Installing OpenCV version: ${OPENCV_VERSION} \
 ; TMP=/tmp/opencv.$$ \
 ; mkdir ${TMP} \
 ; cd ${TMP} \
 ; if [ ! -d opencv_contrib ] ; then \
-    git clone --depth 1 -b ${CV_VERSION} ${CV_URL}_contrib.git \
+    git clone --depth 1 -b ${OPENCV_VERSION} ${CV_URL}_contrib.git \
 ; fi \
 ; cd opencv_contrib \
-; CV_VERSION=$(git symbolic-ref -q --short HEAD || git describe --tags --exact-match) \
+; OPENCV_VERSION=$(git symbolic-ref -q --short HEAD || git describe --tags --exact-match) \
 ; cd .. \
 ; if [ ! -d opencv ] ; then \
-    git clone --depth 1 -b ${CV_VERSION} ${CV_URL}.git \
+    git clone --depth 1 -b ${OPENCV_VERSION} ${CV_URL}.git \
 ; fi \
 ; cd opencv \
 ; MEDIASDK="-DWITH_MFX=OFF" \
@@ -113,7 +116,7 @@ RUN : \
 ; cd python_loader \
 ; sed -e "s/package_name = 'opencv'/package_name = 'opencv-python'/" -i setup.py \
 ; python setup.py  bdist_wheel \
-; pip install dist/opencv_python-${CV_VERSION}-py3-none-any.whl \
+; pip install dist/opencv_python-${OPENCV_VERSION}-py3-none-any.whl \
 ; cd ; rm -rf ${TMP}
 
 # Install robot vision package
