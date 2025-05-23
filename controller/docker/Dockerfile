@@ -76,9 +76,6 @@ RUN : \
 ; if [ ! -d opencv_contrib ] ; then \
     git clone --depth 1 -b ${OPENCV_VERSION} ${CV_URL}_contrib.git \
 ; fi \
-; cd opencv_contrib \
-; OPENCV_VERSION=$(git symbolic-ref -q --short HEAD || git describe --tags --exact-match) \
-; cd .. \
 ; if [ ! -d opencv ] ; then \
     git clone --depth 1 -b ${OPENCV_VERSION} ${CV_URL}.git \
 ; fi \
