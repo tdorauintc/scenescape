@@ -24,8 +24,6 @@ ARG CERTDOMAIN=scenescape.intel.com
 
 ENV DEBIAN_FRONTEND=noninteractive
 
-# SceneScape requirements #Change this to just controller requirements?
-COPY requirements-controller.txt /tmp
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         # Keep package list in alphabetical order
@@ -45,9 +43,18 @@ RUN apt-get update \
         python-is-python3 \
         python3-pip \
         python3-scipy \
+        python3-venv \
         sudo \
-    && apt-get purge -y python3-numpy \
-    && pip3 install --upgrade --no-cache-dir -r /tmp/requirements-controller.txt \
+    && apt-get purge -y python3-numpy
+
+COPY requirements-controller.txt /tmp
+
+ENV ENV_DIR=/tmp/venv
+
+RUN mkdir ${ENV_DIR} \
+    && python3 -m venv --system-site-packages ${ENV_DIR} \
+    && ${ENV_DIR}/bin/pip3 install --upgrade --no-cache-dir pip \
+    && ${ENV_DIR}/bin/pip3 install --upgrade --no-cache-dir -r /tmp/requirements-controller.txt \
     && rm -rf /tmp/requirements-controller.txt
 
 ENV WSUSER=scenescape
@@ -60,6 +67,8 @@ RUN : \
     ;
 
 ENV SCENESCAPE_HOME=/home/$WSUSER/SceneScape
+
+ENV PATH="${ENV_DIR}/bin:${PATH}"
 
 # Install robot vision package
 ADD robot_vision.tar /tmp/
