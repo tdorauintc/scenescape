@@ -1,5 +1,3 @@
-# -*- mode: Fundamental; indent-tabs-mode: nil -*-
-
 # Copyright (C) 2021-2025 Intel Corporation
 #
 # This software and the related documents are Intel copyrighted materials,
@@ -17,15 +15,14 @@ FROM ubuntu:22.04 AS controller-builder
 # hadolint ignore=DL3002
 USER root
 
-SHELL ["/bin/bash", "-e", "-o", "pipefail", "-c"]
-
 ARG USER_ID
 ARG CERTDOMAIN=scenescape.intel.com
 
 ENV DEBIAN_FRONTEND=noninteractive
 
-RUN apt-get update \
-    ; apt-get install -y --no-install-recommends \
+RUN : \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends \
         # Keep package list in alphabetical order
         cmake \
         curl \
@@ -46,26 +43,27 @@ RUN apt-get update \
         python3-scipy \
         python3-venv \
         sudo \
-    ; apt-get purge -y python3-numpy
+    && apt-get purge -y python3-numpy \
+    && rm -rf /var/lib/apt/lists/*
 
 ENV ENV_DIR=/tmp/venv
 
 # create virtual environment and install 3rd party python dependencies
 COPY requirements-controller.txt /tmp
-RUN mkdir ${ENV_DIR} \
-    ; python3 -m venv --system-site-packages ${ENV_DIR} \
-    ; ${ENV_DIR}/bin/pip3 install --upgrade --no-cache-dir pip \
-    ; ${ENV_DIR}/bin/pip3 install --upgrade --no-cache-dir -r /tmp/requirements-controller.txt \
-    ; rm -rf /tmp/requirements-controller.txt
+RUN : \
+    && mkdir ${ENV_DIR} \
+    && python3 -m venv --system-site-packages ${ENV_DIR} \
+    && ${ENV_DIR}/bin/pip3 install --upgrade --no-cache-dir pip \
+    && ${ENV_DIR}/bin/pip3 install --upgrade --no-cache-dir -r /tmp/requirements-controller.txt \
+    && rm -rf /tmp/requirements-controller.txt
 
 ENV WSUSER=scenescape
 
 RUN : \
-    ; useradd -r -m -s /bin/bash $WSUSER \
-    ; usermod -a -G video,users $WSUSER \
-    ; eval WSHOME=~$WSUSER \
-    ; chmod a+rX "${WSHOME}" \
-    ;
+    && useradd -r -m -s /bin/bash $WSUSER \
+    && usermod -a -G video,users $WSUSER \
+    && eval WSHOME=~$WSUSER \
+    && chmod a+rX "${WSHOME}"
 
 ENV SCENESCAPE_HOME=/home/$WSUSER/SceneScape
 
@@ -74,37 +72,33 @@ ENV PATH="${ENV_DIR}/bin:${PATH}"
 # Install robot vision package
 ADD robot_vision.tar /tmp/
 RUN : \
-    ; export OpenCV_DIR="/usr/lib/x86_64-linux-gnu/cmake/opencv4" \
-    ; cd /tmp/robot_vision \
-    ; python3 setup.py bdist_wheel \
-    ; cd dist \
-    ; pip3 install --no-cache-dir ./*.whl \
-    ; cd \
-    ; rm -rf /tmp/robot_vision \
-    ;
+    && export OpenCV_DIR="/usr/lib/x86_64-linux-gnu/cmake/opencv4" \
+    && cd /tmp/robot_vision \
+    && python3 setup.py bdist_wheel \
+    && cd dist \
+    && pip3 install --no-cache-dir ./*.whl \
+    && cd \
+    && rm -rf /tmp/robot_vision
 
 # Install scene common
 ADD scene_common.tar tmp/
 RUN : \
-    ; cd tmp/scene_common \
-    ; pip install --no-cache-dir . \
-    ; make -C fast_geometry -j $(nproc) all install \
-    ; cd .. \
-    ; rm -rf scene_common \
-    ;
+    && cd tmp/scene_common \
+    && pip install --no-cache-dir . \
+    && make -C fast_geometry -j $(nproc) all install \
+    && cd .. \
+    && rm -rf scene_common
 
 ADD controller.tar $SCENESCAPE_HOME/
 RUN : \
-    ; eval WSHOME=~$WSUSER \
-    ; chown -R "$WSUSER" "$SCENESCAPE_HOME" \
-    ; pip3 install --no-cache-dir "$SCENESCAPE_HOME/" \
-    ;
+    && eval WSHOME=~$WSUSER \
+    && chown -R "$WSUSER" "$SCENESCAPE_HOME" \
+    && pip3 install --no-cache-dir "$SCENESCAPE_HOME/"
 
 RUN : \
-    ; apt-get purge -y --auto-remove make cmake git \
-    ; apt-get clean \
-    ; rm -rf /var/lib/apt/lists/* \
-    ;
+    && apt-get purge -y --auto-remove make cmake git \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
 
 COPY controller-init /usr/local/bin/
 
