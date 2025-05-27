@@ -20,21 +20,16 @@ ARG CERTDOMAIN=scenescape.intel.com
 
 ENV DEBIAN_FRONTEND=noninteractive
 
+# TODO: remove dependencies not needed in this stage
 RUN : \
     && apt-get update \
     && apt-get install -y --no-install-recommends \
         # Keep package list in alphabetical order
-        cmake \
-        curl \
         g++ \
-        git \
-        libeigen3-dev \
         libglib2.0-0 \
         libgl1-mesa-glx \
         libgtest-dev \
-        libopencv-dev \
         make \
-        netbase \
         patch \
         pybind11-dev \
         python-is-python3 \
@@ -42,14 +37,13 @@ RUN : \
         # TODO: investigate why removing this breaks the build. scipy is included in requirements-controller.txt
         python3-scipy \
         python3-venv \
-        sudo \
     && apt-get purge -y python3-numpy \
     && rm -rf /var/lib/apt/lists/*
 
 ENV ENV_DIR=/tmp/venv
 
 # create virtual environment and install 3rd party python dependencies
-COPY requirements-controller.txt /tmp
+COPY controller/docker/requirements-controller.txt /tmp
 RUN : \
     && mkdir ${ENV_DIR} \
     && python3 -m venv --system-site-packages ${ENV_DIR} \
@@ -57,7 +51,49 @@ RUN : \
     && ${ENV_DIR}/bin/pip3 install --upgrade --no-cache-dir -r /tmp/requirements-controller.txt \
     && rm -rf /tmp/requirements-controller.txt
 
+ENV PATH="${ENV_DIR}/bin:${PATH}"
+
+# Install common dependencies
+COPY ./scene_common tmp/scene_common
+RUN cd tmp/scene_common \
+    && pip install --no-cache-dir . \
+    && make -C fast_geometry -j $(nproc) all install \
+    && cd .. \
+    && rm -rf scene_common
+
+COPY ./utils/waitforbroker /tmp/utils/waitforbroker
+
+# TODO: use slimmer image for runtime stage
+FROM ubuntu:22.04 AS controller-runtime
+
+USER root
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+# TODO: copy common dependencies from controller-builder stage instead of install
+RUN : \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends \
+        cmake \
+        g++ \
+        libeigen3-dev \
+        libgtest-dev \
+        libopencv-dev \
+        make \
+        netbase \
+        pybind11-dev \
+        python3-pip \
+        python3-scipy \
+        python3-venv \
+        python-is-python3 \
+        # TODO: remove sudo when switching to non-root user is implemented
+        sudo \
+    && rm -rf /var/lib/apt/lists/*
+
 ENV WSUSER=scenescape
+ENV SCENESCAPE_HOME=/home/$WSUSER/SceneScape
+# ENV BUILD_ENV_DIR=/tmp/venv
+# ENV ENV_DIR=/home/$WSUSER/venv
 
 RUN : \
     && useradd -r -m -s /bin/bash $WSUSER \
@@ -65,14 +101,22 @@ RUN : \
     && eval WSHOME=~$WSUSER \
     && chmod a+rX "${WSHOME}"
 
-ENV SCENESCAPE_HOME=/home/$WSUSER/SceneScape
-
+# Set up Python virtual  environment
+ENV ENV_DIR=/tmp/venv
+# TODO: use --chown=user:group when switching to non-root user is implemented
+COPY --from=controller-builder $ENV_DIR $ENV_DIR
+COPY --from=controller-builder /usr/local/lib/python3.10/dist-packages/fast_geometry ${ENV_DIR}/lib/python3.10/site-packages/fast_geometry
 ENV PATH="${ENV_DIR}/bin:${PATH}"
 
+# TODO: copy all runtime dependencies from controller-builder
+
+# TODO: use non-root user for runtime as soon as possible
+# USER $WSUSER
+# WORKDIR $SCENESCAPE_HOME
+
 # Install robot vision package
-ADD robot_vision.tar /tmp/
-RUN : \
-    && export OpenCV_DIR="/usr/lib/x86_64-linux-gnu/cmake/opencv4" \
+COPY ./controller/robot_vision /tmp/robot_vision
+RUN export OpenCV_DIR="/usr/lib/x86_64-linux-gnu/cmake/opencv4" \
     && cd /tmp/robot_vision \
     && python3 setup.py bdist_wheel \
     && cd dist \
@@ -80,26 +124,19 @@ RUN : \
     && cd \
     && rm -rf /tmp/robot_vision
 
-# Install scene common
-ADD scene_common.tar tmp/
-RUN : \
-    && cd tmp/scene_common \
-    && pip install --no-cache-dir . \
-    && make -C fast_geometry -j $(nproc) all install \
-    && cd .. \
-    && rm -rf scene_common
-
-ADD controller.tar $SCENESCAPE_HOME/
-RUN : \
-    && eval WSHOME=~$WSUSER \
+# Install main controller package
+# TODO: simplify folder structure, so that one COPY is enough
+COPY ./controller/schema/metadata.schema.json $SCENESCAPE_HOME/schema/metadata.schema.json
+COPY ./controller/src/controller $SCENESCAPE_HOME/src/controller
+COPY ./controller/tools/analytics $SCENESCAPE_HOME/tools/analytics
+COPY ./controller/tracker-config.json $SCENESCAPE_HOME/tracker-config.json
+COPY ./controller/setup.py $SCENESCAPE_HOME/setup.py
+COPY --from=controller-builder /tmp/utils/waitforbroker $SCENESCAPE_HOME/utils/waitforbroker
+RUN eval WSHOME=~$WSUSER \
     && chown -R "$WSUSER" "$SCENESCAPE_HOME" \
     && pip3 install --no-cache-dir "$SCENESCAPE_HOME/"
 
-RUN : \
-    && apt-get purge -y --auto-remove make cmake git \
-    && apt-get clean \
-    && rm -rf /var/lib/apt/lists/*
-
-COPY controller-init /usr/local/bin/
+# TODO: make separate run-time stage and copy only the required binaries there
+COPY ./controller/docker/controller-init /usr/local/bin/
 
 ENTRYPOINT ["/usr/local/bin/controller-init"]
