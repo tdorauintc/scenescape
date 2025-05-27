@@ -118,14 +118,7 @@ RUN export OpenCV_DIR="/usr/lib/x86_64-linux-gnu/cmake/opencv4" \
     && rm -rf /tmp/robot_vision
 
 # Build main controller package
-# TODO: simplify folder structure, so that one COPY is enough
-COPY ./controller/schema/metadata.schema.json $SCENESCAPE_HOME/schema/metadata.schema.json
-COPY ./controller/src/controller $SCENESCAPE_HOME/src/controller
-COPY ./controller/tools/analytics $SCENESCAPE_HOME/tools/analytics
-COPY ./controller/controller $SCENESCAPE_HOME/controller
-COPY ./controller/tracker-config.json $SCENESCAPE_HOME/tracker-config.json
-COPY ./controller/setup.py $SCENESCAPE_HOME/setup.py
-COPY --from=scenescape-common-base /tmp/utils/waitforbroker $SCENESCAPE_HOME/utils/waitforbroker
+COPY ./controller/src/controller $SCENESCAPE_HOME
 RUN eval WSHOME=~$WSUSER \
     && chown -R "$WSUSER" "$SCENESCAPE_HOME" \
     && pip3 install --no-cache-dir "$SCENESCAPE_HOME/"
@@ -136,6 +129,11 @@ RUN eval WSHOME=~$WSUSER \
 # TODO: use non-root user for runtime as soon as possible
 # USER $WSUSER
 # WORKDIR $SCENESCAPE_HOME
+
+COPY --from=scenescape-common-base /tmp/utils/waitforbroker $SCENESCAPE_HOME/utils/waitforbroker
+COPY ./controller/schema/metadata.schema.json $SCENESCAPE_HOME/schema/metadata.schema.json
+COPY ./controller/controller $SCENESCAPE_HOME/controller
+COPY ./controller/tracker-config.json $SCENESCAPE_HOME/tracker-config.json
 
 # TODO: make separate run-time stage and copy only the required binaries there
 COPY ./controller/docker/controller-init /usr/local/bin/
