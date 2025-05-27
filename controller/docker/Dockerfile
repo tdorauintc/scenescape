@@ -79,30 +79,15 @@ RUN : \
         libgtest-dev \
         libopencv-dev \
         make \
-        netbase \
         pybind11-dev \
         python3-pip \
         python3-scipy \
         python3-venv \
         python-is-python3 \
-        # TODO: remove sudo when switching to non-root user is implemented
-        sudo \
     && rm -rf /var/lib/apt/lists/*
-
-ENV WSUSER=scenescape
-ENV SCENESCAPE_HOME=/home/$WSUSER/SceneScape
-# ENV BUILD_ENV_DIR=/tmp/venv
-# ENV ENV_DIR=/home/$WSUSER/venv
-
-RUN : \
-    && useradd -r -m -s /bin/bash $WSUSER \
-    && usermod -a -G video,users $WSUSER \
-    && eval WSHOME=~$WSUSER \
-    && chmod a+rX "${WSHOME}"
 
 # Set up Python virtual  environment
 ENV ENV_DIR=/tmp/venv
-# TODO: use --chown=user:group when switching to non-root user is implemented
 COPY --from=scenescape-common-base $ENV_DIR $ENV_DIR
 COPY --from=scenescape-common-base /usr/local/lib/python3.10/dist-packages/fast_geometry ${ENV_DIR}/lib/python3.10/site-packages/fast_geometry
 ENV PATH="${ENV_DIR}/bin:${PATH}"
@@ -113,31 +98,56 @@ RUN export OpenCV_DIR="/usr/lib/x86_64-linux-gnu/cmake/opencv4" \
     && cd /tmp/robot_vision \
     && python3 setup.py bdist_wheel \
     && cd dist \
-    && pip3 install --no-cache-dir ./*.whl \
-    && cd \
-    && rm -rf /tmp/robot_vision
+    && pip3 install --no-cache-dir ./*.whl
 
 # Build main controller package
 # TODO: simplify folder structure, so that one COPY is enough
-COPY ./controller/schema/metadata.schema.json $SCENESCAPE_HOME/schema/metadata.schema.json
-COPY ./controller/src/controller $SCENESCAPE_HOME/src/controller
-COPY ./controller/tools/analytics $SCENESCAPE_HOME/tools/analytics
-COPY ./controller/controller $SCENESCAPE_HOME/controller
-COPY ./controller/tracker-config.json $SCENESCAPE_HOME/tracker-config.json
-COPY ./controller/setup.py $SCENESCAPE_HOME/setup.py
-COPY --from=scenescape-common-base /tmp/utils/waitforbroker $SCENESCAPE_HOME/utils/waitforbroker
-RUN eval WSHOME=~$WSUSER \
-    && chown -R "$WSUSER" "$SCENESCAPE_HOME" \
-    && pip3 install --no-cache-dir "$SCENESCAPE_HOME/"
+COPY ./controller/src/controller /tmp/controller/src/controller
+COPY ./controller/tools/analytics /tmp/controller/tools/analytics
+COPY ./controller/setup.py /tmp/controller/setup.py
+RUN cd /tmp/controller \
+    && pip3 install --no-cache-dir .
 
 # TODO: use slimmer image for runtime stage
-# FROM ubuntu:22.04 AS scenescape-controller-runtime
+FROM ubuntu:22.04 AS scenescape-controller-runtime
 
-# TODO: use non-root user for runtime as soon as possible
+ENV WSUSER=scenescape
+ENV SCENESCAPE_HOME=/home/$WSUSER/SceneScape
+ENV BUILD_ENV_DIR=/tmp/venv
+ENV ENV_DIR=/home/$WSUSER/venv
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+USER root
+
+RUN : \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends \
+        libopencv-dev \
+        netbase \
+        pybind11-dev \
+        python3-pip \
+        python3-venv \
+        python-is-python3 \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN : \
+    && useradd -r -m -s /bin/bash $WSUSER \
+    && usermod -a -G video,users $WSUSER \
+    && eval WSHOME=~$WSUSER \
+    && chmod a+rX "${WSHOME}"
+
+# TODO: uncomment when issue with accessing the secrets is resolved
 # USER $WSUSER
-# WORKDIR $SCENESCAPE_HOME
 
-# TODO: make separate run-time stage and copy only the required binaries there
-COPY ./controller/docker/controller-init /usr/local/bin/
+# setup up Python virtual environment
+COPY --chown=$WSUSER:$WSUSER --from=scenescape-controller-builder $BUILD_ENV_DIR $ENV_DIR
+ENV PATH="${ENV_DIR}/bin:${PATH}"
+
+COPY --chown=$WSUSER:$WSUSER ./controller/schema/metadata.schema.json $SCENESCAPE_HOME/schema/metadata.schema.json
+COPY --chown=$WSUSER:$WSUSER ./controller/tracker-config.json $SCENESCAPE_HOME/tracker-config.json
+COPY --chown=$WSUSER:$WSUSER --from=scenescape-common-base /tmp/utils/waitforbroker $SCENESCAPE_HOME/utils/waitforbroker
+COPY --chown=$WSUSER:$WSUSER ./controller/controller $SCENESCAPE_HOME/controller
+COPY --chown=$WSUSER:$WSUSER ./controller/docker/controller-init /usr/local/bin/
 
 ENTRYPOINT ["/usr/local/bin/controller-init"]
