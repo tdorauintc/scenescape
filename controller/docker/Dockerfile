@@ -48,8 +48,8 @@ RUN : \
     && mkdir ${ENV_DIR} \
     && python3 -m venv --system-site-packages ${ENV_DIR} \
     && ${ENV_DIR}/bin/pip3 install --upgrade --no-cache-dir pip \
-    && ${ENV_DIR}/bin/pip3 install --upgrade --no-cache-dir -r /tmp/requirements-controller.txt \
-    && rm -rf /tmp/requirements-controller.txt
+    && ${ENV_DIR}/bin/pip3 install --upgrade --no-cache-dir -r /tmp/requirements.txt \
+    && rm -rf /tmp/requirements.txt
 
 ENV PATH="${ENV_DIR}/bin:${PATH}"
 

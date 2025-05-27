@@ -12,7 +12,7 @@
 IMAGE=scenescape-controller
 VERSION:=$(shell cat ../version.txt)
 
-default: Dockerfile
+default: ./docker/Dockerfile
 	env BUILDKIT_PROGRESS=plain \
 	  docker build $(REBUILDFLAGS) \
 	    --build-arg http_proxy=$(http_proxy) \
@@ -20,7 +20,7 @@ default: Dockerfile
 	    --build-arg no_proxy=$(no_proxy) \
 	    --build-arg CERTDOMAIN=$(CERTDOMAIN) \
 	    --build-arg USER_ID=$$UID \
-	    --rm -t $(IMAGE):$(VERSION) ../.. -f ./Dockerfile \
+	    --rm -t $(IMAGE):$(VERSION) .. -f ./docker/Dockerfile \
 	&& docker tag $(IMAGE):$(VERSION) $(IMAGE):latest
 
 rebuild:
