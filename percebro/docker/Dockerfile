@@ -11,7 +11,8 @@
 # This software and the related documents are provided as is, with no express
 # or implied warranties, other than those that are expressly stated in the License.
 
-FROM ubuntu:22.04
+# -------- Build Stage --------
+FROM ubuntu:22.04 AS build
 
 SHELL ["/bin/bash", "-e", "-o", "pipefail", "-c"]
 
@@ -32,12 +33,9 @@ RUN : \
     ; chmod a+rX "${WSHOME}" \
     ;
 
-# Install percebro requirements
+# Install build and runtime dependencies
 COPY requirements-percebro.txt /tmp
-RUN : \
-    ; apt-get update \
-    ; apt-get install -y --no-install-recommends \
-        # Keep package list in alphabetical order
+RUN apt-get update && apt-get install -y --no-install-recommends \
         cmake \
         curl \
         ffmpeg \
@@ -75,15 +73,13 @@ RUN : \
         python3-termcolor \
         sudo \
         tesseract-ocr \
-        v4l-utils \
-    ; apt-get purge -y python3-numpy \
-    ; rm -rf /var/lib/apt/lists/* \
-    ; pip3 install --upgrade --no-cache-dir \
+        v4l-utils  \
+    && pip3 install --upgrade --no-cache-dir \
         --extra-index-url https://download.pytorch.org/whl/cpu \
-        -r /tmp/requirements-percebro.txt \
-    ; pip3 uninstall -y openvino-telemetry \
-    ; rm -rf /tmp/requirements-percebro.txt \
-    ;
+        -r /tmp/requirements-percebro.txt && \
+    pip3 uninstall -y openvino-telemetry && \
+    rm -rf /tmp/requirements-percebro.txt && \
+    rm -rf /var/lib/apt/lists/*
 
 # Install openvino GPU drivers
 RUN : \
@@ -117,7 +113,7 @@ RUN : \
     ; rm /tmp/install-vaapi.sh \
     ;
 
-# Install opencv
+# Build opencv from source and install wheel
 RUN : \
     ; CV_URL=https://github.com/opencv/opencv \
     ; CV_VERSION=$(curl -sL -o /dev/null -w '%{url_effective}' "${CV_URL}/releases/latest" | sed -e 's,.*/,,') \
@@ -166,26 +162,96 @@ RUN : \
     ; cd python_loader \
     ; sed -e "s/package_name = 'opencv'/package_name = 'opencv-python'/" -i setup.py \
     ; python setup.py  bdist_wheel \
-    ; pip install dist/opencv_python-${CV_VERSION}-py3-none-any.whl \
+    ; cp dist/opencv_python-${CV_VERSION}-py3-none-any.whl /tmp/ \
     ; cd ; rm -rf ${TMP}
 
-# Install percebro
+# Prepare percebro and scene_common for install in runtime
 ADD percebro.tar $SCENESCAPE_HOME/percebro
+ADD scene_common.tar /tmp/
 
-# Install scene_common
-ADD scene_common.tar tmp/
+# Build and install scene_common (wheel and fast_geometry)
 RUN : \
-    ; cd tmp/scene_common \
-    ; pip install --no-cache-dir . \
+    ; cd /tmp/scene_common \
+    ; pip wheel --no-deps . -w /tmp/scene_common_wheel \
     ; make -C fast_geometry -j $(nproc) all install \
-    ; cd .. \
-    ; rm -rf scene_common \
     ;
 
+# -------- Runtime Stage --------
+FROM ubuntu:22.04 AS runtime
+
+SHELL ["/bin/bash", "-e", "-o", "pipefail", "-c"]
+
+ARG USER_ID
+ARG CERTDOMAIN=scenescape.intel.com
+
+ENV WSUSER=scenescape
+ENV SCENESCAPE_HOME=/home/$WSUSER/SceneScape
+
+ENV DEBIAN_FRONTEND=noninteractive
+ARG FORCE_VAAPI
+
+# Add scenescape user
 RUN : \
-    ; apt-get purge -y --auto-remove cmake make git g++ \
-    ; apt-get clean \
+    ; useradd -r -m -s /bin/bash $WSUSER \
+    ; usermod -a -G video,users $WSUSER \
+    ; eval WSHOME=~$WSUSER \
+    ; chmod a+rX "${WSHOME}" \
     ;
+
+# Install runtime dependencies only
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        curl \
+        ffmpeg \
+        gstreamer1.0-libav \
+        gstreamer1.0-plugins-bad \
+        gstreamer1.0-plugins-base \
+        gstreamer1.0-plugins-good \
+        gstreamer1.0-plugins-ugly \
+        gstreamer1.0-tools \
+        libavcodec-dev \
+        libavformat-dev \
+        libavutil-dev \
+        libegl1 \
+        libgl1 \
+        libglib2.0 \
+        libgomp1 \
+        libtesseract-dev \
+        libva-dev \
+        mesa-utils \
+        netbase \
+        python-is-python3 \
+        python3-pip \
+        # python3-opencv \
+        python3-scipy \
+        python3-termcolor \
+        sudo \
+        tesseract-ocr \
+        v4l-utils \
+        intel-gpu-tools \
+        libdrm-dev \
+        libx11-xcb-dev \
+        libxcb-dri3-dev \
+        libxfixes-dev \
+        libxext-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# # Copy OpenVINO GPU libva gmmlib media-driver drivers from build stage
+COPY --from=build /usr/lib/x86_64-linux-gnu/ /usr/lib/x86_64-linux-gnu/
+COPY --from=build /usr/local/lib/ /usr/local/lib/
+COPY --from=build /etc/OpenCL/ /etc/OpenCL/
+COPY --from=build /etc/ld.so.conf.d/ /etc/ld.so.conf.d/
+COPY --from=build /usr/include/x86_64-linux-gnu/   /usr/include/x86_64-linux-gnu/
+
+# Copy OpenCV wheel and install
+COPY --from=build /tmp/opencv_python-*-py3-none-any.whl /tmp/
+RUN pip3 install --no-cache-dir /tmp/opencv_python-*-py3-none-any.whl && rm /tmp/opencv_python-*-py3-none-any.whl
+
+# Copy and install scene_common wheel
+COPY --from=build /tmp/scene_common_wheel/ /tmp/scene_common_wheel/
+RUN pip3 install --no-cache-dir /tmp/scene_common_wheel/*.whl && rm -rf /tmp/scene_common_wheel
+
+# Copy percebro
+COPY --from=build /home/scenescape/SceneScape/percebro $SCENESCAPE_HOME/percebro
 
 # Copy init scripts
 COPY percebro-init /usr/local/bin/
