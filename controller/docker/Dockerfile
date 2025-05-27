@@ -108,7 +108,7 @@ COPY --from=scenescape-common-base /usr/local/lib/python3.10/dist-packages/fast_
 ENV PATH="${ENV_DIR}/bin:${PATH}"
 
 # Build robot vision package
-COPY ./controller/robot_vision /tmp/robot_vision
+COPY ./controller/src/robot_vision /tmp/robot_vision
 RUN export OpenCV_DIR="/usr/lib/x86_64-linux-gnu/cmake/opencv4" \
     && cd /tmp/robot_vision \
     && python3 setup.py bdist_wheel \
