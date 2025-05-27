@@ -9,6 +9,7 @@
 # This software and the related documents are provided as is, with no express
 # or implied warranties, other than those that are expressly stated in the License.
 
+# -------------- Common Base Stage --------------
 FROM ubuntu:22.04 AS scenescape-common-base
 
 # We use root for runtime init. The command in ENTRYPOINT will drop to an unprivileged user.
@@ -53,13 +54,13 @@ RUN cd tmp/scene_common \
 
 COPY ./utils/waitforbroker /tmp/utils/waitforbroker
 
+# -------------- Controller Builder Stage --------------
 FROM ubuntu:22.04 AS scenescape-controller-builder
 
 USER root
 
 ENV DEBIAN_FRONTEND=noninteractive
 
-# TODO: copy common dependencies from scenescape-common-base stage instead of install
 RUN : \
     && apt-get update \
     && apt-get install -y --no-install-recommends \
@@ -113,7 +114,9 @@ RUN eval WSHOME=~$WSUSER \
     && chown -R "$WSUSER" "$SCENESCAPE_HOME" \
     && pip3 install --no-cache-dir "$SCENESCAPE_HOME/"
 
+
 # TODO: use slimmer image for runtime stage
+# -------------- Controller Runtime Stage --------------
 # FROM ubuntu:22.04 AS scenescape-controller-runtime
 
 ARG USER_ID
