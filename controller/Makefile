@@ -20,7 +20,7 @@ default: Dockerfile
 	    --build-arg no_proxy=$(no_proxy) \
 	    --build-arg CERTDOMAIN=$(CERTDOMAIN) \
 	    --build-arg USER_ID=$$UID \
-	    --rm -t $(IMAGE):$(VERSION) ../.. -f ./Dockerfile \
+	    --rm -t $(IMAGE):$(VERSION) .. -f ./Dockerfile \
 	&& docker tag $(IMAGE):$(VERSION) $(IMAGE):latest
 
 rebuild:
