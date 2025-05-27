@@ -43,7 +43,7 @@ RUN : \
 ENV ENV_DIR=/tmp/venv
 
 # create virtual environment and install 3rd party python dependencies
-COPY controller/docker/requirements-controller.txt /tmp
+COPY controller/requirements.txt /tmp
 RUN : \
     && mkdir ${ENV_DIR} \
     && python3 -m venv --system-site-packages ${ENV_DIR} \
