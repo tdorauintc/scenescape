@@ -136,6 +136,6 @@ COPY ./controller/config/tracker-config.json $SCENESCAPE_HOME/tracker-config.jso
 COPY ./controller/src/controller-app.py $SCENESCAPE_HOME/controller-app.py
 
 # TODO: make separate run-time stage and copy only the required binaries there
-COPY ./controller/docker/controller-init /usr/local/bin/
+COPY ./controller/src/controller-init /usr/local/bin/
 
 ENTRYPOINT ["/usr/local/bin/controller-init"]
