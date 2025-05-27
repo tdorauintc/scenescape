@@ -133,7 +133,7 @@ RUN eval WSHOME=~$WSUSER \
 COPY --from=scenescape-common-base /tmp/utils/waitforbroker $SCENESCAPE_HOME/utils/waitforbroker
 COPY ./controller/config/schema/metadata.schema.json $SCENESCAPE_HOME/schema/metadata.schema.json
 COPY ./controller/config/tracker-config.json $SCENESCAPE_HOME/tracker-config.json
-COPY ./controller/controller $SCENESCAPE_HOME/controller
+COPY ./controller/src/controller-app.py $SCENESCAPE_HOME/controller-app.py
 
 # TODO: make separate run-time stage and copy only the required binaries there
 COPY ./controller/docker/controller-init /usr/local/bin/
