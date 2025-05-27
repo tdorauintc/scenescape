@@ -9,7 +9,7 @@
 # This software and the related documents are provided as is, with no express
 # or implied warranties, other than those that are expressly stated in the License.
 
-FROM ubuntu:22.04 AS controller-builder
+FROM ubuntu:22.04 AS scenescape-common-base
 
 # We use root for runtime init. The command in ENTRYPOINT will drop to an unprivileged user.
 # hadolint ignore=DL3002
@@ -63,14 +63,13 @@ RUN cd tmp/scene_common \
 
 COPY ./utils/waitforbroker /tmp/utils/waitforbroker
 
-# TODO: use slimmer image for runtime stage
-FROM ubuntu:22.04 AS controller-runtime
+FROM ubuntu:22.04 AS scenescape-controller-builder
 
 USER root
 
 ENV DEBIAN_FRONTEND=noninteractive
 
-# TODO: copy common dependencies from controller-builder stage instead of install
+# TODO: copy common dependencies from scenescape-common-base stage instead of install
 RUN : \
     && apt-get update \
     && apt-get install -y --no-install-recommends \
@@ -104,17 +103,11 @@ RUN : \
 # Set up Python virtual  environment
 ENV ENV_DIR=/tmp/venv
 # TODO: use --chown=user:group when switching to non-root user is implemented
-COPY --from=controller-builder $ENV_DIR $ENV_DIR
-COPY --from=controller-builder /usr/local/lib/python3.10/dist-packages/fast_geometry ${ENV_DIR}/lib/python3.10/site-packages/fast_geometry
+COPY --from=scenescape-common-base $ENV_DIR $ENV_DIR
+COPY --from=scenescape-common-base /usr/local/lib/python3.10/dist-packages/fast_geometry ${ENV_DIR}/lib/python3.10/site-packages/fast_geometry
 ENV PATH="${ENV_DIR}/bin:${PATH}"
 
-# TODO: copy all runtime dependencies from controller-builder
-
-# TODO: use non-root user for runtime as soon as possible
-# USER $WSUSER
-# WORKDIR $SCENESCAPE_HOME
-
-# Install robot vision package
+# Build robot vision package
 COPY ./controller/robot_vision /tmp/robot_vision
 RUN export OpenCV_DIR="/usr/lib/x86_64-linux-gnu/cmake/opencv4" \
     && cd /tmp/robot_vision \
@@ -124,7 +117,7 @@ RUN export OpenCV_DIR="/usr/lib/x86_64-linux-gnu/cmake/opencv4" \
     && cd \
     && rm -rf /tmp/robot_vision
 
-# Install main controller package
+# Build main controller package
 # TODO: simplify folder structure, so that one COPY is enough
 COPY ./controller/schema/metadata.schema.json $SCENESCAPE_HOME/schema/metadata.schema.json
 COPY ./controller/src/controller $SCENESCAPE_HOME/src/controller
@@ -132,10 +125,17 @@ COPY ./controller/tools/analytics $SCENESCAPE_HOME/tools/analytics
 COPY ./controller/controller $SCENESCAPE_HOME/controller
 COPY ./controller/tracker-config.json $SCENESCAPE_HOME/tracker-config.json
 COPY ./controller/setup.py $SCENESCAPE_HOME/setup.py
-COPY --from=controller-builder /tmp/utils/waitforbroker $SCENESCAPE_HOME/utils/waitforbroker
+COPY --from=scenescape-common-base /tmp/utils/waitforbroker $SCENESCAPE_HOME/utils/waitforbroker
 RUN eval WSHOME=~$WSUSER \
     && chown -R "$WSUSER" "$SCENESCAPE_HOME" \
     && pip3 install --no-cache-dir "$SCENESCAPE_HOME/"
+
+# TODO: use slimmer image for runtime stage
+# FROM ubuntu:22.04 AS scenescape-controller-runtime
+
+# TODO: use non-root user for runtime as soon as possible
+# USER $WSUSER
+# WORKDIR $SCENESCAPE_HOME
 
 # TODO: make separate run-time stage and copy only the required binaries there
 COPY ./controller/docker/controller-init /usr/local/bin/
