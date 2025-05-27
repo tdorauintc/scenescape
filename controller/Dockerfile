@@ -15,26 +15,16 @@ FROM ubuntu:22.04 AS scenescape-common-base
 # hadolint ignore=DL3002
 USER root
 
-ARG USER_ID
-ARG CERTDOMAIN=scenescape.intel.com
-
 ENV DEBIAN_FRONTEND=noninteractive
 
-# TODO: remove dependencies not needed in this stage
 RUN : \
     && apt-get update \
     && apt-get install -y --no-install-recommends \
         # Keep package list in alphabetical order
         g++ \
-        libglib2.0-0 \
-        libgl1-mesa-glx \
-        libgtest-dev \
         make \
-        patch \
-        pybind11-dev \
-        python-is-python3 \
         python3-pip \
-        # TODO: investigate why removing this breaks the build. scipy is included in requirements-controller.txt
+        # needed by fast_geometry
         python3-scipy \
         python3-venv \
     && apt-get purge -y python3-numpy \
@@ -125,6 +115,9 @@ RUN eval WSHOME=~$WSUSER \
 
 # TODO: use slimmer image for runtime stage
 # FROM ubuntu:22.04 AS scenescape-controller-runtime
+
+ARG USER_ID
+ARG CERTDOMAIN=scenescape.intel.com
 
 # TODO: use non-root user for runtime as soon as possible
 # USER $WSUSER
