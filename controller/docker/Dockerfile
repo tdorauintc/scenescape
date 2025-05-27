@@ -129,6 +129,7 @@ RUN export OpenCV_DIR="/usr/lib/x86_64-linux-gnu/cmake/opencv4" \
 COPY ./controller/schema/metadata.schema.json $SCENESCAPE_HOME/schema/metadata.schema.json
 COPY ./controller/src/controller $SCENESCAPE_HOME/src/controller
 COPY ./controller/tools/analytics $SCENESCAPE_HOME/tools/analytics
+COPY ./controller/controller $SCENESCAPE_HOME/controller
 COPY ./controller/tracker-config.json $SCENESCAPE_HOME/tracker-config.json
 COPY ./controller/setup.py $SCENESCAPE_HOME/setup.py
 COPY --from=controller-builder /tmp/utils/waitforbroker $SCENESCAPE_HOME/utils/waitforbroker
