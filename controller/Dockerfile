@@ -129,7 +129,7 @@ ARG CERTDOMAIN=scenescape.intel.com
 COPY --from=scenescape-common-base /tmp/utils/waitforbroker $SCENESCAPE_HOME/utils/waitforbroker
 COPY ./controller/config/schema/metadata.schema.json $SCENESCAPE_HOME/schema/metadata.schema.json
 COPY ./controller/config/tracker-config.json $SCENESCAPE_HOME/tracker-config.json
-COPY ./controller/src/controller-app.py $SCENESCAPE_HOME/controller-app.py
+COPY ./controller/src/controller-cmd $SCENESCAPE_HOME/controller-cmd
 
 # TODO: make separate run-time stage and copy only the required binaries there
 COPY ./controller/src/controller-init /usr/local/bin/
