@@ -33,26 +33,28 @@ RUN : \
 
 ENV ENV_DIR=/tmp/venv
 
-# create virtual environment and install 3rd party python dependencies
-COPY controller/requirements.txt /tmp
+# create virtual environment and install common dependencies
+COPY ./scene_common tmp/scene_common
 RUN : \
     && mkdir ${ENV_DIR} \
     && python3 -m venv --system-site-packages ${ENV_DIR} \
     && ${ENV_DIR}/bin/pip3 install --upgrade --no-cache-dir pip \
-    && ${ENV_DIR}/bin/pip3 install --upgrade --no-cache-dir -r /tmp/requirements.txt \
-    && rm -rf /tmp/requirements.txt
-
-ENV PATH="${ENV_DIR}/bin:${PATH}"
-
-# Install common dependencies
-COPY ./scene_common tmp/scene_common
-RUN cd tmp/scene_common \
-    && pip install --no-cache-dir . \
+    && cd tmp/scene_common \
+    && pip install --no-cache-dir pybind11 \
+    && ${ENV_DIR}/bin/pip install --no-cache-dir . \
     && make -C fast_geometry -j $(nproc) all install \
     && cd .. \
     && rm -rf scene_common
 
 COPY ./utils/waitforbroker /tmp/utils/waitforbroker
+
+ENV PATH="${ENV_DIR}/bin:${PATH}"
+
+# Install 3rd party python dependencies
+COPY controller/requirements.txt /tmp
+RUN : \
+    && pip3 install --upgrade --no-cache-dir -r /tmp/requirements.txt \
+    && rm -rf /tmp/requirements.txt
 
 # -------------- Controller Builder Stage --------------
 FROM ubuntu:22.04 AS scenescape-controller-builder
