@@ -28,33 +28,31 @@ RUN : \
         # needed by fast_geometry
         python3-scipy \
         python3-venv \
-    && apt-get purge -y python3-numpy \
     && rm -rf /var/lib/apt/lists/*
 
 ENV ENV_DIR=/tmp/venv
 
-# create virtual environment and install common dependencies
-COPY ./scene_common tmp/scene_common
+# create and set up Python virtual environment
 RUN : \
     && mkdir ${ENV_DIR} \
-    && python3 -m venv --system-site-packages ${ENV_DIR} \
+    && python3 -m venv ${ENV_DIR} \
     && ${ENV_DIR}/bin/pip3 install --upgrade --no-cache-dir pip \
+    && ${ENV_DIR}/bin/pip3 install --no-cache-dir wheel \
+    && ${ENV_DIR}/bin/pip install --no-cache-dir wheel
+
+ENV PATH="${ENV_DIR}/bin:${PATH}"
+
+# install common dependencies
+COPY ./scene_common tmp/scene_common
+RUN : \
     && cd tmp/scene_common \
     && pip install --no-cache-dir pybind11 \
-    && ${ENV_DIR}/bin/pip install --no-cache-dir . \
+    && pip install --no-cache-dir . \
     && make -C fast_geometry -j $(nproc) all install \
     && cd .. \
     && rm -rf scene_common
 
 COPY ./utils/waitforbroker /tmp/utils/waitforbroker
-
-ENV PATH="${ENV_DIR}/bin:${PATH}"
-
-# Install 3rd party python dependencies
-COPY controller/requirements.txt /tmp
-RUN : \
-    && pip3 install --upgrade --no-cache-dir -r /tmp/requirements.txt \
-    && rm -rf /tmp/requirements.txt
 
 # -------------- Controller Builder Stage --------------
 FROM ubuntu:22.04 AS scenescape-controller-builder
@@ -83,6 +81,12 @@ ENV ENV_DIR=/tmp/venv
 COPY --from=scenescape-common-base $ENV_DIR $ENV_DIR
 COPY --from=scenescape-common-base /usr/local/lib/python3.10/dist-packages/fast_geometry ${ENV_DIR}/lib/python3.10/site-packages/fast_geometry
 ENV PATH="${ENV_DIR}/bin:${PATH}"
+
+# Install 3rd party python dependencies
+COPY controller/requirements.txt /tmp
+RUN : \
+    && pip3 install --upgrade --no-cache-dir -r /tmp/requirements.txt \
+    && rm -rf /tmp/requirements.txt
 
 # Build robot vision package
 COPY ./controller/src/robot_vision /tmp/robot_vision
