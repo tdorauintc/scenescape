@@ -83,11 +83,11 @@ ENV PATH="${BUILD_ENV_DIR}/bin:${PATH}"
 ENV WHEEL_DIR=/tmp/wheelhouse
 
 # Install 3rd party python dependencies
-COPY controller/requirements.txt /tmp
+COPY controller/requirements-buildtime.txt /tmp
 RUN : \
-    && pip3 download -r /tmp/requirements.txt -d ${WHEEL_DIR} \
-    && pip3 install --upgrade --no-index --find-links=${WHEEL_DIR} -r /tmp/requirements.txt \
-    && rm -rf /tmp/requirements.txt
+    && pip3 download -r /tmp/requirements-buildtime.txt -d ${WHEEL_DIR} \
+    && pip3 install --upgrade --no-index --find-links=${WHEEL_DIR} -r /tmp/requirements-buildtime.txt \
+    && rm -rf /tmp/requirements-buildtime.txt
 
 # Build robot vision package
 COPY ./controller/src/robot_vision /tmp/robot_vision
