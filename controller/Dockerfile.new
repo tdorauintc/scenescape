@@ -98,7 +98,11 @@ RUN export OpenCV_DIR="/usr/lib/x86_64-linux-gnu/cmake/opencv4" \
 # Build main controller package
 COPY ./controller/src/controller /tmp/controller
 RUN cd /tmp/controller \
-    && pip3 install --no-cache-dir .
+    && python3 setup.py bdist_wheel \
+    && cd dist \
+    && pip3 install --no-cache-dir ./*.whl \
+    && cd \
+    && rm -rf /tmp/controller
 
 # TODO: use slimmer image for runtime stage
 # -------------- Controller Runtime Stage --------------
@@ -145,7 +149,7 @@ ENV PATH="${ENV_DIR}/bin:${PATH}"
 COPY --chown=$WSUSER:$WSUSER ./controller/config/schema/metadata.schema.json $SCENESCAPE_HOME/schema/metadata.schema.json
 COPY --chown=$WSUSER:$WSUSER ./controller/config/tracker-config.json $SCENESCAPE_HOME/tracker-config.json
 COPY --chown=$WSUSER:$WSUSER --from=scenescape-common-base /tmp/utils/waitforbroker $SCENESCAPE_HOME/utils/waitforbroker
-COPY --chown=$WSUSER:$WSUSER ./controller/src/controller-app.py $SCENESCAPE_HOME/controller-app.py
+COPY --chown=$WSUSER:$WSUSER ./controller/src/controller-cmd $SCENESCAPE_HOME/controller-cmd
 COPY --chown=$WSUSER:$WSUSER ./controller/src/controller-init /usr/local/bin/
 
 ENTRYPOINT ["/usr/local/bin/controller-init"]
