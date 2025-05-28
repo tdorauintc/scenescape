@@ -30,17 +30,17 @@ RUN : \
         python3-venv \
     && rm -rf /var/lib/apt/lists/*
 
-ENV ENV_DIR=/tmp/venv
+ENV BUILD_ENV_DIR=/tmp/venv
 
 # create and set up Python virtual environment
 RUN : \
-    && mkdir ${ENV_DIR} \
-    && python3 -m venv ${ENV_DIR} \
-    && ${ENV_DIR}/bin/pip3 install --upgrade --no-cache-dir pip \
-    && ${ENV_DIR}/bin/pip3 install --no-cache-dir wheel \
-    && ${ENV_DIR}/bin/pip install --no-cache-dir wheel
+    && mkdir ${BUILD_ENV_DIR} \
+    && python3 -m venv ${BUILD_ENV_DIR} \
+    && ${BUILD_ENV_DIR}/bin/pip3 install --upgrade --no-cache-dir pip \
+    && ${BUILD_ENV_DIR}/bin/pip3 install --no-cache-dir wheel \
+    && ${BUILD_ENV_DIR}/bin/pip install --no-cache-dir wheel
 
-ENV PATH="${ENV_DIR}/bin:${PATH}"
+ENV PATH="${BUILD_ENV_DIR}/bin:${PATH}"
 
 # install common dependencies
 COPY ./scene_common tmp/scene_common
@@ -76,17 +76,17 @@ RUN : \
         python3-venv \
     && rm -rf /var/lib/apt/lists/*
 
-# Set up Python virtual environment
-ENV ENV_DIR=/tmp/venv
-COPY --from=scenescape-common-base $ENV_DIR $ENV_DIR
-COPY --from=scenescape-common-base /usr/local/lib/python3.10/dist-packages/fast_geometry ${ENV_DIR}/lib/python3.10/site-packages/fast_geometry
-ENV PATH="${ENV_DIR}/bin:${PATH}"
+# Set up Python virtual environment for building
+ENV BUILD_ENV_DIR=/tmp/venv
+COPY --from=scenescape-common-base $BUILD_ENV_DIR $BUILD_ENV_DIR
+ENV PATH="${BUILD_ENV_DIR}/bin:${PATH}"
+ENV WHEEL_DIR=/tmp/wheelhouse
 
 # Install 3rd party python dependencies
 COPY controller/requirements.txt /tmp
 RUN : \
-    && pip3 download -r /tmp/requirements.txt -d /tmp/wheelhouse \
-    && pip3 install --upgrade --no-index --find-links=/tmp/wheelhouse -r /tmp/requirements.txt \
+    && pip3 download -r /tmp/requirements.txt -d ${WHEEL_DIR} \
+    && pip3 install --upgrade --no-index --find-links=${WHEEL_DIR} -r /tmp/requirements.txt \
     && rm -rf /tmp/requirements.txt
 
 # Build robot vision package
@@ -117,8 +117,9 @@ ARG CERTDOMAIN=scenescape.intel.com
 
 ENV WSUSER=scenescape
 ENV SCENESCAPE_HOME=/home/$WSUSER/SceneScape
+ENV WHEEL_DIR=/tmp/wheelhouse
 ENV BUILD_ENV_DIR=/tmp/venv
-ENV ENV_DIR=/home/$WSUSER/venv
+ENV RUNTIME_ENV_DIR=/home/$WSUSER/venv
 ENV DEBIAN_FRONTEND=noninteractive
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
@@ -132,6 +133,7 @@ RUN : \
         libpython3.10 \
         netbase \
         python-is-python3 \
+        python3-venv \
     && rm -rf /var/lib/apt/lists/*
 
 RUN : \
@@ -143,9 +145,31 @@ RUN : \
 # TODO: uncomment when issue with accessing the secrets is resolved
 # USER $WSUSER
 
-# setup up Python virtual environment
-COPY --chown=$WSUSER:$WSUSER --from=scenescape-controller-builder $BUILD_ENV_DIR $ENV_DIR
-ENV PATH="${ENV_DIR}/bin:${PATH}"
+# setup up runtime Python virtual environment
+RUN : \
+    && mkdir ${RUNTIME_ENV_DIR} \
+    && python3 -m venv ${RUNTIME_ENV_DIR} \
+    && ${RUNTIME_ENV_DIR}/bin/pip3 install --upgrade --no-cache-dir pip \
+    && ${RUNTIME_ENV_DIR}/bin/pip3 install --no-cache-dir wheel
+ENV PATH="${RUNTIME_ENV_DIR}/bin:${PATH}"
+
+# copy wheels from the builder stage
+COPY --chown=$WSUSER:$WSUSER --from=scenescape-controller-builder ${WHEEL_DIR} ${WHEEL_DIR}
+# copy installed scenescape packages from the previous stages
+COPY --chown=$WSUSER:$WSUSER --from=scenescape-common-base /usr/local/lib/python3.10/dist-packages/fast_geometry ${RUNTIME_ENV_DIR}/lib/python3.10/site-packages/fast_geometry
+COPY --chown=$WSUSER:$WSUSER --from=scenescape-common-base ${BUILD_ENV_DIR}/lib/python3.10/site-packages/scene_common ${RUNTIME_ENV_DIR}/lib/python3.10/site-packages/scene_common
+COPY --chown=$WSUSER:$WSUSER --from=scenescape-common-base ${BUILD_ENV_DIR}/lib/python3.10/site-packages/scene_common*.dist-info ${RUNTIME_ENV_DIR}/lib/python3.10/site-packages/
+COPY --chown=$WSUSER:$WSUSER --from=scenescape-controller-builder ${BUILD_ENV_DIR}/lib/python3.10/site-packages/controller ${RUNTIME_ENV_DIR}/lib/python3.10/site-packages/controller
+COPY --chown=$WSUSER:$WSUSER --from=scenescape-controller-builder ${BUILD_ENV_DIR}/lib/python3.10/site-packages/controller*.dist-info ${RUNTIME_ENV_DIR}/lib/python3.10/site-packages/
+COPY --chown=$WSUSER:$WSUSER --from=scenescape-controller-builder ${BUILD_ENV_DIR}/lib/python3.10/site-packages/robot_vision ${RUNTIME_ENV_DIR}/lib/python3.10/site-packages/robot_vision
+COPY --chown=$WSUSER:$WSUSER --from=scenescape-controller-builder ${BUILD_ENV_DIR}/lib/python3.10/site-packages/robot_vision*.dist-info ${RUNTIME_ENV_DIR}/lib/python3.10/site-packages/
+
+# install only required runtime dependencies
+COPY controller/requirements-runtime.txt /tmp
+RUN : \
+    && pip3 install --upgrade --no-index --find-links=${WHEEL_DIR} -r /tmp/requirements-runtime.txt \
+    && rm -rf /tmp/requirements-runtime.txt \
+    && rm -rf ${WHEEL_DIR}
 
 COPY --chown=$WSUSER:$WSUSER ./controller/config/schema/metadata.schema.json $SCENESCAPE_HOME/schema/metadata.schema.json
 COPY --chown=$WSUSER:$WSUSER ./controller/config/tracker-config.json $SCENESCAPE_HOME/tracker-config.json
