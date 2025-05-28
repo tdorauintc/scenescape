@@ -171,7 +171,7 @@ RUN : \
     && rm -rf /tmp/requirements-runtime.txt \
     && rm -rf ${WHEEL_DIR}
 
-COPY --chown=$WSUSER:$WSUSER ./controller/config/schema/metadata.schema.json $SCENESCAPE_HOME/schema/metadata.schema.json
+COPY --chown=$WSUSER:$WSUSER ./controller/src/schema/metadata.schema.json $SCENESCAPE_HOME/schema/metadata.schema.json
 COPY --chown=$WSUSER:$WSUSER ./controller/config/tracker-config.json $SCENESCAPE_HOME/tracker-config.json
 COPY --chown=$WSUSER:$WSUSER --from=scenescape-common-base /tmp/utils/waitforbroker $SCENESCAPE_HOME/utils/waitforbroker
 COPY --chown=$WSUSER:$WSUSER ./controller/src/controller-cmd $SCENESCAPE_HOME/controller-cmd
