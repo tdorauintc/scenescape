@@ -85,7 +85,8 @@ ENV PATH="${ENV_DIR}/bin:${PATH}"
 # Install 3rd party python dependencies
 COPY controller/requirements.txt /tmp
 RUN : \
-    && pip3 install --upgrade --no-cache-dir -r /tmp/requirements.txt \
+    && pip3 download -r /tmp/requirements.txt -d /tmp/wheelhouse \
+    && pip3 install --upgrade --no-index --find-links=/tmp/wheelhouse -r /tmp/requirements.txt \
     && rm -rf /tmp/requirements.txt
 
 # Build robot vision package
