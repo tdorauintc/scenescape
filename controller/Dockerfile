@@ -119,7 +119,6 @@ SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
 USER root
 
-# TODO: review whether all dependencies are needed
 # TODO: copy common dependencies from previous stages instead of install
 RUN : \
     && apt-get update \
@@ -127,9 +126,6 @@ RUN : \
         libopencv-dev \
         libpython3.10 \
         netbase \
-        pybind11-dev \
-        python3-pip \
-        python3-venv \
         python-is-python3 \
     && rm -rf /var/lib/apt/lists/*
 
