@@ -15,8 +15,8 @@ FROM ubuntu:22.04 AS scenescape-common-base
 # We use root for runtime init. The command in ENTRYPOINT will drop to an unprivileged user.
 # hadolint ignore=DL3002
 USER root
-
 ENV DEBIAN_FRONTEND=noninteractive
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
 RUN : \
     && apt-get update \
@@ -58,9 +58,10 @@ COPY ./utils/waitforbroker /tmp/utils/waitforbroker
 FROM ubuntu:22.04 AS scenescape-controller-builder
 
 USER root
-
 ENV DEBIAN_FRONTEND=noninteractive
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
+# TODO: review whether all dependencies are needed
 RUN : \
     && apt-get update \
     && apt-get install -y --no-install-recommends \
@@ -76,24 +77,10 @@ RUN : \
         python3-scipy \
         python3-venv \
         python-is-python3 \
-        # TODO: remove sudo when switching to non-root user is implemented
-        sudo \
     && rm -rf /var/lib/apt/lists/*
-
-ENV WSUSER=scenescape
-ENV SCENESCAPE_HOME=/home/$WSUSER/SceneScape
-# ENV BUILD_ENV_DIR=/tmp/venv
-# ENV ENV_DIR=/home/$WSUSER/venv
-
-RUN : \
-    && useradd -r -m -s /bin/bash $WSUSER \
-    && usermod -a -G video,users $WSUSER \
-    && eval WSHOME=~$WSUSER \
-    && chmod a+rX "${WSHOME}"
 
 # Set up Python virtual  environment
 ENV ENV_DIR=/tmp/venv
-# TODO: use --chown=user:group when switching to non-root user is implemented
 COPY --from=scenescape-common-base $ENV_DIR $ENV_DIR
 COPY --from=scenescape-common-base /usr/local/lib/python3.10/dist-packages/fast_geometry ${ENV_DIR}/lib/python3.10/site-packages/fast_geometry
 ENV PATH="${ENV_DIR}/bin:${PATH}"
@@ -104,34 +91,68 @@ RUN export OpenCV_DIR="/usr/lib/x86_64-linux-gnu/cmake/opencv4" \
     && cd /tmp/robot_vision \
     && python3 setup.py bdist_wheel \
     && cd dist \
-    && pip3 install --no-cache-dir ./*.whl \
-    && cd \
-    && rm -rf /tmp/robot_vision
+    && pip3 install --no-cache-dir ./*.whl
+#    && cd \
+#    && rm -rf /tmp/robot_vision
 
 # Build main controller package
-COPY ./controller/src/controller $SCENESCAPE_HOME
-RUN eval WSHOME=~$WSUSER \
-    && chown -R "$WSUSER" "$SCENESCAPE_HOME" \
-    && pip3 install --no-cache-dir "$SCENESCAPE_HOME/"
-
+COPY ./controller/src/controller /tmp/controller
+RUN cd /tmp/controller \
+    && python3 setup.py bdist_wheel \
+    && cd dist \
+    && pip3 install --no-cache-dir ./*.whl
+#    && cd \
+#    && rm -rf /tmp/controller
 
 # TODO: use slimmer image for runtime stage
 # -------------- Controller Runtime Stage --------------
-# FROM ubuntu:22.04 AS scenescape-controller-runtime
+FROM ubuntu:22.04 AS scenescape-controller-runtime
 
 ARG USER_ID
 ARG CERTDOMAIN=scenescape.intel.com
 
-# TODO: use non-root user for runtime as soon as possible
+ENV WSUSER=scenescape
+ENV SCENESCAPE_HOME=/home/$WSUSER/SceneScape
+ENV BUILD_ENV_DIR=/tmp/venv
+ENV ENV_DIR=/home/$WSUSER/venv
+ENV DEBIAN_FRONTEND=noninteractive
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
+
+USER root
+
+# TODO: review whether all dependencies are needed
+# TODO: copy common dependencies from scenescape-common-base stage instead of install
+RUN : \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends \
+        libopencv-dev \
+        libpython3.10 \
+        netbase \
+        pybind11-dev \
+        python3-pip \
+        python3-venv \
+        python-is-python3 \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN : \
+    && useradd -r -m -s /bin/bash $WSUSER \
+    && usermod -a -G video,users $WSUSER \
+    && eval WSHOME=~$WSUSER \
+    && chmod a+rX "${WSHOME}"
+
+# TODO: uncomment when issue with accessing the secrets is resolved
 # USER $WSUSER
-# WORKDIR $SCENESCAPE_HOME
 
-COPY --from=scenescape-common-base /tmp/utils/waitforbroker $SCENESCAPE_HOME/utils/waitforbroker
-COPY ./controller/config/schema/metadata.schema.json $SCENESCAPE_HOME/schema/metadata.schema.json
-COPY ./controller/config/tracker-config.json $SCENESCAPE_HOME/tracker-config.json
-COPY ./controller/src/controller-cmd $SCENESCAPE_HOME/controller-cmd
+# setup up Python virtual environment
+COPY --chown=$WSUSER:$WSUSER --from=scenescape-controller-builder $BUILD_ENV_DIR $ENV_DIR
+ENV PATH="${ENV_DIR}/bin:${PATH}"
+# ENV PYTHONPATH=/usr/lib/x86_64-linux-gnu:${PYTHONPATH}
+# ENV LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu:${LD_LIBRARY_PATH}
 
-# TODO: make separate run-time stage and copy only the required binaries there
-COPY ./controller/src/controller-init /usr/local/bin/
+COPY --chown=$WSUSER:$WSUSER ./controller/config/schema/metadata.schema.json $SCENESCAPE_HOME/schema/metadata.schema.json
+COPY --chown=$WSUSER:$WSUSER ./controller/config/tracker-config.json $SCENESCAPE_HOME/tracker-config.json
+COPY --chown=$WSUSER:$WSUSER --from=scenescape-common-base /tmp/utils/waitforbroker $SCENESCAPE_HOME/utils/waitforbroker
+COPY --chown=$WSUSER:$WSUSER ./controller/src/controller-cmd $SCENESCAPE_HOME/controller-cmd
+COPY --chown=$WSUSER:$WSUSER ./controller/src/controller-init /usr/local/bin/
 
 ENTRYPOINT ["/usr/local/bin/controller-init"]
