@@ -61,25 +61,22 @@ USER root
 ENV DEBIAN_FRONTEND=noninteractive
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
-# TODO: review whether all dependencies are needed
+# TODO: copy common dependencies from previous stages instead of install
 RUN : \
     && apt-get update \
     && apt-get install -y --no-install-recommends \
         cmake \
-        g++ \
         libeigen3-dev \
         libgtest-dev \
         libopencv-dev \
         make \
-        netbase \
         pybind11-dev \
         python3-pip \
         python3-scipy \
         python3-venv \
-        python-is-python3 \
     && rm -rf /var/lib/apt/lists/*
 
-# Set up Python virtual  environment
+# Set up Python virtual environment
 ENV ENV_DIR=/tmp/venv
 COPY --from=scenescape-common-base $ENV_DIR $ENV_DIR
 COPY --from=scenescape-common-base /usr/local/lib/python3.10/dist-packages/fast_geometry ${ENV_DIR}/lib/python3.10/site-packages/fast_geometry
@@ -91,18 +88,18 @@ RUN export OpenCV_DIR="/usr/lib/x86_64-linux-gnu/cmake/opencv4" \
     && cd /tmp/robot_vision \
     && python3 setup.py bdist_wheel \
     && cd dist \
-    && pip3 install --no-cache-dir ./*.whl
-#    && cd \
-#    && rm -rf /tmp/robot_vision
+    && pip3 install --no-cache-dir ./*.whl \
+    && cd \
+    && rm -rf /tmp/robot_vision
 
 # Build main controller package
 COPY ./controller/src/controller /tmp/controller
 RUN cd /tmp/controller \
     && python3 setup.py bdist_wheel \
     && cd dist \
-    && pip3 install --no-cache-dir ./*.whl
-#    && cd \
-#    && rm -rf /tmp/controller
+    && pip3 install --no-cache-dir ./*.whl \
+    && cd \
+    && rm -rf /tmp/controller
 
 # TODO: use slimmer image for runtime stage
 # -------------- Controller Runtime Stage --------------
@@ -121,7 +118,7 @@ SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 USER root
 
 # TODO: review whether all dependencies are needed
-# TODO: copy common dependencies from scenescape-common-base stage instead of install
+# TODO: copy common dependencies from previous stages instead of install
 RUN : \
     && apt-get update \
     && apt-get install -y --no-install-recommends \
@@ -146,8 +143,6 @@ RUN : \
 # setup up Python virtual environment
 COPY --chown=$WSUSER:$WSUSER --from=scenescape-controller-builder $BUILD_ENV_DIR $ENV_DIR
 ENV PATH="${ENV_DIR}/bin:${PATH}"
-# ENV PYTHONPATH=/usr/lib/x86_64-linux-gnu:${PYTHONPATH}
-# ENV LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu:${LD_LIBRARY_PATH}
 
 COPY --chown=$WSUSER:$WSUSER ./controller/config/schema/metadata.schema.json $SCENESCAPE_HOME/schema/metadata.schema.json
 COPY --chown=$WSUSER:$WSUSER ./controller/config/tracker-config.json $SCENESCAPE_HOME/tracker-config.json
