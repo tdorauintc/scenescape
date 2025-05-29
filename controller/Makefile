@@ -9,9 +9,9 @@
 # This software and the related documents are provided as is, with no express
 # or implied warranties, other than those that are expressly stated in the License.
 
-IMAGE=scenescape-controller
+IMAGE:=scenescape-controller
 VERSION:=$(shell cat ../version.txt)
-BUILD_DIR=build
+BUILD_DIR:=./build
 
 PHONY: build-image rebuild list-deps
 
@@ -32,13 +32,15 @@ rebuild:
 	make REBUILDFLAGS="--no-cache"
 
 list-deps: build-image
-	mkdir -p ${BUILD_DIR} && cd ${BUILD_DIR}
-	docker run --rm --entrypoint pip $(IMAGE):$(VERSION) freeze --all > pip-deps.txt
-	docker run --rm ubuntu:22.04 dpkg -l | awk '{ print $2, $3, $4 }' > ubuntu-packages.txt
-	docker run --rm $(IMAGE):$(VERSION) dpkg -l | awk '{ print $2, $3, $4 }' > controller-packages.txt
-	grep -Fxv -f ubuntu-packages.txt controller-packages.txt > apt-deps.txt
-	rm -rf ubuntu-packages.txt controller-packages.txt
+	@mkdir -p $(BUILD_DIR)
+	@docker run --rm --entrypoint pip $(IMAGE):$(VERSION) freeze --all > $(BUILD_DIR)/pip-deps.txt
+	@echo "Python dependencies listed in $(BUILD_DIR)/pip-deps.txt"
+	@docker run --rm ubuntu:22.04 dpkg -l | awk '{ print $$2, $$3, $$4 }' > $(BUILD_DIR)/ubuntu-packages.txt
+	@docker run --rm --entrypoint dpkg $(IMAGE):$(VERSION) -l | awk '{ print $$2, $$3, $$4 }' > $(BUILD_DIR)/controller-packages.txt
+	@grep -Fxv -f $(BUILD_DIR)/ubuntu-packages.txt $(BUILD_DIR)/controller-packages.txt > $(BUILD_DIR)/apt-deps.txt
+	@rm -rf $(BUILD_DIR)/ubuntu-packages.txt $(BUILD_DIR)/controller-packages.txt
+	@echo "OS dependencies listed in $(BUILD_DIR)/apt-deps.txt"
 
 clean:
-	rm -rf ${BUILD_DIR}
+	rm -rf $(BUILD_DIR)
 	docker rmi $(IMAGE):$(VERSION) $(IMAGE):latest || true
