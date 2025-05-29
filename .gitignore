@@ -13,8 +13,7 @@ __pycache__
 admin-pass.txt
 apriltag-cam[0-9].json
 autocalibration/scene_common
-controller/scene_common
-controller/utils
+controller/build
 datasets
 db
 db.sqlite3
