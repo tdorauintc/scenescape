@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 COMMON_FOLDER := scene_common
-SUB_FOLDERS := docker controller autocalibration/docker percebro/docker
+SUB_FOLDERS := docker controller autocalibration manager percebro/docker
 EXTRA_BUILD_FLAGS :=
 TARGET_BRANCH ?= $(if $(CHANGE_TARGET),$(CHANGE_TARGET),$(BRANCH_NAME))
 
