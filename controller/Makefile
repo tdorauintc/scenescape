@@ -13,10 +13,9 @@ IMAGE:=scenescape-controller
 VERSION:=$(shell cat ../version.txt)
 BUILD_DIR:=./build
 
-PHONY: build-image rebuild list-deps
-
 default: build-image
 
+PHONY: build-image
 build-image: Dockerfile
 	env BUILDKIT_PROGRESS=plain \
 	  docker build $(REBUILDFLAGS) \
@@ -28,9 +27,11 @@ build-image: Dockerfile
 	    --rm -t $(IMAGE):$(VERSION) .. -f ./Dockerfile \
 	&& docker tag $(IMAGE):$(VERSION) $(IMAGE):latest
 
+PHONY: rebuild
 rebuild:
 	make REBUILDFLAGS="--no-cache"
 
+PHONY: list-deps
 list-deps: build-image
 	@mkdir -p $(BUILD_DIR)
 	@docker run --rm --entrypoint pip $(IMAGE):$(VERSION) freeze --all > $(BUILD_DIR)/pip-deps.txt
@@ -41,6 +42,7 @@ list-deps: build-image
 	@rm -rf $(BUILD_DIR)/ubuntu-packages.txt $(BUILD_DIR)/controller-packages.txt
 	@echo "OS dependencies listed in $(BUILD_DIR)/apt-deps.txt"
 
+PHONY: clean
 clean:
 	rm -rf $(BUILD_DIR)
 	docker rmi $(IMAGE):$(VERSION) $(IMAGE):latest || true
