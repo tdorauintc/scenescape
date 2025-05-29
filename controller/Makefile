@@ -11,8 +11,13 @@
 
 IMAGE=scenescape-controller
 VERSION:=$(shell cat ../version.txt)
+BUILD_DIR=build
 
-default: Dockerfile
+PHONY: build-image rebuild list-deps
+
+default: build-image
+
+build-image: Dockerfile
 	env BUILDKIT_PROGRESS=plain \
 	  docker build $(REBUILDFLAGS) \
 	    --build-arg http_proxy=$(http_proxy) \
@@ -25,3 +30,15 @@ default: Dockerfile
 
 rebuild:
 	make REBUILDFLAGS="--no-cache"
+
+list-deps: build-image
+	mkdir -p ${BUILD_DIR} && cd ${BUILD_DIR}
+	docker run --rm --entrypoint pip $(IMAGE):$(VERSION) freeze --all > pip-deps.txt
+	docker run --rm ubuntu:22.04 dpkg -l | awk '{ print $2, $3, $4 }' > ubuntu-packages.txt
+	docker run --rm $(IMAGE):$(VERSION) dpkg -l | awk '{ print $2, $3, $4 }' > controller-packages.txt
+	grep -Fxv -f ubuntu-packages.txt controller-packages.txt > apt-deps.txt
+	rm -rf ubuntu-packages.txt controller-packages.txt
+
+clean:
+	rm -rf ${BUILD_DIR}
+	docker rmi $(IMAGE):$(VERSION) $(IMAGE):latest || true
