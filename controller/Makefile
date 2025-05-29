@@ -10,7 +10,7 @@
 # or implied warranties, other than those that are expressly stated in the License.
 
 IMAGE=scenescape-controller
-BASE_OS_IMAGE=debian:bookworm
+BASE_OS_IMAGE=ubuntu:22.04
 VERSION:=$(shell cat ../version.txt)
 BUILD_DIR=./build
 

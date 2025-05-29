@@ -9,7 +9,7 @@
 # This software and the related documents are provided as is, with no express
 # or implied warranties, other than those that are expressly stated in the License.
 
-ARG BASE_OS_IMAGE=debian:bookworm
+ARG BASE_OS_IMAGE=ubuntu:22.04
 
 # -------------- Common Base Stage --------------
 FROM ${BASE_OS_IMAGE} AS scenescape-common-base

@@ -11,7 +11,7 @@
 
 IMAGE=scenescape-common-base
 VERSION:=$(shell cat ../version.txt)
-BASE_OS_IMAGE=debian:bookworm
+BASE_OS_IMAGE=ubuntu:22.04
 
 default: build-image
 
