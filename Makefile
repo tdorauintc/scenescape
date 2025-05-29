@@ -1,7 +1,8 @@
 # SPDX-FileCopyrightText: (C) 2025 Intel Corporation
 # SPDX-License-Identifier: Apache-2.0
 
-SUB_FOLDERS := docker controller/docker autocalibration/docker percebro/docker
+COMMON_FOLDER := scene_common
+SUB_FOLDERS := docker controller autocalibration/docker percebro/docker
 EXTRA_BUILD_FLAGS :=
 TARGET_BRANCH ?= $(if $(CHANGE_TARGET),$(CHANGE_TARGET),$(BRANCH_NAME))
 
@@ -29,10 +30,29 @@ endif
 
 .PHONY: build-certificates
 build-certificates:
-	make -C certificates CERTPASS=$$(openssl rand -base64 12)
+	@make -C certificates CERTPASS=$$(openssl rand -base64 12)
 
+# Build common base image
+.PHONY: build-common
+build-common:
+	@$(MAKE) -C $(COMMON_FOLDER) http_proxy=$(http_proxy) $(EXTRA_BUILD_FLAGS)
+	@echo "DONE"
+
+# Build docker images for all microservices
 .PHONY: build-docker
-build-docker:
+build-docker: build-common
+	@echo "Building docker images in parallel..."
 	for dir in $(SUB_FOLDERS); do \
-		$(MAKE) http_proxy=$(http_proxy) -C $$dir $(EXTRA_BUILD_FLAGS); \
+		$(MAKE) http_proxy=$(http_proxy) -C $$dir $(EXTRA_BUILD_FLAGS) & \
 	done
+	@wait
+	@echo "DONE"
+
+.PHONY: list-deps
+list-deps:
+	@echo "Listing dependencies for all microservices..."
+	for dir in $(SUB_FOLDERS); do \
+		$(MAKE) -C $$dir list-deps; \
+	done
+	@wait
+	@echo "DONE"

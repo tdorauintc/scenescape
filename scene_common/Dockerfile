@@ -9,8 +9,10 @@
 # This software and the related documents are provided as is, with no express
 # or implied warranties, other than those that are expressly stated in the License.
 
+ARG BASE_OS_IMAGE=debian:bookworm
+
 # -------------- Common Base Stage --------------
-FROM ubuntu:22.04 AS scenescape-common-base
+FROM ${BASE_OS_IMAGE} AS scenescape-common-base
 
 # We use root for runtime init. The command in ENTRYPOINT will drop to an unprivileged user.
 # hadolint ignore=DL3002
@@ -24,6 +26,9 @@ RUN : \
         # Keep package list in alphabetical order
         g++ \
         make \
+        # needed by fast_geometry
+        pkg-config \
+        pybind11-dev \
         python3-pip \
         # needed by fast_geometry
         python3-scipy \
@@ -37,8 +42,7 @@ RUN : \
     && mkdir ${BUILD_ENV_DIR} \
     && python3 -m venv ${BUILD_ENV_DIR} \
     && ${BUILD_ENV_DIR}/bin/pip3 install --upgrade --no-cache-dir pip \
-    && ${BUILD_ENV_DIR}/bin/pip3 install --no-cache-dir wheel \
-    && ${BUILD_ENV_DIR}/bin/pip install --no-cache-dir wheel
+    && ${BUILD_ENV_DIR}/bin/pip3 install --no-cache-dir wheel
 
 ENV PATH="${BUILD_ENV_DIR}/bin:${PATH}"
 
@@ -46,8 +50,8 @@ ENV PATH="${BUILD_ENV_DIR}/bin:${PATH}"
 COPY ./scene_common tmp/scene_common
 RUN : \
     && cd tmp/scene_common \
-    && pip install --no-cache-dir pybind11 \
-    && pip install --no-cache-dir . \
+    && pip3 install --no-cache-dir pybind11 \
+    && pip3 install --no-cache-dir . \
     && make -C fast_geometry -j $(nproc) all install \
     && cd .. \
     && rm -rf scene_common

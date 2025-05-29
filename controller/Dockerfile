@@ -9,59 +9,15 @@
 # This software and the related documents are provided as is, with no express
 # or implied warranties, other than those that are expressly stated in the License.
 
-# -------------- Common Base Stage --------------
-FROM ubuntu:22.04 AS scenescape-common-base
-
-# We use root for runtime init. The command in ENTRYPOINT will drop to an unprivileged user.
-# hadolint ignore=DL3002
-USER root
-ENV DEBIAN_FRONTEND=noninteractive
-SHELL ["/bin/bash", "-o", "pipefail", "-c"]
-
-RUN : \
-    && apt-get update \
-    && apt-get install -y --no-install-recommends \
-        # Keep package list in alphabetical order
-        g++ \
-        make \
-        python3-pip \
-        # needed by fast_geometry
-        python3-scipy \
-        python3-venv \
-    && rm -rf /var/lib/apt/lists/*
-
-ENV BUILD_ENV_DIR=/tmp/venv
-
-# create and set up Python virtual environment
-RUN : \
-    && mkdir ${BUILD_ENV_DIR} \
-    && python3 -m venv ${BUILD_ENV_DIR} \
-    && ${BUILD_ENV_DIR}/bin/pip3 install --upgrade --no-cache-dir pip \
-    && ${BUILD_ENV_DIR}/bin/pip3 install --no-cache-dir wheel \
-    && ${BUILD_ENV_DIR}/bin/pip install --no-cache-dir wheel
-
-ENV PATH="${BUILD_ENV_DIR}/bin:${PATH}"
-
-# install common dependencies
-COPY ./scene_common tmp/scene_common
-RUN : \
-    && cd tmp/scene_common \
-    && pip install --no-cache-dir pybind11 \
-    && pip install --no-cache-dir . \
-    && make -C fast_geometry -j $(nproc) all install \
-    && cd .. \
-    && rm -rf scene_common
-
-COPY ./utils/waitforbroker /tmp/utils/waitforbroker
+ARG BASE_OS_IMAGE=debian:bookworm
 
 # -------------- Controller Builder Stage --------------
-FROM ubuntu:22.04 AS scenescape-controller-builder
+FROM scenescape-common-base AS scenescape-controller-builder
 
 USER root
 ENV DEBIAN_FRONTEND=noninteractive
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
-# TODO: copy common dependencies from previous stages instead of install
 RUN : \
     && apt-get update \
     && apt-get install -y --no-install-recommends \
@@ -69,16 +25,11 @@ RUN : \
         libeigen3-dev \
         libgtest-dev \
         libopencv-dev \
-        make \
         pybind11-dev \
-        python3-pip \
-        python3-scipy \
-        python3-venv \
     && rm -rf /var/lib/apt/lists/*
 
 # Set up Python virtual environment for building
 ENV BUILD_ENV_DIR=/tmp/venv
-COPY --from=scenescape-common-base $BUILD_ENV_DIR $BUILD_ENV_DIR
 ENV PATH="${BUILD_ENV_DIR}/bin:${PATH}"
 ENV WHEEL_DIR=/tmp/wheelhouse
 
@@ -108,9 +59,8 @@ RUN cd /tmp/controller \
     && cd \
     && rm -rf /tmp/controller
 
-# TODO: use slimmer image for runtime stage
 # -------------- Controller Runtime Stage --------------
-FROM ubuntu:22.04 AS scenescape-controller-runtime
+FROM debian:bookworm AS scenescape-controller-runtime
 
 ARG USER_ID
 ARG CERTDOMAIN=scenescape.intel.com
@@ -125,12 +75,14 @@ SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
 USER root
 
+COPY --from=scenescape-common-base /var/cache/apt/archives /var/cache/apt/archives
+
 # TODO: copy common dependencies from previous stages instead of install
 RUN : \
     && apt-get update \
     && apt-get install -y --no-install-recommends \
         libopencv-dev \
-        libpython3.10 \
+        libpython3.11 \
         netbase \
         python-is-python3 \
         python3-venv \
@@ -156,13 +108,13 @@ ENV PATH="${RUNTIME_ENV_DIR}/bin:${PATH}"
 # copy wheels from the builder stage
 COPY --chown=$WSUSER:$WSUSER --from=scenescape-controller-builder ${WHEEL_DIR} ${WHEEL_DIR}
 # copy installed scenescape packages from the previous stages
-COPY --chown=$WSUSER:$WSUSER --from=scenescape-common-base /usr/local/lib/python3.10/dist-packages/fast_geometry ${RUNTIME_ENV_DIR}/lib/python3.10/site-packages/fast_geometry
-COPY --chown=$WSUSER:$WSUSER --from=scenescape-common-base ${BUILD_ENV_DIR}/lib/python3.10/site-packages/scene_common ${RUNTIME_ENV_DIR}/lib/python3.10/site-packages/scene_common
-COPY --chown=$WSUSER:$WSUSER --from=scenescape-common-base ${BUILD_ENV_DIR}/lib/python3.10/site-packages/scene_common*.dist-info ${RUNTIME_ENV_DIR}/lib/python3.10/site-packages/
-COPY --chown=$WSUSER:$WSUSER --from=scenescape-controller-builder ${BUILD_ENV_DIR}/lib/python3.10/site-packages/controller ${RUNTIME_ENV_DIR}/lib/python3.10/site-packages/controller
-COPY --chown=$WSUSER:$WSUSER --from=scenescape-controller-builder ${BUILD_ENV_DIR}/lib/python3.10/site-packages/controller*.dist-info ${RUNTIME_ENV_DIR}/lib/python3.10/site-packages/
-COPY --chown=$WSUSER:$WSUSER --from=scenescape-controller-builder ${BUILD_ENV_DIR}/lib/python3.10/site-packages/robot_vision ${RUNTIME_ENV_DIR}/lib/python3.10/site-packages/robot_vision
-COPY --chown=$WSUSER:$WSUSER --from=scenescape-controller-builder ${BUILD_ENV_DIR}/lib/python3.10/site-packages/robot_vision*.dist-info ${RUNTIME_ENV_DIR}/lib/python3.10/site-packages/
+COPY --chown=$WSUSER:$WSUSER --from=scenescape-common-base /usr/local/lib/python3.11/dist-packages/fast_geometry ${RUNTIME_ENV_DIR}/lib/python3.11/site-packages/fast_geometry
+COPY --chown=$WSUSER:$WSUSER --from=scenescape-common-base ${BUILD_ENV_DIR}/lib/python3.11/site-packages/scene_common ${RUNTIME_ENV_DIR}/lib/python3.11/site-packages/scene_common
+COPY --chown=$WSUSER:$WSUSER --from=scenescape-common-base ${BUILD_ENV_DIR}/lib/python3.11/site-packages/scene_common*.dist-info ${RUNTIME_ENV_DIR}/lib/python3.11/site-packages/
+COPY --chown=$WSUSER:$WSUSER --from=scenescape-controller-builder ${BUILD_ENV_DIR}/lib/python3.11/site-packages/controller ${RUNTIME_ENV_DIR}/lib/python3.11/site-packages/controller
+COPY --chown=$WSUSER:$WSUSER --from=scenescape-controller-builder ${BUILD_ENV_DIR}/lib/python3.11/site-packages/controller*.dist-info ${RUNTIME_ENV_DIR}/lib/python3.11/site-packages/
+COPY --chown=$WSUSER:$WSUSER --from=scenescape-controller-builder ${BUILD_ENV_DIR}/lib/python3.11/site-packages/robot_vision ${RUNTIME_ENV_DIR}/lib/python3.11/site-packages/robot_vision
+COPY --chown=$WSUSER:$WSUSER --from=scenescape-controller-builder ${BUILD_ENV_DIR}/lib/python3.11/site-packages/robot_vision*.dist-info ${RUNTIME_ENV_DIR}/lib/python3.11/site-packages/
 
 # install only required runtime dependencies
 COPY controller/requirements-runtime.txt /tmp

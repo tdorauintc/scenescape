@@ -9,40 +9,42 @@
 # This software and the related documents are provided as is, with no express
 # or implied warranties, other than those that are expressly stated in the License.
 
-IMAGE:=scenescape-controller
+IMAGE=scenescape-controller
+BASE_OS_IMAGE=debian:bookworm
 VERSION:=$(shell cat ../version.txt)
-BUILD_DIR:=./build
+BUILD_DIR=./build
 
 default: build-image
 
-PHONY: build-image
+.PHONY: build-image
 build-image: Dockerfile
 	env BUILDKIT_PROGRESS=plain \
 	  docker build $(REBUILDFLAGS) \
+	    --build-arg BASE_OS_IMAGE=$(BASE_OS_IMAGE) \
 	    --build-arg http_proxy=$(http_proxy) \
 	    --build-arg https_proxy=$(https_proxy) \
 	    --build-arg no_proxy=$(no_proxy) \
 	    --build-arg CERTDOMAIN=$(CERTDOMAIN) \
 	    --build-arg USER_ID=$$UID \
-	    --rm -t $(IMAGE):$(VERSION) .. -f ./Dockerfile \
+	    --rm -t $(IMAGE):$(VERSION) -f ./Dockerfile .. \
 	&& docker tag $(IMAGE):$(VERSION) $(IMAGE):latest
 
-PHONY: rebuild
+.PHONY: rebuild
 rebuild:
 	make REBUILDFLAGS="--no-cache"
 
-PHONY: list-deps
+.PHONY: list-deps
 list-deps: build-image
 	@mkdir -p $(BUILD_DIR)
 	@docker run --rm --entrypoint pip $(IMAGE):$(VERSION) freeze --all > $(BUILD_DIR)/pip-deps.txt
 	@echo "Python dependencies listed in $(BUILD_DIR)/pip-deps.txt"
-	@docker run --rm ubuntu:22.04 dpkg -l | awk '{ print $$2, $$3, $$4 }' > $(BUILD_DIR)/ubuntu-packages.txt
+	@docker run --rm $(BASE_OS_IMAGE) dpkg -l | awk '{ print $$2, $$3, $$4 }' > $(BUILD_DIR)/system-packages.txt
 	@docker run --rm --entrypoint dpkg $(IMAGE):$(VERSION) -l | awk '{ print $$2, $$3, $$4 }' > $(BUILD_DIR)/controller-packages.txt
-	@grep -Fxv -f $(BUILD_DIR)/ubuntu-packages.txt $(BUILD_DIR)/controller-packages.txt > $(BUILD_DIR)/apt-deps.txt
-	@rm -rf $(BUILD_DIR)/ubuntu-packages.txt $(BUILD_DIR)/controller-packages.txt
+	@grep -Fxv -f $(BUILD_DIR)/system-packages.txt $(BUILD_DIR)/controller-packages.txt > $(BUILD_DIR)/apt-deps.txt
+	@rm -rf $(BUILD_DIR)/system-packages.txt $(BUILD_DIR)/controller-packages.txt
 	@echo "OS dependencies listed in $(BUILD_DIR)/apt-deps.txt"
 
-PHONY: clean
+.PHONY: clean
 clean:
 	rm -rf $(BUILD_DIR)
 	docker rmi $(IMAGE):$(VERSION) $(IMAGE):latest || true

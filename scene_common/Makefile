@@ -11,25 +11,27 @@
 
 IMAGE=scenescape-common-base
 VERSION:=$(shell cat ../version.txt)
-BUILD_DIR=build
-
-PHONY: build-image rebuild
+BASE_OS_IMAGE=debian:bookworm
 
 default: build-image
 
+.PHONY: build-image
 build-image: Dockerfile
 	env BUILDKIT_PROGRESS=plain \
 	  docker build $(REBUILDFLAGS) \
+	    --build-arg BASE_OS_IMAGE=$(BASE_OS_IMAGE) \
 	    --build-arg http_proxy=$(http_proxy) \
 	    --build-arg https_proxy=$(https_proxy) \
 	    --build-arg no_proxy=$(no_proxy) \
 	    --build-arg CERTDOMAIN=$(CERTDOMAIN) \
 	    --build-arg USER_ID=$$UID \
-	    --rm -t $(IMAGE):$(VERSION) .. -f ./Dockerfile \
+	    --rm -t $(IMAGE):$(VERSION) -f ./Dockerfile .. \
 	&& docker tag $(IMAGE):$(VERSION) $(IMAGE):latest
 
+.PHONY: rebuild
 rebuild:
-	make REBUILDFLAGS="--no-cache"
+	make build-image REBUILDFLAGS="--no-cache"
 
+.PHONY: clean
 clean:
 	docker rmi $(IMAGE):$(VERSION) $(IMAGE):latest || true
