@@ -1,8 +1,8 @@
 # controller dependencies
 ntplib
 numpy
-open3d_cpu
-opencv_python
+open3d-cpu
+opencv-python
 paho-mqtt
 scipy
 trimesh
