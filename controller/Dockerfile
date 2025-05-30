@@ -21,11 +21,7 @@ SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 RUN : \
     && apt-get update \
     && apt-get install -y --no-install-recommends \
-        cmake \
-        libeigen3-dev \
-        libgtest-dev \
         libopencv-dev \
-        pybind11-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # Set up Python virtual environment for building

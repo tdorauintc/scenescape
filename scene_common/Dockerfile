@@ -20,11 +20,17 @@ USER root
 ENV DEBIAN_FRONTEND=noninteractive
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 
+# install common build dependencies
 RUN : \
     && apt-get update \
     && apt-get install -y --no-install-recommends \
         # Keep package list in alphabetical order
+        cmake \
+        curl \
         g++ \
+        git \
+        libeigen3-dev \
+        libgtest-dev \
         make \
         # needed by fast_geometry
         pkg-config \
@@ -33,6 +39,7 @@ RUN : \
         # needed by fast_geometry
         python3-scipy \
         python3-venv \
+        python-is-python3 \
     && rm -rf /var/lib/apt/lists/*
 
 ENV BUILD_ENV_DIR=/tmp/venv
@@ -47,12 +54,12 @@ RUN : \
 ENV PATH="${BUILD_ENV_DIR}/bin:${PATH}"
 
 # install common dependencies
-COPY ./scene_common tmp/scene_common
+COPY ./scene_common/src /tmp/scene_common
 RUN : \
     && cd tmp/scene_common \
     && pip3 install --no-cache-dir pybind11 \
-    && pip3 install --no-cache-dir . \
     && make -C fast_geometry -j $(nproc) all install \
+    && pip3 install --no-cache-dir . \
     && cd .. \
     && rm -rf scene_common
 
