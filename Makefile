@@ -46,7 +46,7 @@ build-images: build-common
 	@echo "Building docker images in parallel..."
 	for dir in $(SUB_FOLDERS); do \
 		$(MAKE) http_proxy=$(http_proxy) -C $$dir $(EXTRA_BUILD_FLAGS) & \
-	done
+	done && wait
 	@$(MAKE) -C docker ../docker-compose.yml
 	@echo "DONE"
 
