@@ -47,7 +47,7 @@ build-images: build-common
 	for dir in $(SUB_FOLDERS); do \
 		$(MAKE) http_proxy=$(http_proxy) -C $$dir $(EXTRA_BUILD_FLAGS) & \
 	done
-	@wait
+	@$(MAKE) -C docker ../docker-compose.yml
 	@echo "DONE"
 
 .PHONY: list-dependencies
