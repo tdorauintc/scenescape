@@ -135,9 +135,8 @@ COPY ./manager/static/ $SCENESCAPE_HOME/manager/static
 COPY ./manager/templatetags/ $SCENESCAPE_HOME/manager/templatetags
 COPY ./manager/manage.py $SCENESCAPE_HOME
 
-
 COPY --from=manager-builder /usr/local/lib/python3.10/dist-packages/fast_geometry /usr/local/lib/python3.10/dist-packages/fast_geometry
-COPY --from=manager-builder /tmp/venv/lib/python3.10/site-packages/scene_common /usr/local/lib/python3.10/dist-packages/scene_common
+COPY --from=manager-builder /usr/local/lib/python3.10/dist-packages/scene_common /usr/local/lib/python3.10/dist-packages/scene_common
 
 # Install SceneScape
 RUN : \

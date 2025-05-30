@@ -38,20 +38,8 @@ RUN : \
         python3-pip \
         # needed by fast_geometry
         python3-scipy \
-        python3-venv \
         python-is-python3 \
     && rm -rf /var/lib/apt/lists/*
-
-ENV BUILD_ENV_DIR=/tmp/venv
-
-# create and set up Python virtual environment
-RUN : \
-    && mkdir ${BUILD_ENV_DIR} \
-    && python3 -m venv ${BUILD_ENV_DIR} \
-    && ${BUILD_ENV_DIR}/bin/pip3 install --upgrade --no-cache-dir pip \
-    && ${BUILD_ENV_DIR}/bin/pip3 install --no-cache-dir wheel
-
-ENV PATH="${BUILD_ENV_DIR}/bin:${PATH}"
 
 # install common dependencies
 COPY ./scene_common/src /tmp/scene_common
