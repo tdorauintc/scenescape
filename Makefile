@@ -58,7 +58,7 @@ list-dependencies:
 	for dir in $(SUB_FOLDERS); do \
 		$(MAKE) -C $$dir list-deps; \
 	done
-	# TODO: generate a summary files with all dependencies
+#TODO: generate a summary files with all dependencies
 	@echo "DONE"
 
 .PHONY: clean
