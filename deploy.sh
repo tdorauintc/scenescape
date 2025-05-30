@@ -220,13 +220,10 @@ echo Building SceneScape
 echo '########################################'
 
 make -C docs clean
-make -C certificates CERTPASS="${CERTPASS}"
-make -C docker DBPASS="${DBPASS}"
-make -C manager
-make -C autocalibration &
-make -C controller &
-make -C percebro &
-wait
+export CERTPASS="${CERTPASS}"
+export DBPASS="${DBPASS}"
+
+make build
 
 if manager/tools/upgrade-database --check ; then
     UPGRADEDB=0
