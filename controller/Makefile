@@ -14,14 +14,15 @@ BASE_OS_IMAGE=ubuntu:22.04
 VERSION:=$(shell cat ../version.txt)
 BUILD_DIR=./build
 LOG_FILE=$(BUILD_DIR)/build.log
+SHELL := /bin/bash
 
 default: build-image
 
 .PHONY: build-image
 build-image: Dockerfile
-	@echo "Started building image $(IMAGE):$(VERSION)..."
+	@echo "------- STARTING BUILD OF IMAGE: $(IMAGE):$(VERSION) -------"
 	@mkdir -p $(BUILD_DIR)
-	@env BUILDKIT_PROGRESS=plain \
+	@-env BUILDKIT_PROGRESS=plain \
 	  docker build $(REBUILDFLAGS) \
 	    --build-arg BASE_OS_IMAGE=$(BASE_OS_IMAGE) \
 	    --build-arg http_proxy=$(http_proxy) \
@@ -29,13 +30,14 @@ build-image: Dockerfile
 	    --build-arg no_proxy=$(no_proxy) \
 	    --build-arg CERTDOMAIN=$(CERTDOMAIN) \
 	    --build-arg USER_ID=$$UID \
-	    --rm -t $(IMAGE):$(VERSION) -f ./Dockerfile .. > $(LOG_FILE) 2>&1
-	@if [ $$? -eq 0 ]; then \
-		echo "Build complete. Image tagged as $(IMAGE):$(VERSION). Full log file at $(LOG_FILE)"; \
+	    --rm -t $(IMAGE):$(VERSION) -f ./Dockerfile .. 2>&1 | tee $(LOG_FILE); \
+	status=$${PIPESTATUS[0]}; \
+	if [ $$status -eq 0 ]; then \
 		docker tag $(IMAGE):$(VERSION) $(IMAGE):latest; \
+		echo -e "\033[0;32m------- BUILD OF IMAGE $(IMAGE):$(VERSION) COMPLETED SUCCESSFULLY -------\033[0m"; \
+		echo "Log file created at $(LOG_FILE)"; \
 	else \
-		echo "Docker build $(IMAGE):$(VERSION) failed. Check $(LOG_FILE) for details."; \
-		tail -n 25 $(LOG_FILE); \
+		echo -e "\033[0;31m------- BUILD OF IMAGE $(IMAGE):$(VERSION) FAILED. CHECK $(LOG_FILE) FOR DETAILS. -------\033[0m"; \
 		exit 1; \
 	fi
 
