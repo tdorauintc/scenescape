@@ -12,7 +12,7 @@
 # or implied warranties, other than those that are expressly stated in the License.
 
 # -------- Build Stage --------
-FROM ubuntu:22.04 AS build
+FROM scenescape-common-base AS build
 
 SHELL ["/bin/bash", "-e", "-o", "pipefail", "-c"]
 
@@ -36,11 +36,7 @@ RUN : \
 # Install build dependencies
 COPY ./percebro/requirements-buildtime.txt /tmp
 RUN apt-get update && apt-get install -y --no-install-recommends \
-        cmake \
-        curl \
         ffmpeg \
-        g++ \
-        git \
         gstreamer1.0-libav \
         gstreamer1.0-plugins-bad \
         gstreamer1.0-plugins-base \
@@ -52,24 +48,17 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         libavutil-dev \
         libboost-python-dev \
         libegl1 \
-        libeigen3-dev \
         libgl1 \
         libglib2.0 \
         libgomp1 \
         libgstreamer-plugins-base1.0-dev \
         libgstreamer1.0-dev \
         libswscale-dev \
-        libgtest-dev \
         libtesseract-dev \
         libva-dev \
-        make \
         mesa-utils \
         netbase \
-        pybind11-dev \
-        python-is-python3 \
         python3-dev \
-        python3-pip \
-        python3-scipy \
         python3-termcolor \
         sudo \
         tesseract-ocr \
@@ -77,7 +66,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && pip3 install --upgrade --no-cache-dir \
         --extra-index-url https://download.pytorch.org/whl/cpu \
         -r /tmp/requirements-buildtime.txt && \
-    pip3 uninstall -y openvino-telemetry && \
     rm -rf /tmp/requirements-buildtime.txt && \
     rm -rf /var/lib/apt/lists/*
 
@@ -197,16 +185,6 @@ RUN : \
     ; cp dist/opencv_python-${CV_VERSION}-py3-none-any.whl /tmp/ \
     ; cd ; rm -rf ${TMP}
 
-# Prepare scene_common for install in runtime
-COPY ./scene_common tmp/scene_common
-
-# Build and install scene_common (wheel and fast_geometry)
-RUN : \
-    ; cd /tmp/scene_common \
-    ; pip wheel --no-deps . -w /tmp/scene_common_wheel \
-    ; make -C fast_geometry -j $(nproc) all install \
-    ;
-
 # -------- Runtime Stage --------
 FROM ubuntu:22.04 AS runtime
 
@@ -281,9 +259,8 @@ COPY --from=build /usr/include/x86_64-linux-gnu/   /usr/include/x86_64-linux-gnu
 COPY --from=build /tmp/opencv_python-*-py3-none-any.whl /tmp/
 RUN pip3 install --no-cache-dir /tmp/opencv_python-*-py3-none-any.whl && rm /tmp/opencv_python-*-py3-none-any.whl
 
-# Copy and install scene_common wheel
-COPY --from=build /tmp/scene_common_wheel/ /tmp/scene_common_wheel/
-RUN pip3 install --no-cache-dir /tmp/scene_common_wheel/*.whl && rm -rf /tmp/scene_common_wheel
+# Copy scene_common
+COPY --from=build /usr/local/lib/python3.10/dist-packages/scene_common /usr/local/lib/python3.10/dist-packages/scene_common
 
 # Add percebro
 COPY ./percebro/src/* $SCENESCAPE_HOME/percebro/
