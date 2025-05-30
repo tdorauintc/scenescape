@@ -13,8 +13,10 @@ ifeq ($(or $(TARGET_BRANCH)),rc beta-rc)
 	EXTRA_BUILD_FLAGS := rebuild
 endif
 
+default: build
+
 .PHONY: build
-build: check-tag build-certificates build-docker
+build: check-tag build-certificates build-images
 
 .PHONY: check-tag
 check-tag:
@@ -39,8 +41,8 @@ build-common:
 	@echo "DONE"
 
 # Build docker images for all microservices
-.PHONY: build-docker
-build-docker: build-common
+.PHONY: build-images
+build-images: build-common
 	@echo "Building docker images in parallel..."
 	for dir in $(SUB_FOLDERS); do \
 		$(MAKE) http_proxy=$(http_proxy) -C $$dir $(EXTRA_BUILD_FLAGS) & \
@@ -56,3 +58,19 @@ list-deps:
 	done
 	@wait
 	@echo "DONE"
+
+.PHONY: clean
+clean:
+	@echo "Cleaning up all microservices..."
+	for dir in $(SUB_FOLDERS); do \
+		$(MAKE) -C $$dir clean; \
+	done
+	@echo "Cleaning common folder..."
+	@$(MAKE) -C $(COMMON_FOLDER) clean
+	@echo "DONE"
+	@echo "Cleaning certificates..."
+	@make -C certificates clean
+	@echo "DONE"
+
+.PHONY: rebuild
+rebuild: clean build
