@@ -5,6 +5,7 @@ COMMON_FOLDER := scene_common
 SUB_FOLDERS := docker controller autocalibration manager percebro
 EXTRA_BUILD_FLAGS :=
 TARGET_BRANCH ?= $(if $(CHANGE_TARGET),$(CHANGE_TARGET),$(BRANCH_NAME))
+SHELL:=/bin/bash
 
 ifeq ($(or $(findstring DAILY,$(BUILD_TYPE)),$(findstring TAG,$(BUILD_TYPE))),true)
 	EXTRA_BUILD_FLAGS := rebuild
@@ -44,9 +45,10 @@ build-common:
 .PHONY: build-images
 build-images: build-common
 	@echo "Building docker images in parallel..."
+	@trap 'echo "Interrupted! Exiting..."; exit 1' INT; \
 	for dir in $(SUB_FOLDERS); do \
 		$(MAKE) http_proxy=$(http_proxy) -C $$dir $(EXTRA_BUILD_FLAGS) & \
-	done && wait
+	done; wait
 	@$(MAKE) -C docker ../docker-compose.yml
 	@echo "DONE"
 
