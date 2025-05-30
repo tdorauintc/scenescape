@@ -220,10 +220,7 @@ echo Building SceneScape
 echo '########################################'
 
 make -C docs clean
-export CERTPASS="${CERTPASS}"
-export DBPASS="${DBPASS}"
-
-make build
+make build CERTPASS="${CERTPASS}" DBPASS="${DBPASS}"
 
 if manager/tools/upgrade-database --check ; then
     UPGRADEDB=0
