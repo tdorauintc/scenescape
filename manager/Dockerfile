@@ -11,7 +11,7 @@
 # This software and the related documents are provided as is, with no express
 # or implied warranties, other than those that are expressly stated in the License.
 
-FROM ubuntu:22.04 AS manager-builder
+FROM scenescape-common-base AS manager-builder
 
 # We use root for runtime init. The command in ENTRYPOINT will drop to an unprivileged user.
 # hadolint ignore=DL3002
@@ -22,35 +22,17 @@ SHELL ["/bin/bash", "-e", "-o", "pipefail", "-c"]
 RUN : \
     && apt-get update \
     && apt-get install -y --no-install-recommends \
-        curl \
-        g++ \
         libboost-python-dev \
         libegl1 \
-        libeigen3-dev \
         libgl1 \
         libglib2.0 \
-        libgtest-dev \
-        make \
-        pybind11-dev \
-        python-is-python3 \
         python3-dev \
-        python3-pip \
-        python3-scipy \
     && rm -rf /var/lib/apt/lists/*
 
 # SceneScape requirements
 COPY ./manager/requirements-buildtime.txt /tmp
 RUN pip3 install --upgrade --no-cache-dir \
         -r /tmp/requirements-buildtime.txt
-
-ENV WSUSER=scenescape
-COPY ./scene_common tmp/scene_common
-RUN cd tmp/scene_common \
-    && pip install --no-cache-dir . \
-    && make -C fast_geometry -j $(nproc) all install \
-    && cd .. \
-    && rm -rf scene_common
-
 
 # ---------- Manager Runtime Stage ------------------
 FROM ubuntu:22.04 AS manager-runtime
@@ -152,8 +134,10 @@ COPY ./manager/templates/ $SCENESCAPE_HOME/manager/templates
 COPY ./manager/static/ $SCENESCAPE_HOME/manager/static
 COPY ./manager/templatetags/ $SCENESCAPE_HOME/manager/templatetags
 COPY ./manager/manage.py $SCENESCAPE_HOME
+
+
 COPY --from=manager-builder /usr/local/lib/python3.10/dist-packages/fast_geometry /usr/local/lib/python3.10/dist-packages/fast_geometry
-COPY --from=manager-builder /usr/local/lib/python3.10/dist-packages/scene_common /usr/local/lib/python3.10/dist-packages/scene_common
+COPY --from=manager-builder /tmp/venv/lib/python3.10/site-packages/scene_common /usr/local/lib/python3.10/dist-packages/scene_common
 
 # Install SceneScape
 RUN : \
