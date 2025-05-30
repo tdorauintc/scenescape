@@ -13,12 +13,15 @@ IMAGE=scenescape-controller
 BASE_OS_IMAGE=ubuntu:22.04
 VERSION:=$(shell cat ../version.txt)
 BUILD_DIR=./build
+LOG_FILE=$(BUILD_DIR)/build.log
 
 default: build-image
 
 .PHONY: build-image
 build-image: Dockerfile
-	env BUILDKIT_PROGRESS=plain \
+	@echo "Started building image $(IMAGE):$(VERSION)..."
+	@mkdir -p $(BUILD_DIR)
+	@env BUILDKIT_PROGRESS=plain \
 	  docker build $(REBUILDFLAGS) \
 	    --build-arg BASE_OS_IMAGE=$(BASE_OS_IMAGE) \
 	    --build-arg http_proxy=$(http_proxy) \
@@ -26,8 +29,15 @@ build-image: Dockerfile
 	    --build-arg no_proxy=$(no_proxy) \
 	    --build-arg CERTDOMAIN=$(CERTDOMAIN) \
 	    --build-arg USER_ID=$$UID \
-	    --rm -t $(IMAGE):$(VERSION) -f ./Dockerfile .. \
-	&& docker tag $(IMAGE):$(VERSION) $(IMAGE):latest
+	    --rm -t $(IMAGE):$(VERSION) -f ./Dockerfile .. > $(LOG_FILE) 2>&1
+	@if [ $$? -eq 0 ]; then \
+		echo "Build complete. Image tagged as $(IMAGE):$(VERSION). Full log file at $(LOG_FILE)"; \
+		docker tag $(IMAGE):$(VERSION) $(IMAGE):latest; \
+	else \
+		echo "Docker build $(IMAGE):$(VERSION) failed. Check $(LOG_FILE) for details."; \
+		tail -n 25 $(LOG_FILE); \
+		exit 1; \
+	fi
 
 .PHONY: rebuild
 rebuild:
