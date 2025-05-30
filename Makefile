@@ -50,13 +50,13 @@ build-images: build-common
 	@wait
 	@echo "DONE"
 
-.PHONY: list-deps
-list-deps:
+.PHONY: list-dependencies
+list-dependencies:
 	@echo "Listing dependencies for all microservices..."
 	for dir in $(SUB_FOLDERS); do \
 		$(MAKE) -C $$dir list-deps; \
 	done
-	@wait
+	# TODO: generate a summary files with all dependencies
 	@echo "DONE"
 
 .PHONY: clean

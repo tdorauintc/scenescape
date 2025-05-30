@@ -46,13 +46,13 @@ build-image: Dockerfile
 .PHONY: list-deps
 list-deps: build-image
 	@mkdir -p $(BUILD_DIR)
-	@docker run --rm --entrypoint pip $(IMAGE):$(VERSION) freeze --all > $(BUILD_DIR)/pip-deps.txt
-	@echo "Python dependencies listed in $(BUILD_DIR)/pip-deps.txt"
+	@docker run --rm --entrypoint pip $(IMAGE):$(VERSION) freeze --all > $(BUILD_DIR)/$(IMAGE)-pip-deps.txt
+	@echo "Python dependencies listed in $(BUILD_DIR)/$(IMAGE)-pip-deps.txt"
 	@docker run --rm $(BASE_OS_IMAGE) dpkg -l | awk '{ print $$2, $$3, $$4 }' > $(BUILD_DIR)/system-packages.txt
 	@docker run --rm --entrypoint dpkg $(IMAGE):$(VERSION) -l | awk '{ print $$2, $$3, $$4 }' > $(BUILD_DIR)/manager-packages.txt
-	@grep -Fxv -f $(BUILD_DIR)/system-packages.txt $(BUILD_DIR)/manager-packages.txt > $(BUILD_DIR)/apt-deps.txt
+	@grep -Fxv -f $(BUILD_DIR)/system-packages.txt $(BUILD_DIR)/manager-packages.txt > $(BUILD_DIR)/$(IMAGE)-apt-deps.txt
 	@rm -rf $(BUILD_DIR)/system-packages.txt $(BUILD_DIR)/manager-packages.txt
-	@echo "OS dependencies listed in $(BUILD_DIR)/apt-deps.txt"
+	@echo "OS dependencies listed in $(BUILD_DIR)/$(IMAGE)-apt-deps.txt"
 
 .PHONY: rebuild
 rebuild:
