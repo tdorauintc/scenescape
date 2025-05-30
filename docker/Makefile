@@ -20,7 +20,7 @@ CURL_FLAGS=--connect-timeout 5 --max-time 120 --retry 5 --retry-delay 0
 FORCE_VAAPI ?= 0
 THREEJS_VERSION=168
 
-default: broker model-installer-img install-models secrets scene_common
+default: broker model-installer-img install-models secrets
 
 interface: Dockerfile-interface firefox-profile.tar geckodriver.tar.gz
 	env BUILDKIT_PROGRESS=plain \
@@ -57,11 +57,6 @@ sources: Dockerfile-sources
 	    --build-arg no_proxy=$(no_proxy) \
 	    --rm -t $(IMAGE)-sources:$(VERSION) .. -f ./Dockerfile-sources \
 	&& docker tag $(IMAGE)-sources:$(VERSION) $(IMAGE)-sources:latest
-
-scene_common:
-	ln -sf ../scene_common ../autocalibration
-	ln -sf ../scene_common ../controller
-	mkdir -p ../controller/utils && ln -sf ../../utils/waitforbroker ../controller/utils/waitforbroker
 
 # To force a complete clean build, do:
 #   make rebuild
