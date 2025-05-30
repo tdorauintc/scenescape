@@ -44,7 +44,7 @@ build-image: Dockerfile
 	fi
 
 .PHONY: list-deps
-list-deps: build-image
+list-deps:
 	@mkdir -p $(BUILD_DIR)
 	@docker run --rm --entrypoint pip $(IMAGE):$(VERSION) freeze --all > $(BUILD_DIR)/$(IMAGE)-pip-deps.txt
 	@echo "Python dependencies listed in $(BUILD_DIR)/$(IMAGE)-pip-deps.txt"
