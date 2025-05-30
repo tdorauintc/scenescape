@@ -38,9 +38,10 @@ ENV PATH="${BUILD_ENV_DIR}/bin:${PATH}"
 ENV WHEEL_DIR=/tmp/wheelhouse
 
 # Install 3rd party python dependencies
-COPY controller/requirements-buildtime.txt /tmp
+COPY controller/requirements-buildtime.txt controller/requirements-runtime.txt /tmp/
 RUN : \
     && pip3 download -r /tmp/requirements-buildtime.txt -d ${WHEEL_DIR} \
+    && pip3 download -r /tmp/requirements-runtime.txt -d ${WHEEL_DIR} \
     && pip3 install --upgrade --no-index --find-links=${WHEEL_DIR} -r /tmp/requirements-buildtime.txt \
     && rm -rf /tmp/requirements-buildtime.txt
 
