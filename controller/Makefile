@@ -13,7 +13,7 @@ IMAGE=scenescape-controller
 BASE_OS_IMAGE=ubuntu:22.04
 VERSION:=$(shell cat ../version.txt)
 BUILD_DIR=./build
-LOG_FILE=$(BUILD_DIR)/build.log
+LOG_FILE=$(BUILD_DIR)/$(IMAGE).log
 SHELL := /bin/bash
 
 default: build-image
@@ -22,7 +22,7 @@ default: build-image
 build-image: Dockerfile
 	@echo "------- STARTING BUILD OF IMAGE: $(IMAGE):$(VERSION) -------"
 	@mkdir -p $(BUILD_DIR)
-	-env BUILDKIT_PROGRESS=plain \
+	@-env BUILDKIT_PROGRESS=plain \
 	  docker build $(REBUILDFLAGS) \
 	    --build-arg BASE_OS_IMAGE=$(BASE_OS_IMAGE) \
 	    --build-arg http_proxy=$(http_proxy) \

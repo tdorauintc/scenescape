@@ -14,7 +14,7 @@ BASE_OS_IMAGE=ubuntu:22.04
 SHELL=/bin/bash
 VERSION:=$(shell cat version.txt)
 BUILD_DIR=./build
-LOG_FILE=$(BUILD_DIR)/build.log
+LOG_FILE=$(BUILD_DIR)/$(IMAGE).log
 FORCE_VAAPI ?= 0
 
 default: Dockerfile build-image

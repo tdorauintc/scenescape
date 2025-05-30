@@ -12,13 +12,14 @@
 __pycache__
 admin-pass.txt
 apriltag-cam[0-9].json
-autocalibration/scene_common
+autocalibration/build
 controller/build
 datasets
 db
 db.sqlite3
 db-backup-*
 docker/.mosquitto-go-auth-build
+manager/build
 manager/static/assets
 manager/static/bootstrap*
 manager/static/examples
@@ -32,8 +33,7 @@ kubernetes/setup/
 media
 migrations
 models
-percebro/scene_common
-percebro/utils
+percebro/build
 pvd-mqtt/detect
 sample_data/xREF_*
 secrets

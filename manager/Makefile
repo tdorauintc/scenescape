@@ -24,7 +24,7 @@ FORCE_VAAPI ?= 0
 THREEJS_VERSION=168
 BASE_OS_IMAGE=ubuntu:22.04
 BUILD_DIR=./build
-LOG_FILE=$(BUILD_DIR)/build.log
+LOG_FILE=$(BUILD_DIR)/$(IMAGE).log
 
 define JSMEXAMPLES
 fonts/helvetiker_regular.typeface.json \
