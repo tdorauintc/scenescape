@@ -21,22 +21,27 @@ SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 RUN : \
     && apt-get update \
     && apt-get install -y --no-install-recommends \
-        cmake \
-        libeigen3-dev \
-        libgtest-dev \
         libopencv-dev \
-        pybind11-dev \
+        python3-venv \
     && rm -rf /var/lib/apt/lists/*
 
-# Set up Python virtual environment for building
+# create and set up Python virtual environment
 ENV BUILD_ENV_DIR=/tmp/venv
+RUN : \
+    && mkdir ${BUILD_ENV_DIR} \
+    && python3 -m venv ${BUILD_ENV_DIR} \
+    && ${BUILD_ENV_DIR}/bin/pip3 install --upgrade --no-cache-dir pip \
+    && ${BUILD_ENV_DIR}/bin/pip3 install --no-cache-dir wheel
+
 ENV PATH="${BUILD_ENV_DIR}/bin:${PATH}"
+
 ENV WHEEL_DIR=/tmp/wheelhouse
 
 # Install 3rd party python dependencies
-COPY controller/requirements-buildtime.txt /tmp
+COPY controller/requirements-buildtime.txt controller/requirements-runtime.txt /tmp/
 RUN : \
     && pip3 download -r /tmp/requirements-buildtime.txt -d ${WHEEL_DIR} \
+    && pip3 download -r /tmp/requirements-runtime.txt -d ${WHEEL_DIR} \
     && pip3 install --upgrade --no-index --find-links=${WHEEL_DIR} -r /tmp/requirements-buildtime.txt \
     && rm -rf /tmp/requirements-buildtime.txt
 
@@ -109,12 +114,9 @@ ENV PATH="${RUNTIME_ENV_DIR}/bin:${PATH}"
 COPY --chown=$WSUSER:$WSUSER --from=scenescape-controller-builder ${WHEEL_DIR} ${WHEEL_DIR}
 # copy installed scenescape packages from the previous stages
 COPY --chown=$WSUSER:$WSUSER --from=scenescape-common-base /usr/local/lib/python3.10/dist-packages/fast_geometry ${RUNTIME_ENV_DIR}/lib/python3.10/site-packages/fast_geometry
-COPY --chown=$WSUSER:$WSUSER --from=scenescape-common-base ${BUILD_ENV_DIR}/lib/python3.10/site-packages/scene_common ${RUNTIME_ENV_DIR}/lib/python3.10/site-packages/scene_common
-COPY --chown=$WSUSER:$WSUSER --from=scenescape-common-base ${BUILD_ENV_DIR}/lib/python3.10/site-packages/scene_common*.dist-info ${RUNTIME_ENV_DIR}/lib/python3.10/site-packages/
+COPY --chown=$WSUSER:$WSUSER --from=scenescape-common-base /usr/local/lib/python3.10/dist-packages/scene_common ${RUNTIME_ENV_DIR}/lib/python3.10/site-packages/scene_common
 COPY --chown=$WSUSER:$WSUSER --from=scenescape-controller-builder ${BUILD_ENV_DIR}/lib/python3.10/site-packages/controller ${RUNTIME_ENV_DIR}/lib/python3.10/site-packages/controller
-COPY --chown=$WSUSER:$WSUSER --from=scenescape-controller-builder ${BUILD_ENV_DIR}/lib/python3.10/site-packages/controller*.dist-info ${RUNTIME_ENV_DIR}/lib/python3.10/site-packages/
 COPY --chown=$WSUSER:$WSUSER --from=scenescape-controller-builder ${BUILD_ENV_DIR}/lib/python3.10/site-packages/robot_vision ${RUNTIME_ENV_DIR}/lib/python3.10/site-packages/robot_vision
-COPY --chown=$WSUSER:$WSUSER --from=scenescape-controller-builder ${BUILD_ENV_DIR}/lib/python3.10/site-packages/robot_vision*.dist-info ${RUNTIME_ENV_DIR}/lib/python3.10/site-packages/
 
 # install only required runtime dependencies
 COPY controller/requirements-runtime.txt /tmp
