@@ -27,6 +27,11 @@ sudo apt update
   ```bash
   git clone https://github.com/open-edge-platform/scenescape/
   cd scenescape
+  ```
+
+  Optionally, checkout a specific version, if required, e.g.:
+
+  ```bash
   git checkout v1.3.0
   ```
 
