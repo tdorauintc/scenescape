@@ -2,10 +2,13 @@
 # SPDX-License-Identifier: Apache-2.0
 
 COMMON_FOLDER := scene_common
-SUB_FOLDERS := docker controller autocalibration manager percebro
+IMAGE_FOLDERS := docker controller autocalibration manager percebro
 EXTRA_BUILD_FLAGS :=
 TARGET_BRANCH ?= $(if $(CHANGE_TARGET),$(CHANGE_TARGET),$(BRANCH_NAME))
-SHELL:=/bin/bash
+SHELL := /bin/bash
+# Number of parallel jobs (defaults to CPU count)
+JOBS ?= $(shell nproc)
+FOLDERS ?= $(IMAGE_FOLDERS)
 
 ifeq ($(or $(findstring DAILY,$(BUILD_TYPE)),$(findstring TAG,$(BUILD_TYPE))),true)
 	EXTRA_BUILD_FLAGS := rebuild
@@ -46,16 +49,29 @@ build-common:
 build-images: build-common
 	@echo "Building docker images in parallel..."
 	@trap 'echo "Interrupted! Exiting..."; exit 1' INT; \
-	for dir in $(SUB_FOLDERS); do \
+	for dir in $(IMAGE_FOLDERS); do \
 		$(MAKE) http_proxy=$(http_proxy) -C $$dir $(EXTRA_BUILD_FLAGS) & \
 	done; wait
 	@$(MAKE) -C docker ../docker-compose.yml
 	@echo "DONE"
 
+.PHONY: $(IMAGE_FOLDERS)
+$(IMAGE_FOLDERS):
+	@echo "Building image(s) in folder $@..."
+	@$(MAKE) -C $@ http_proxy=$(http_proxy) https_proxy=$(https_proxy) no_proxy=$(no_proxy) $(EXTRA_BUILD_FLAGS)
+	@echo "Image(s) in folder $@ built successfully."
+
+# Parallel wrapper
+.PHONY: build-images-parallel
+build-images-parallel: build-common
+	@echo "==> Running parallel builds of folders: $(FOLDERS)"
+	@$(MAKE) -j$(JOBS) $(FOLDERS)
+	@echo "DONE ==> Parallel builds of folders: $(FOLDERS)"
+
 .PHONY: list-dependencies
 list-dependencies:
 	@echo "Listing dependencies for all microservices..."
-	for dir in $(SUB_FOLDERS); do \
+	for dir in $(IMAGE_FOLDERS); do \
 		$(MAKE) -C $$dir list-deps; \
 	done
 #TODO: generate a summary files with all dependencies
@@ -64,7 +80,7 @@ list-dependencies:
 .PHONY: clean
 clean:
 	@echo "Cleaning up all microservices..."
-	for dir in $(SUB_FOLDERS); do \
+	for dir in $(IMAGE_FOLDERS); do \
 		$(MAKE) -C $$dir clean; \
 	done
 	@echo "Cleaning common folder..."
