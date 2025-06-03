@@ -57,6 +57,11 @@ build-images-parallel: build-common
 	@$(MAKE) -j$(JOBS) $(FOLDERS)
 	@echo "DONE ==> Parallel builds of folders: $(FOLDERS)"
 
+.PHONY: demo
+demo:
+	@$(MAKE) -C docker ../docker-compose.yml
+	docker compose up -d
+
 .PHONY: list-dependencies
 list-dependencies:
 	@echo "Listing dependencies for all microservices..."
