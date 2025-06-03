@@ -70,5 +70,4 @@ list-dependencies:
 
 .PHONY: clean
 clean:
-	rm -rf $(BUILD_DIR)
 	docker rmi $(IMAGE):$(VERSION) $(IMAGE):latest || true

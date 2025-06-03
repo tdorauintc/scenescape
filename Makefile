@@ -99,6 +99,7 @@ clean:
 	@$(MAKE) -C $(COMMON_FOLDER) clean
 	@echo "Cleaning certificates..."
 	@make -C certificates clean
+	@-rm -rf $(BUILD_DIR)
 	@echo "DONE"
 
 .PHONY: rebuild
