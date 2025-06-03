@@ -37,13 +37,6 @@ sudo apt update
 
 ### Step 3: Build Intel® SceneScape container images
 
-Set an environment variable SUPASS with a password for logging into Intel® SceneScape.
-Important: This should be different than the password for your system user.
-
-  ```bash
-  export SUPASS=<password>
-  ```
-
 Build container images:
 
   ```bash
@@ -61,10 +54,17 @@ This step generates common base docker image and docker images for all microserv
 
 This step generates dependency lists. Two separate files are created for system packages and Python packages per each microservice image.
 
-### Step 5: Deploy Intel® SceneScape to the target system
+### Step 5: Deploy Intel® SceneScape demo to the target system
+
+Before deploying the demo of Intel® SceneScape for the first time, please set the environment variable SUPASS with a password for logging into Intel® SceneScape.
+Important: This should be different than the password for your system user.
 
   ```bash
-  docker compose up -d
+  export SUPASS=<password>
+  ```
+
+  ```bash
+  make demo
   ```
 
 ### Step 6: Verify a successful deployment
