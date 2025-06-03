@@ -11,7 +11,7 @@
 
 SHELL=/bin/bash
 IMAGE=scenescape
-VERSION:=$(shell cat version.txt)
+VERSION:=$(shell cat ../version.txt)
 CERTDOMAIN=scenescape.intel.com
 SECRETSDIR=../secrets
 MQTTUSERS="percebro.auth=cameras controller.auth=scenectrl browser.auth=webuser calibration.auth=calibration"
