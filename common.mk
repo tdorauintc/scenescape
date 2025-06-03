@@ -27,7 +27,7 @@ build-image: Dockerfile
 	@echo -e "$(GREEN)------- STARTING BUILD OF IMAGE: $(IMAGE):$(VERSION) -------$(RESET)"
 	@{ \
 	    set -e; \
-		set -o pipefail; \
+	    set -o pipefail; \
 	    if env BUILDKIT_PROGRESS=plain docker build $(REBUILDFLAGS) \
 	        --build-arg BASE_OS_IMAGE=$(BASE_OS_IMAGE) \
 	        --build-arg http_proxy=$(http_proxy) \

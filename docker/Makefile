@@ -46,7 +46,7 @@ broker: Dockerfile-broker
 	@echo -e "$(GREEN)------- STARTING BUILD OF IMAGE: $(IMAGE)-broker:$(VERSION) -------$(RESET)"
 	@{ \
 	    set -e; \
-		set -o pipefail; \
+	    set -o pipefail; \
 	    if env BUILDKIT_PROGRESS=plain docker build $(REBUILDFLAGS) \
 	        --build-arg http_proxy=$(http_proxy) \
 	        --build-arg https_proxy=$(https_proxy) \
@@ -68,7 +68,7 @@ model-installer-img: Dockerfile-model-installer
 	@echo -e "$(GREEN)------- STARTING BUILD OF IMAGE: $(IMAGE)-model-installer:$(VERSION) -------$(RESET)"
 	@{ \
 	    set -e; \
-		set -o pipefail; \
+	    set -o pipefail; \
 	    if env BUILDKIT_PROGRESS=plain docker build $(REBUILDFLAGS) \
 	        --build-arg http_proxy=$(http_proxy) \
 	        --build-arg https_proxy=$(https_proxy) \
