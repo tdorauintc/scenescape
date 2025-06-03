@@ -46,6 +46,13 @@ Build container images:
 The build may take around 15 minutes depending on target machine.
 This step generates common base docker image and docker images for all microservices.
 
+By default, a parallel build is being run with the number of jobs equal to the number of processors in the system.
+Optionally, the number of jobs can be adjusted with `JOBS` environment variable, e.g. to achieve sequential building:
+
+  ```bash
+  make JOBS=1
+  ```
+
 ### Step 4 (Optional): Build dependency list of Intel® SceneScape container images
 
   ```bash
