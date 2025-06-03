@@ -62,8 +62,16 @@ build-images-parallel: build-common
 
 .PHONY: demo
 demo:
+	@if [ ! -d "./db" ] && [ -z "$$SUPASS" ]; then \
+	    echo "Please set the SUPASS environment variable before starting the demo for the first time."; \
+	    echo "The SUPASS environment variable is a password for logging into Intel® SceneScape."; \
+	    exit 1; \
+	fi
 	@$(MAKE) -C docker ../docker-compose.yml
 	docker compose up -d
+	@echo ""
+	@echo "To stop SceneScape, type:"
+	@echo "    docker compose down"
 
 .PHONY: list-dependencies
 list-dependencies:
