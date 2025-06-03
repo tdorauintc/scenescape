@@ -65,7 +65,7 @@ build-images-parallel: build-common
 
 .PHONY: demo
 demo:
-	@if [ ! -d "./db" ] && [ -z "$$SUPASS" ]; then \
+	@if [ -z "$$SUPASS" ] && { [ ! -d "./db" ] || [ -z "$$(ls -A ./db)" ]; }; then \
 	    echo "Please set the SUPASS environment variable before starting the demo for the first time."; \
 	    echo "The SUPASS environment variable is a password for logging into Intel® SceneScape."; \
 	    exit 1; \
