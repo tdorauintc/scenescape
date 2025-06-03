@@ -19,7 +19,7 @@ TEST_NAME="Scene Performance test"
 
 source tests/test_utils.sh
 
-VERSION=$(cat sscape/version.txt)
+VERSION=$(cat ./version.txt)
 export BROWSER_IMAGE="scenescape:${VERSION}"
 export IMAGE="scenescape:${VERSION}"
 
