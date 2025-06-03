@@ -51,6 +51,11 @@ rebuild:
 
 .PHONY: list-deps
 list-deps:
+	@if [[ -z $$(docker images | grep "^$(IMAGE)" | grep $(VERSION)) ]]; then \
+	  echo "Error: the image $(IMAGE):$(VERSION) does not exist! Cannot generate dependency list."; \
+	  echo "Please build the image first."; \
+	  exit 1; \
+	fi
 	@docker run --rm --entrypoint pip $(IMAGE):$(VERSION) freeze --all > $(BUILD_DIR)/$(IMAGE)-pip-deps.txt
 	@echo "Python dependencies listed in $(BUILD_DIR)/$(IMAGE)-pip-deps.txt"
 	@docker run --rm $(BASE_OS_IMAGE) dpkg -l | awk '{ print $$2, $$3, $$4 }' > $(BUILD_DIR)/system-packages.txt
