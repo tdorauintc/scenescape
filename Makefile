@@ -20,7 +20,7 @@ endif
 default: build
 
 .PHONY: build
-build: check-tag build-certificates build-images
+build: check-tag build-certificates build-images-parallel
 
 .PHONY: check-tag
 check-tag:
@@ -42,17 +42,6 @@ build-certificates:
 .PHONY: build-common
 build-common:
 	@$(MAKE) -C $(COMMON_FOLDER) http_proxy=$(http_proxy) $(EXTRA_BUILD_FLAGS)
-	@echo "DONE"
-
-# Build docker images for all microservices
-.PHONY: build-images
-build-images: build-common
-	@echo "Building docker images in parallel..."
-	@trap 'echo "Interrupted! Exiting..."; exit 1' INT; \
-	for dir in $(IMAGE_FOLDERS); do \
-		$(MAKE) http_proxy=$(http_proxy) -C $$dir $(EXTRA_BUILD_FLAGS) & \
-	done; wait
-	@$(MAKE) -C docker ../docker-compose.yml
 	@echo "DONE"
 
 .PHONY: $(IMAGE_FOLDERS)
@@ -85,7 +74,6 @@ clean:
 	done
 	@echo "Cleaning common folder..."
 	@$(MAKE) -C $(COMMON_FOLDER) clean
-	@echo "DONE"
 	@echo "Cleaning certificates..."
 	@make -C certificates clean
 	@echo "DONE"
