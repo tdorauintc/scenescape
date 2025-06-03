@@ -11,7 +11,7 @@
 
 SHELL := /bin/bash
 VERSION:=$(shell cat ../version.txt)
-BUILD_DIR := $(PWD)/build
+BUILD_DIR ?= $(PWD)/build
 LOG_FILE := $(BUILD_DIR)/$(IMAGE).log
 
 $(shell mkdir -p $(BUILD_DIR))
@@ -53,8 +53,8 @@ build-image: Dockerfile
 rebuild:
 	$(MAKE) REBUILDFLAGS="--no-cache"
 
-.PHONY: list-deps
-list-deps:
+.PHONY: list-dependencies
+list-dependencies:
 	@if [[ -z $$(docker images | grep "^$(IMAGE)" | grep $(VERSION)) ]]; then \
 	  echo "Error: the image $(IMAGE):$(VERSION) does not exist! Cannot generate dependency list."; \
 	  echo "Please build the image first."; \

@@ -9,6 +9,7 @@ SHELL := /bin/bash
 # Number of parallel jobs (defaults to CPU count)
 JOBS ?= $(shell nproc)
 FOLDERS ?= $(IMAGE_FOLDERS)
+BUILD_DIR ?= $(PWD)/build
 
 ifeq ($(or $(findstring DAILY,$(BUILD_TYPE)),$(findstring TAG,$(BUILD_TYPE))),true)
 	EXTRA_BUILD_FLAGS := rebuild
@@ -67,10 +68,14 @@ demo:
 .PHONY: list-dependencies
 list-dependencies:
 	@echo "Listing dependencies for all microservices..."
+	@set -e; \
 	for dir in $(IMAGE_FOLDERS); do \
-		$(MAKE) -C $$dir list-deps; \
+		$(MAKE) -C $$dir list-dependencies; \
 	done
-#TODO: generate a summary files with all dependencies
+	@-find . -type f -name '*-apt-deps.txt' -exec cat {} + | sort | uniq > $(BUILD_DIR)/scenescape-all-apt-deps.txt
+	@-find . -type f -name '*-pip-deps.txt' -exec cat {} + | sort | uniq > $(BUILD_DIR)/scenescape-all-pip-deps.txt
+	@echo "The following dependency lists have been generated:"
+	@find $(BUILD_DIR) -name '*-deps.txt' -print
 	@echo "DONE"
 
 .PHONY: clean

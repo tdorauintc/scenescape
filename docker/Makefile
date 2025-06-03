@@ -19,11 +19,10 @@ AUTHFILES=$(addprefix $(SECRETSDIR)/,$(shell echo $(MQTTUSERS) | sed -e 's/=[^ ]
 CURL_FLAGS=--connect-timeout 5 --max-time 120 --retry 5 --retry-delay 0
 FORCE_VAAPI ?= 0
 THREEJS_VERSION=168
-BUILD_DIR := $(PWD)/build
 IMAGES := $(IMAGE)-broker $(IMAGE)-model-installer
 BROKER_LOG_FILE=$(BUILD_DIR)/$(IMAGE)-broker.log
 MODEL_INSTALLER_LOG_FILE=$(BUILD_DIR)/$(IMAGE)-model-installer.log
-
+BUILD_DIR ?= $(PWD)/build
 $(shell mkdir -p $(BUILD_DIR))
 
 # ANSI color codes
@@ -171,10 +170,15 @@ $(SECRETSDIR)/django/secrets.py:
 
 authfiles: $(AUTHFILES)
 
-.PHONY: list-deps
-list-deps:
+.PHONY: list-dependencies
+list-dependencies:
 	@mkdir -p $(BUILD_DIR)
 	@for image in $(IMAGES); do \
+		if [[ -z $$(docker images | grep "^$$image" | grep $(VERSION)) ]]; then \
+		  echo "Error: the image $$image:$(VERSION) does not exist! Cannot generate dependency list."; \
+		  echo "Please build the image first."; \
+		  exit 1; \
+		fi; \
 		BASE_OS_IMAGE="ubuntu:22.04"; \
 		if [ "$$image" = "scenescape-model-installer" ]; then \
 			BASE_OS_IMAGE="openvino/ubuntu22_dev:2024.6.0"; \
