@@ -50,11 +50,13 @@ $(IMAGE_FOLDERS):
 	@$(MAKE) -C $@ http_proxy=$(http_proxy) https_proxy=$(https_proxy) no_proxy=$(no_proxy) $(EXTRA_BUILD_FLAGS)
 	@echo "DONE ====> Building folder $@"
 
-# Parallel wrapper
+# Parallel wrapper handles parallel builds of folders specified in FOLDERS variable
 .PHONY: build-images-parallel
 build-images-parallel: build-common
 	@echo "==> Running parallel builds of folders: $(FOLDERS)"
-	@$(MAKE) -j$(JOBS) $(FOLDERS)
+# Use a trap to catch errors and print logs if any error occurs in parallel build
+	@set -e; trap 'grep --color=auto -i -r --include="*.log" "^error" . || true' EXIT; \
+	$(MAKE) -j$(JOBS) $(FOLDERS)
 	@echo "DONE ==> Parallel builds of folders: $(FOLDERS)"
 
 .PHONY: demo

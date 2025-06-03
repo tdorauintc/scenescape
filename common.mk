@@ -11,7 +11,7 @@
 
 SHELL := /bin/bash
 VERSION:=$(shell cat ../version.txt)
-BUILD_DIR := ./build
+BUILD_DIR := $(PWD)/build
 LOG_FILE := $(BUILD_DIR)/$(IMAGE).log
 
 $(shell mkdir -p $(BUILD_DIR))
@@ -44,7 +44,7 @@ build-image: Dockerfile
 	        echo "Log file created at $(LOG_FILE)"; \
 	    else \
 	        echo -e "$(RED)------- BUILD OF IMAGE $(IMAGE):$(VERSION) FAILED. CHECK $(LOG_FILE) FOR DETAILS. -------$(RESET)"; \
-	        tail -n 20 $(LOG_FILE); \
+	        grep --color=auto -i -r "^error" $(LOG_FILE); \
 	        exit 1; \
 	    fi \
 	}
