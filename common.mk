@@ -25,25 +25,29 @@ RESET  := \033[0m
 .PHONY: build-image
 build-image: Dockerfile
 	@echo -e "$(GREEN)------- STARTING BUILD OF IMAGE: $(IMAGE):$(VERSION) -------$(RESET)"
-	@-env BUILDKIT_PROGRESS=plain \
-	  docker build $(REBUILDFLAGS) \
-	    --build-arg BASE_OS_IMAGE=$(BASE_OS_IMAGE) \
-	    --build-arg http_proxy=$(http_proxy) \
-	    --build-arg https_proxy=$(https_proxy) \
-	    --build-arg no_proxy=$(no_proxy) \
-	    --build-arg CERTDOMAIN=$(CERTDOMAIN) \
-	    --build-arg USER_ID=$$UID \
-	    --build-arg FORCE_VAAPI=$(FORCE_VAAPI) \
-	    --rm -t $(IMAGE):$(VERSION) -f ./Dockerfile .. 2>&1 | tee $(LOG_FILE); \
-	status=$${PIPESTATUS[0]}; \
-	if [ $$status -eq 0 ]; then \
-	    docker tag $(IMAGE):$(VERSION) $(IMAGE):latest; \
-	    echo -e "$(GREEN)------- BUILD OF IMAGE $(IMAGE):$(VERSION) COMPLETED SUCCESSFULLY -------$(RESET)"; \
-	    echo "Log file created at $(LOG_FILE)"; \
-	else \
-	    echo -e "$(RED)------- BUILD OF IMAGE $(IMAGE):$(VERSION) FAILED. CHECK $(LOG_FILE) FOR DETAILS. -------$(RESET)"; \
-	    exit 1; \
-	fi
+	@{ \
+	    set -e; \
+		set -o pipefail; \
+	    if env BUILDKIT_PROGRESS=plain docker build $(REBUILDFLAGS) \
+	        --build-arg BASE_OS_IMAGE=$(BASE_OS_IMAGE) \
+	        --build-arg http_proxy=$(http_proxy) \
+	        --build-arg https_proxy=$(https_proxy) \
+	        --build-arg no_proxy=$(no_proxy) \
+	        --build-arg CERTDOMAIN=$(CERTDOMAIN) \
+	        --build-arg USER_ID=$$UID \
+	        --build-arg FORCE_VAAPI=$(FORCE_VAAPI) \
+	        --rm -t $(IMAGE):$(VERSION) \
+	        -f ./Dockerfile .. 2>&1 | tee $(LOG_FILE); \
+	    then \
+	        docker tag $(IMAGE):$(VERSION) $(IMAGE):latest; \
+	        echo -e "$(GREEN)------- BUILD OF IMAGE $(IMAGE):$(VERSION) COMPLETED SUCCESSFULLY -------$(RESET)"; \
+	        echo "Log file created at $(LOG_FILE)"; \
+	    else \
+	        echo -e "$(RED)------- BUILD OF IMAGE $(IMAGE):$(VERSION) FAILED. CHECK $(LOG_FILE) FOR DETAILS. -------$(RESET)"; \
+	        tail -n 20 $(LOG_FILE); \
+	        exit 1; \
+	    fi \
+	}
 
 .PHONY: rebuild
 rebuild:
