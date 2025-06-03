@@ -16,9 +16,15 @@ LOG_FILE := $(BUILD_DIR)/$(IMAGE).log
 
 $(shell mkdir -p $(BUILD_DIR))
 
+# ANSI color codes
+RED    := \033[0;31m
+GREEN  := \033[0;32m
+YELLOW := \033[0;33m
+RESET  := \033[0m
+
 .PHONY: build-image
 build-image: Dockerfile
-	@echo "------- STARTING BUILD OF IMAGE: $(IMAGE):$(VERSION) -------"
+	@echo -e "$(GREEN)------- STARTING BUILD OF IMAGE: $(IMAGE):$(VERSION) -------$(RESET)"
 	@-env BUILDKIT_PROGRESS=plain \
 	  docker build $(REBUILDFLAGS) \
 	    --build-arg BASE_OS_IMAGE=$(BASE_OS_IMAGE) \
@@ -32,10 +38,10 @@ build-image: Dockerfile
 	status=$${PIPESTATUS[0]}; \
 	if [ $$status -eq 0 ]; then \
 	    docker tag $(IMAGE):$(VERSION) $(IMAGE):latest; \
-	    echo -e "\033[0;32m------- BUILD OF IMAGE $(IMAGE):$(VERSION) COMPLETED SUCCESSFULLY -------\033[0m"; \
+	    echo -e "$(GREEN)------- BUILD OF IMAGE $(IMAGE):$(VERSION) COMPLETED SUCCESSFULLY -------$(RESET)"; \
 	    echo "Log file created at $(LOG_FILE)"; \
 	else \
-	    echo -e "\033[0;31m------- BUILD OF IMAGE $(IMAGE):$(VERSION) FAILED. CHECK $(LOG_FILE) FOR DETAILS. -------\033[0m"; \
+	    echo -e "$(RED)------- BUILD OF IMAGE $(IMAGE):$(VERSION) FAILED. CHECK $(LOG_FILE) FOR DETAILS. -------$(RESET)"; \
 	    exit 1; \
 	fi
 
