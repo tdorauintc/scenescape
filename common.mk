@@ -29,7 +29,7 @@ build-image: Dockerfile
 	    set -e; \
 	    set -o pipefail; \
 	    if env BUILDKIT_PROGRESS=plain docker build $(REBUILDFLAGS) \
-	        --build-arg BASE_OS_IMAGE=$(BASE_OS_IMAGE) \
+	        --build-arg RUNTIME_OS_IMAGE=$(RUNTIME_OS_IMAGE) \
 	        --build-arg http_proxy=$(http_proxy) \
 	        --build-arg https_proxy=$(https_proxy) \
 	        --build-arg no_proxy=$(no_proxy) \
@@ -62,7 +62,7 @@ list-dependencies:
 	fi
 	@docker run --rm --entrypoint pip $(IMAGE):$(VERSION) freeze --all > $(BUILD_DIR)/$(IMAGE)-pip-deps.txt
 	@echo "Python dependencies listed in $(BUILD_DIR)/$(IMAGE)-pip-deps.txt"
-	@docker run --rm $(BASE_OS_IMAGE) dpkg -l | awk '{ print $$2, $$3, $$4 }' > $(BUILD_DIR)/system-packages.txt
+	@docker run --rm $(RUNTIME_OS_IMAGE) dpkg -l | awk '{ print $$2, $$3, $$4 }' > $(BUILD_DIR)/system-packages.txt
 	@docker run --rm --entrypoint dpkg $(IMAGE):$(VERSION) -l | awk '{ print $$2, $$3, $$4 }' > $(BUILD_DIR)/$(IMAGE)-packages.txt
 	@grep -Fxv -f $(BUILD_DIR)/system-packages.txt $(BUILD_DIR)/$(IMAGE)-packages.txt > $(BUILD_DIR)/$(IMAGE)-apt-deps.txt
 	@rm -rf $(BUILD_DIR)/system-packages.txt $(BUILD_DIR)/$(IMAGE)-packages.txt

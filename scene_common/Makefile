@@ -10,7 +10,6 @@
 # or implied warranties, other than those that are expressly stated in the License.
 
 IMAGE=scenescape-common-base
-BASE_OS_IMAGE=ubuntu:22.04
 
 default: build-image
 

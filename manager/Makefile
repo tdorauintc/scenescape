@@ -10,7 +10,7 @@
 # or implied warranties, other than those that are expressly stated in the License.
 
 IMAGE = scenescape-manager
-BASE_OS_IMAGE = ubuntu:22.04
+RUNTIME_OS_IMAGE = ubuntu:22.04
 SHELL = /bin/bash
 CERTDOMAIN = scenescape.intel.com
 DBDIR = ../db

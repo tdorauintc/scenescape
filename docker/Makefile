@@ -179,19 +179,19 @@ list-dependencies:
 		  echo "Please build the image first."; \
 		  exit 1; \
 		fi; \
-		BASE_OS_IMAGE="ubuntu:22.04"; \
+		RUNTIME_OS_IMAGE="ubuntu:22.04"; \
 		if [ "$$image" = "scenescape-model-installer" ]; then \
-			BASE_OS_IMAGE="openvino/ubuntu22_dev:2024.6.0"; \
+			RUNTIME_OS_IMAGE="openvino/ubuntu22_dev:2024.6.0"; \
 		elif [ "$$image" = "scenescape-broker" ]; then \
-			BASE_OS_IMAGE="debian:stable-slim"; \
+			RUNTIME_OS_IMAGE="debian:stable-slim"; \
 		fi; \
-		docker run --rm $$BASE_OS_IMAGE dpkg -l | awk '{ print $$2, $$3, $$4 }' > $(BUILD_DIR)/system-packages.txt || echo "Failed to run dpkg on $$BASE_OS_IMAGE"; \
+		docker run --rm $$RUNTIME_OS_IMAGE dpkg -l | awk '{ print $$2, $$3, $$4 }' > $(BUILD_DIR)/system-packages.txt || echo "Failed to run dpkg on $$RUNTIME_OS_IMAGE"; \
 		docker run --rm --entrypoint dpkg $$image:$(VERSION) -l | awk '$$1 == "ii" { print $$2, $$3, $$4 }' > $(BUILD_DIR)/$$image-packages.txt || echo "Failed to run dpkg on $$image:$(VERSION)"; \
 		grep -Fxv -f $(BUILD_DIR)/system-packages.txt $(BUILD_DIR)/$$image-packages.txt > $(BUILD_DIR)/$$image-apt-deps.txt; \
 		rm -rf $(BUILD_DIR)/system-packages.txt $(BUILD_DIR)/$$image-packages.txt; \
 		echo "OS dependencies listed in $(BUILD_DIR)/$$image-apt-deps.txt"; \
 		if [ "$$image" != "scenescape-broker" ]; then \
-			docker run --rm $$BASE_OS_IMAGE pip freeze --all > $(BUILD_DIR)/base-pip-packages.txt || echo "Failed to run pip on $$BASE_OS_IMAGE"; \
+			docker run --rm $$RUNTIME_OS_IMAGE pip freeze --all > $(BUILD_DIR)/base-pip-packages.txt || echo "Failed to run pip on $$RUNTIME_OS_IMAGE"; \
 			docker run --rm --entrypoint pip $$image:$(VERSION) freeze --all > $(BUILD_DIR)/$$image-pip-packages.txt || echo "Failed to run pip on $$image:$(VERSION)"; \
 			grep -Fxv -f $(BUILD_DIR)/base-pip-packages.txt $(BUILD_DIR)/$$image-pip-packages.txt > $(BUILD_DIR)/$$image-pip-deps.txt; \
 			rm -rf $(BUILD_DIR)/base-pip-packages.txt $(BUILD_DIR)/$$image-pip-packages.txt; \
