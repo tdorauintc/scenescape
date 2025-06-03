@@ -6,9 +6,12 @@ IMAGE_FOLDERS := docker controller autocalibration manager percebro
 EXTRA_BUILD_FLAGS :=
 TARGET_BRANCH ?= $(if $(CHANGE_TARGET),$(CHANGE_TARGET),$(BRANCH_NAME))
 SHELL := /bin/bash
-# Number of parallel jobs (defaults to CPU count)
+
+# User can adjust number of parallel jobs (defaults to CPU count)
 JOBS ?= $(shell nproc)
+# User can adjust folders being built (defaults to all)
 FOLDERS ?= $(IMAGE_FOLDERS)
+# User can adjust build output folder (defaults to ./build)
 BUILD_DIR ?= $(PWD)/build
 
 ifeq ($(or $(findstring DAILY,$(BUILD_TYPE)),$(findstring TAG,$(BUILD_TYPE))),true)
