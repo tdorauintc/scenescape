@@ -46,9 +46,9 @@ build-common:
 
 .PHONY: $(IMAGE_FOLDERS)
 $(IMAGE_FOLDERS):
-	@echo "Building image(s) in folder $@..."
+	@echo "====> Building folder $@..."
 	@$(MAKE) -C $@ http_proxy=$(http_proxy) https_proxy=$(https_proxy) no_proxy=$(no_proxy) $(EXTRA_BUILD_FLAGS)
-	@echo "Image(s) in folder $@ built successfully."
+	@echo "DONE ====> Building folder $@"
 
 # Parallel wrapper
 .PHONY: build-images-parallel
