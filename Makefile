@@ -92,7 +92,7 @@ list-dependencies:
 .PHONY: clean
 clean:
 	@echo "Cleaning up all microservices..."
-	for dir in $(IMAGE_FOLDERS); do \
+	for dir in $(FOLDERS); do \
 		$(MAKE) -C $$dir clean; \
 	done
 	@echo "Cleaning common folder..."
