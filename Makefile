@@ -22,11 +22,12 @@ FOLDERS ?= $(IMAGE_FOLDERS)
 # User can adjust build output folder (defaults to ./build)
 BUILD_DIR ?= $(PWD)/build
 
-ifeq ($(or $(findstring DAILY,$(BUILD_TYPE)),$(findstring TAG,$(BUILD_TYPE))),true)
-	EXTRA_BUILD_FLAGS := rebuild
+ifneq (,$(filter DAILY TAG,$(BUILD_TYPE)))
+  EXTRA_BUILD_FLAGS := rebuild
 endif
-ifeq ($(or $(TARGET_BRANCH)),rc beta-rc)
-	EXTRA_BUILD_FLAGS := rebuild
+
+ifneq (,$(filter rc beta-rc,$(TARGET_BRANCH)))
+  EXTRA_BUILD_FLAGS := rebuild
 endif
 
 default: build
@@ -38,7 +39,7 @@ build: check-tag build-certificates build-images-parallel
 check-tag:
 ifeq ($(BUILD_TYPE),TAG)
 	@echo "Checking if tag matches version.txt..."
-	@if grep --quiet $(BRANCH_NAME) version.txt; then \
+	@if grep --quiet "$(BRANCH_NAME)" version.txt; then \
 		echo "Perfect - Tag and Version is matching"; \
 	else \
 		echo "There is some mismatch between Tag and Version"; \
@@ -96,6 +97,24 @@ list-dependencies:
 	@echo "The following dependency lists have been generated:"
 	@find $(BUILD_DIR) -name '*-deps.txt' -print
 	@echo "DONE"
+
+.PHONY: run_tests
+run_tests:
+	@echo "Running tests..."
+	$(MAKE) --trace -C  tests -j 1 SUPASS=$(SUPASS) || (echo "Tests failed" && exit 1)
+
+.PHONY: run_performance_tests
+run_performance_tests:
+	@echo "Running performance tests..."
+	$(MAKE) -C tests performance_tests -j 1 SUPASS=$(SUPASS) || (echo "Performance tests failed" && exit 1)
+
+.PHONY: run_stability_tests
+run_stability_tests:
+ifeq ($(BUILD_TYPE),DAILY)
+	@$(MAKE) -C tests system-stability SUPASS=$(SUPASS) HOURS=4
+else
+	@$(MAKE) -C tests system-stability SUPASS=$(SUPASS)
+endif
 
 .PHONY: clean
 clean:
