@@ -8,12 +8,8 @@ ARG CERTDOMAIN=scenescape.intel.com
 ENV CERTDOMAIN=${CERTDOMAIN}
 
 # Upgrade pip and install buildtime requirements
-COPY autocalibration/requirements-buildtime.txt /tmp/
 RUN apt-get update && apt-get install -y --no-install-recommends build-essential && \
-    rm -rf /var/lib/apt/lists/* && \
-    pip3 install --upgrade --no-cache-dir \
-    --extra-index-url https://download.pytorch.org/whl/cpu \
-    -r /tmp/requirements-buildtime.txt
+    rm -rf /var/lib/apt/lists/*
 
 # === AprilTag Build and Wheel ===
 RUN mkdir -p /output /tmp/apriltag_build /tmp/apriltag && \
