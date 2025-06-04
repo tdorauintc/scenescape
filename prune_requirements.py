@@ -22,7 +22,7 @@ def check_git_clean():
 
 def run_build(build_cmd):
     try:
-        result = subprocess.run(build_cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        result = subprocess.run(build_cmd, shell=True)
         return result.returncode == 0
     except Exception:
         return False
@@ -53,6 +53,7 @@ def prune_file(req_file, build_cmd):
         shutil.copy(tmp_path, req_file)
         os.unlink(tmp_path)
 
+        print(f"Testing removal of line {idx}: {line.rstrip()}")
         if run_build(build_cmd):
             removed_lines.append((idx, line.rstrip()))
         else:
