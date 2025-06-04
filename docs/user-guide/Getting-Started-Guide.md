@@ -63,7 +63,7 @@ This step generates dependency lists. Two separate files are created for system 
 
 ### Step 5: Deploy Intel® SceneScape demo to the target system
 
-Before deploying the demo of Intel® SceneScape for the first time, please set the environment variable SUPASS with a password for logging into Intel® SceneScape.
+Before deploying the demo of Intel® SceneScape for the first time, please set the environment variable SUPASS with the super user password for logging into Intel® SceneScape.
 Important: This should be different than the password for your system user.
 
   ```bash

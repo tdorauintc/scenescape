@@ -67,7 +67,7 @@ build-images-parallel: build-common
 demo:
 	@if [ -z "$$SUPASS" ] && { [ ! -d "./db" ] || [ -z "$$(ls -A ./db)" ]; }; then \
 	    echo "Please set the SUPASS environment variable before starting the demo for the first time."; \
-	    echo "The SUPASS environment variable is a password for logging into Intel® SceneScape."; \
+	    echo "The SUPASS environment variable is the super user password for logging into Intel® SceneScape."; \
 	    exit 1; \
 	fi
 	@$(MAKE) -C docker ../docker-compose.yml
