@@ -42,6 +42,8 @@ def prune_file(req_file, build_cmd):
         stripped = line.strip()
         idx += 1
         if not stripped or stripped.startswith("#"):
+            needed_lines.append(line)
+            unchecked_lines.pop(0)
             continue
 
         # Try removing this line
