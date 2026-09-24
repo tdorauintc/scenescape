@@ -10,8 +10,8 @@
 #include <string>
 
 #include <opencv2/core.hpp>
-#include <rv/Utils.hpp>
 #include <rv/tracking/TrackedObject.hpp>
+#include <rv/Utils.hpp>
 
 namespace tracker {
 
