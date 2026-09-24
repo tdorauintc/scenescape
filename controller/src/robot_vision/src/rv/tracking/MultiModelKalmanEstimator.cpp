@@ -565,11 +565,11 @@ cv::Mat MultiModelKalmanEstimator::getConditionalProbability() const
 
 cv::Mat MultiModelKalmanEstimator::getKalmanFilterMeasurementCovariance(std::size_t j) const
 {
-  return mKalmanFilters[j]->getErrorCov();
+  return mKalmanFilters[j]->getMeasurementCov();
 }
 cv::Mat MultiModelKalmanEstimator::getKalmanFilterErrorCovariance(std::size_t j) const
 {
-  return mKalmanFilters[j]->getMeasurementCov();
+  return mKalmanFilters[j]->getErrorCov();
 }
 
 } // namespace tracking
