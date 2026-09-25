@@ -1,4 +1,4 @@
-// SPDX-FileCopyrightText: 2026 Intel Corporation
+// SPDX-FileCopyrightText: (C) 2026 Intel Corporation
 // SPDX-License-Identifier: Apache-2.0
 
 #pragma once
@@ -10,8 +10,8 @@
 #include <string>
 
 #include <opencv2/core.hpp>
-#include <rv/Utils.hpp>
 #include <rv/tracking/TrackedObject.hpp>
+#include <rv/Utils.hpp>
 
 namespace tracker {
 
