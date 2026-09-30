@@ -1,12 +1,15 @@
-Sarat, my recommendation is to split the PR, so we can proceed granularly and carefully evaluate impact on accuracy and performance for each of them. Below is my proposal. I can take care of it.
+# `feature/prob-tracking` branch split plan
 
-What to extract into a new PRs to main branch:
+This is the plan to split the feature/prob-tracking branch, so we can proceed granularly and carefully evaluate impact on accuracy and performance for each of them.
 
-1. Tracker shift projection + related evaluation update -> main
+## What to extract into a new PRs to main branch:
+
+1. Tracker shift projection + related evaluation update. Branch: tracker-eval-projection-shift. Base branch: main
   - Tracker Evaluation pipeline change (to accept object class configuration)
   - Tracker Service - narrowed down to object-class and shift projection (w/o new association config)
   - Evaluate and document impact
-2. Multicamera geometry fusion -> main
+
+2. Multicamera geometry fusion. Branch multi-camera-geometry-fusion. Base branch: main
   - required supporting changes in Tracker / Controller
   - enabling robot-vision benchmark
   - fixes
@@ -20,9 +23,9 @@ What to extract into a new PRs to main branch:
     - verify performance impact of streaming fusion in robot-vision benchmark
     - Evaluate and document impact
 
-What to extract into a new PR and merge first into a feature branch (keeping the order):
+## What to extract into a new PR and merge first into a feature branch (keeping the order):
 
-3. IMM-UKF changes -> feature branch
+3. IMM-UKF changes. Branch: feature/prob-tracking-extracted. Base branch: multi-camera-geometry-fusion
   - Carried over from feature/prob-tracking
     - Fixing IMM S_pred and mixing, process-noise redesign and the new initial uncertainty (MultiModelKalmanEstimator.cpp)
     - Fixing UKF (UnscentedKalmanFilter.cpp)
@@ -31,7 +34,7 @@ What to extract into a new PR and merge first into a feature branch (keeping the
     - Extend the tests coverage to include more motion models (manoeuvring motion, sudden stops)
     - Extend the tests coverage to include {CV, CA, CTRV} models set (exercise predictState(), not only singleModelPredict()).
 
-4. Mahalonobis association -> feature branch
+4. Mahalonobis association. Branch: feature/prob-tracking-extracted-association. Base branch: feature/prob-tracking-extracted
   - Carried over from feature/prob-tracking
     - New association implementation (ObjectMatching.cpp + any other changes required to support it)
     - Required supporting changes in Controller and Tracker Service to pass down association config and produce association window
@@ -45,9 +48,9 @@ What to extract into a new PR and merge first into a feature branch (keeping the
     - Evaluate using mixed convariance for matching instead of picking best model, then decide
     - Evaluate / mitigate performance impact of numpy.linalg.eigh / cv::eigen on association window publishing
 
-5. Dataset and testing -> feature branch -> main
+5. Dataset and testing. Base branch: feature/prob-tracking-extracted-association. To be merged finally to main
   - Final accuracy and performance evaluation
 
-In parallel, I suggest Dmytro starts working on adopting a dataset with more diverse motion models in Tracker Evaluation (cars), to be merged into feature branch for final evaluation.
+## Parallel efforts
 
-Let me know your feedback please.
+1. Adopting a dataset with more diverse motion models in Tracker Evaluation (cars), to be merged into feature branch for final evaluation.
