@@ -3,6 +3,8 @@
 This is the plan to split the `feature/prob-tracking` branch, so we can proceed granularly and carefully evaluate impact on accuracy and performance for each of them.
 
 References like "yaw review 6" or "yaw review E2" point to findings in [pr-review-yaw-fusion.md](pr-review-yaw-fusion.md).
+References like "prob review 2" or "prob review G9" point to issues and coverage gaps in [pr-review-probabilistic-tracking.md](pr-review-probabilistic-tracking.md).
+References like "delta 9.1" point to Section 9 items in [robot-vision-tracking-prob-tracking-delta.md](robot-vision-tracking-prob-tracking-delta.md).
 
 ## What to extract into a new PRs to main branch:
 
@@ -57,6 +59,12 @@ Both branches 1 and 2 should be merged to a new feature branch `feature/prob-tra
      - Extend the tests coverage for yaw: yaw uncertainty unchanged after a camera-only update, LiDAR yaw responsiveness after a camera-only period, camera-only CTRV yaw stays  bounded with mixing enabled, a turning target learns the turn rate, per-model predicted measurements differ (yaw review 2, E1-E3)
      - [moved from PR 2] yaw thresholding when unreliable + UT
      - [moved from PR 2] rank orienting yaw in `applyOrientingYaw` by the detected-class probability instead of `maxCoeff()` of `[c, 1-c]` + UT (yaw review 6)
+     - Fixes for issues from the `feature/prob-tracking` review:
+       - Add a small process-noise floor on position, z and size so their covariance does not collapse on long-lived tracks; add a long-duration test checking that the size gain stays non-zero and `errorCov` stays positive definite (prob review 2, G9; delta 9.1)
+       - Document the new meaning of `default_process_noise` (x1000 velocity scaling, 1e-3 floor, no position/size noise) and `init_state_covariance` (cap on latent states only, measured states use `measurement_noise`) in `how-to-configure-tracker.md` (prob review 4)
+       - Explain or revert the velocity tolerance loosening (0.01 -> 0.05) in `tracking_test.py` (prob review 5)
+       - Add direct UT for `kinematicProcessNoiseCov` (near-zero velocity fallback, diagonal motion, dt scaling, `qVel` floor), for the initial covariance caps, and for re-initialisation not duplicating filters (prob review G8, G14)
+       - Measure speed acquisition for a target that is born already moving fast; if it lags, revisit the 0.05 velocity prior cap (delta 9.2)
 
 4. **[TODO]** Mahalanobis association. Branch: feature/prob-tracking-extracted-association. Base branch: feature/prob-tracking-extracted
    - Carried over from feature/prob-tracking
