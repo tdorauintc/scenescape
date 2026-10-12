@@ -65,6 +65,7 @@ Both branches 1 and 2 should be merged to a new feature branch `feature/prob-tra
        - Explain or revert the velocity tolerance loosening (0.01 -> 0.05) in `tracking_test.py` (prob review 5)
        - Add direct UT for `kinematicProcessNoiseCov` (near-zero velocity fallback, diagonal motion, dt scaling, `qVel` floor), for the initial covariance caps, and for re-initialisation not duplicating filters (prob review G8, G14)
        - Measure speed acquisition for a target that is born already moving fast; if it lags, revisit the 0.05 velocity prior cap (delta 9.2)
+     - Build robot-vision as strict C++20 everywhere + CI (`tracker-service.yml`) building the Controller image when `controller/src/robot_vision/**` changes
 
 4. **[TODO]** Mahalanobis association. Branch: feature/prob-tracking-extracted-association. Base branch: feature/prob-tracking-extracted
    - Carried over from feature/prob-tracking
