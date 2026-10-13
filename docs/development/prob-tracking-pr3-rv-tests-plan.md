@@ -64,11 +64,11 @@ References follow the post-review plan: "yaw review N/EN" → [pr-review-yaw-fus
 
 ```cpp
 // Unicycle truth (straight / accelerate / turn segments), finely integrated, sampled at fps.
-auto truth = Trajectory(/*x*/ 0, /*y*/ 0, /*heading*/ 0, /*speed*/ 5)
+auto truth = Trajectory(/*x*/ 0, /*y*/ 0, /*heading*/ 0, /*speed*/ 5, kCar)
                .straight(3).turn(0.5, 3).accelerate(-10, 1).straight(2) // turn, then sudden stop
                .sample(10.0);                                           // std::vector<TruthSample>
 
-Sensor camera;                        // position noise std, orienting flag, box size, seeded RNG
+Sensor camera;                        // position, size and yaw noise std, orienting flag, seeded RNG
 Sensor lidar{.orienting = true};      // reports heading as yaw, sets has_orientation
 
 FilterRun run(productionConfig());    // wraps MultiModelKalmanEstimator; initializes on the first observation
@@ -78,13 +78,13 @@ run.coast(1.0);                                                 // predict only
 run.state();                                                    // combined state; run.estimator for per-model access
 ```
 
-- `Trajectory` has only `straight`, `accelerate`, `turn`; speed is clamped at 0, so a stop is `accelerate(-a, t)` and standing is `straight` at speed 0.
+- `Trajectory` has only `straight`, `accelerate`, `turn`; speed is clamped at 0, so a stop is `accelerate(-a, t)` and standing is `straight` at speed 0. The object size is part of the truth: a generic `Box` passed to every `Trajectory`, with `kCar` and `kPerson` presets, e.g. `Trajectory(0, 0, 0, 1.5, kPerson)`.
 - `Sensor` and the C-7 case table are plain aggregates set up with designated initializers, e.g. `{.name = "turn", .truth = ..., .maxPositionError = 0.3}`, so no builder methods or constructors are needed.
-- `between(samples, t0, t1)` slices time. Sensor switches and reported-value changes (e.g. a height step) are done by editing the `Sensor` between `feed` calls, so no concatenation or callback API is needed.
+- `between(samples, t0, t1)` slices time. Sensor switches are done by editing the `Sensor` between `feed` calls, and changes of the object itself (e.g. the F-5 height step) by editing the sampled truth, so no concatenation or callback API is needed.
 - Snapshots clone their matrices to avoid the shared `cv::Mat` buffer pitfall (yaw review E2).
 - PR 4 uses: `FilterRun` + `Trajectory` + `coast` for Mahalanobis gate tests with all three models (prob review G2, G7), competing tracks (G10), the radius ceiling (G4) and the mixture vs best-model covariance evaluation during a turn; an orienting `Sensor` near ±π for the yaw-wrap test (yaw review 3).
 - Not added: a tracker-level runner (no PR 3 or PR 4 test needs it). The reference linear Kalman filter stays local to its only test (C-2).
-- Sanity test `ScenarioSupportTest.TrajectoryKinematics`: a circle closes after 2π/ω (`std::numbers::pi`), braking clamps speed at 0.
+- Sanity tests `ScenarioSupportTest.TrajectoryKinematics` (a circle closes after 2π/ω (`std::numbers::pi`), braking clamps speed at 0) and `ScenarioSupportTest.ObserveReportsTruthWithSensorNoise` (noise-free sensors report the truth; position, size and yaw noise have the configured spread).
 
 ## 5. Step 3: coverage tests (test branch)
 
