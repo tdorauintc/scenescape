@@ -5,6 +5,7 @@ This is the plan to split the `feature/prob-tracking` branch, so we can proceed 
 References like "yaw review 6" or "yaw review E2" point to findings in [pr-review-yaw-fusion.md](pr-review-yaw-fusion.md).
 References like "prob review 2" or "prob review G9" point to issues and coverage gaps in [pr-review-probabilistic-tracking.md](pr-review-probabilistic-tracking.md).
 References like "delta 9.1" point to Section 9 items in [robot-vision-tracking-prob-tracking-delta.md](robot-vision-tracking-prob-tracking-delta.md).
+References like "baseline 9.4" point to Section 9 items in [robot-vision-tracking-algorithms.md](robot-vision-tracking-algorithms.md).
 
 ## What to extract into a new PRs to main branch:
 
@@ -52,11 +53,11 @@ Both branches 1 and 2 should be merged to a new feature branch `feature/prob-tra
      - Fixing UKF (UnscentedKalmanFilter.cpp)
    - My proposed additions:
      - Introduce per-model process noise, including yaw and yaw rate so that CTRV learns the turn rate (yaw review E3)
-     - Treat detections without orientation as having no yaw measurement (reduced update in `UnscentedKalmanFilterMod::correct`, or a very large yaw noise) instead of a  zero-innovation update; update the "predict" wording in the selective-yaw ADR (yaw review 2)
+     - Treat detections without orientation as having no yaw measurement (reduced update in `UnscentedKalmanFilterMod::correct`, or a very large yaw noise) instead of a zero-innovation update; update the "predict" wording in the selective-yaw ADR (yaw review 2)
      - Give each motion model its own predicted-measurement buffer in `MultiModelKalmanEstimator::initialize()`; PR 4's Mahalanobis gate is centred on this mean (yaw review E2)
      - Extend the tests coverage to include more motion models (manoeuvring motion, sudden stops)
      - Extend the tests coverage to include {CV, CA, CTRV} models set (exercise predictState(), not only singleModelPredict()).
-     - Extend the tests coverage for yaw: yaw uncertainty unchanged after a camera-only update, LiDAR yaw responsiveness after a camera-only period, camera-only CTRV yaw stays  bounded with mixing enabled, a turning target learns the turn rate, per-model predicted measurements differ (yaw review 2, E1-E3)
+     - Extend the tests coverage for yaw: yaw uncertainty unchanged after a camera-only update, LiDAR yaw responsiveness after a camera-only period, camera-only CTRV yaw stays bounded with mixing enabled, a turning target learns the turn rate, per-model predicted measurements differ (yaw review 2, E1-E3)
      - [moved from PR 2] yaw thresholding when unreliable + UT
      - [moved from PR 2] rank orienting yaw in `applyOrientingYaw` by the detected-class probability instead of `maxCoeff()` of `[c, 1-c]` + UT (yaw review 6)
      - Fixes for issues from the `feature/prob-tracking` review:
@@ -65,6 +66,8 @@ Both branches 1 and 2 should be merged to a new feature branch `feature/prob-tra
        - Explain or revert the velocity tolerance loosening (0.01 -> 0.05) in `tracking_test.py` (prob review 5)
        - Add direct UT for `kinematicProcessNoiseCov` (near-zero velocity fallback, diagonal motion, dt scaling, `qVel` floor), for the initial covariance caps, and for re-initialisation not duplicating filters (prob review G8, G14)
        - Measure speed acquisition for a target that is born already moving fast; if it lags, revisit the 0.05 velocity prior cap (delta 9.2)
+     - Handle a failed Cholesky factorisation in `UnscentedKalmanFilterMod::getSigmaPoints`: its result is ignored today, so sigma points are silently built from a partly factorised matrix. On failure symmetrize the covariance, add diagonal jitter and retry, log once; UT with a non-positive-definite covariance (baseline 9.4)
+     - Evaluate the sigma-point weights (kappa = 3 - n gives centre weights -3 for the mean and -1 for the covariance) against kappa = 0 after per-model process noise. With beta = 2 they cannot break positive definiteness, but they extrapolate the CTRV predicted mean under strong nonlinearity (multi-step coasts with uncertain turn rate, single long predicts after reactivating a suspended track). Keep and document, or change + UT (baseline 9.4, delta 9.10)
      - Build robot-vision as strict C++20 everywhere + CI (`tracker-service.yml`) building the Controller image when `controller/src/robot_vision/**` changes
 
 4. **[TODO]** Mahalanobis association. Branch: feature/prob-tracking-extracted-association. Base branch: feature/prob-tracking-extracted
@@ -81,7 +84,7 @@ Both branches 1 and 2 should be merged to a new feature branch `feature/prob-tra
      - Evaluate using mixed convariance for matching instead of picking best model, then decide
      - Evaluate / mitigate performance impact of numpy.linalg.eigh / cv::eigen on association window publishing
      - Make the fixed radius in birth clustering (kDefaultBirthClusterRadiusM) configurable
-     - Wrap the yaw difference in the legacy `Mahalanobis` cost (`-rv::deltaTheta(measurement.yaw, predictedYaw)`) and apply the same speed gate as `prepareYawMeasurement` + UT  including the ±π wrap (yaw review 3)
+     - Wrap the yaw difference in the legacy `Mahalanobis` cost (`-rv::deltaTheta(measurement.yaw, predictedYaw)`) and apply the same speed gate as `prepareYawMeasurement` + UT including the ±π wrap (yaw review 3)
 
 5. **[TODO]** Dataset and testing. Base branch: feature/prob-tracking-extracted-association. To be merged finally to main
    - Final accuracy and performance evaluation
