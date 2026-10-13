@@ -53,7 +53,7 @@ References follow the post-review plan: "yaw review N/EN" → [pr-review-yaw-fus
 
 ## 4. Step 2: test tools (header-only, `support/`)
 
-`support/TestUtils.hpp`, in addition to the moved helpers:
+`support/TestUtils.hpp`, in addition to the moved helpers (`makeBox` is renamed to `makeDetection`, since it builds a `TrackedObject`; `Scenario.hpp` adds an overload from a `TruthSample`):
 
 - `atSeconds(double)`.
 - `productionConfig()`: the existing `TrackManagerConfig` with the Controller / Tracker service values (q = 1e-4, r = 0.2, P0 = 1, CV + CA + CTRV). One type drives both `FilterRun` and a `MultipleObjectTracker` (PR 4).
@@ -64,7 +64,7 @@ References follow the post-review plan: "yaw review N/EN" → [pr-review-yaw-fus
 
 ```cpp
 // Unicycle truth (straight / accelerate / turn segments), finely integrated, sampled at fps.
-auto truth = Trajectory(/*x*/ 0, /*y*/ 0, /*heading*/ 0, /*speed*/ 5, kCar)
+auto truth = Trajectory({.speed = 5, .box = kCar})
                .straight(3).turn(0.5, 3).accelerate(-10, 1).straight(2) // turn, then sudden stop
                .sample(10.0);                                           // std::vector<TruthSample>
 
@@ -78,7 +78,7 @@ run.coast(1.0);                                                 // predict only
 run.state();                                                    // combined state; run.estimator for per-model access
 ```
 
-- `Trajectory` has only `straight`, `accelerate`, `turn`; speed is clamped at 0, so a stop is `accelerate(-a, t)` and standing is `straight` at speed 0. The object size is part of the truth: a generic `Box` passed to every `Trajectory`, with `kCar` and `kPerson` presets, e.g. `Trajectory(0, 0, 0, 1.5, kPerson)`.
+- `Trajectory` has only `straight`, `accelerate`, `turn`; speed is clamped at 0, so a stop is `accelerate(-a, t)` and standing is `straight` at speed 0. The object size is part of the truth: a generic `Box` in the starting `TruthSample`, with `kCar` and `kPerson` presets, e.g. `Trajectory({.speed = 1.5, .box = kPerson})`.
 - `Sensor` and the C-7 case table are plain aggregates set up with designated initializers, e.g. `{.name = "turn", .truth = ..., .maxPositionError = 0.3}`, so no builder methods or constructors are needed.
 - `between(samples, t0, t1)` slices time. Sensor switches are done by editing the `Sensor` between `feed` calls, and changes of the object itself (e.g. the F-5 height step) by editing the sampled truth, so no concatenation or callback API is needed.
 - Snapshots clone their matrices to avoid the shared `cv::Mat` buffer pitfall (yaw review E2).
