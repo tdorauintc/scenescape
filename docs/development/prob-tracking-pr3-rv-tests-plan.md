@@ -119,7 +119,20 @@ Ordered so that each fix is calibrated on top of the previous ones.
 
 Note: the yaw review "Where to fix" table lists finding 6 under PR 2; the post-review plan moved it into PR 3.
 
-## 7. Out of scope
+## 7. Values to re-evaluate after fixes
+
+Bounds below were calibrated on the step 3 code (`8f1c0d9ef`, Release build, fixed noise seed) and pin current behaviour. Re-measure and tighten them when the listed fixes land.
+
+| Test                                                                               | Value (current bound)                                                                                                                                                             | Measured                                                                  | Re-evaluate after                                                       |
+| ---------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
+| `MotionScenarioTest.TracksMotionCases` (C-7)                                       | Max position error after warm-up / final speed error: constant velocity 0.15 m / 0.03 m/s, acceleration 0.45 / 0.01, turn 1.5 / 0.05, sudden stop 0.9 / 0.05, manoeuvre 2.5 / 0.1 | 0.11 / 0.020, 0.35 / 0.003, 1.23 / 0.038, 0.74 / 0.033, 2.06 / 0.073      | F-3, F-1 (turn and manoeuvre should improve most), F-5                  |
+| `MotionScenarioTest.ConstantVelocityConvergence` (C-8)                             | Velocity tolerance 0.05 m/s (0.01 before 254afe920)                                                                                                                               | 0.008 / 0.003 m/s (CV), 0.008 / 0.003 m/s (CV + CA + CTRV), one seed only | Velocity tolerance investigation (step 4 row 7); check several seeds    |
+| `MotionScenarioTest.TargetBornMovingAcquiresSpeed` (C-9)                           | Speed after 1 s ≥ 4.5 m/s for a 10 m/s target                                                                                                                                     | 4.79 m/s                                                                  | Velocity prior cap change (step 4 row 7), F-1                           |
+| `MultiModelKalmanEstimatorTest.KinematicProcessNoiseShape` (C-6)                   | Along/cross velocity noise, yaw and yaw-rate noise per case; zero position, z and size noise                                                                                      | exact (pinned formula)                                                    | F-1 (per-model noise incl. yaw / yaw rate), F-5 (position / size floor) |
+| `MultiModelKalmanEstimatorTest.InitialCovarianceUsesMeasurementNoiseAndCaps` (C-5) | Latent-state caps 0.05 (velocity), 0.1 (acceleration), 0.05 (yaw), 0.01 (yaw rate)                                                                                                | exact (pinned formula)                                                    | Velocity prior cap change, F-1 if it changes the yaw / yaw-rate priors  |
+| `MultipleObjectTrackerTest.SingleJumpingDetectionTracking`                         | Single track survives a 15 → 200 m/s jump                                                                                                                                         | fails since 254afe920                                                     | F-1 (step 4 row 3)                                                      |
+
+## 8. Out of scope
 
 - Changes outside `controller/src/robot_vision`, including the Controller yaw publish switch (post-review plan "yaw thresholding when unreliable", yaw review 4).
 - Python `tests/sscape_tests/robot_vision/tracking_test.py` tolerances (PR 3, outside this folder, and that folder does not run in CI).
