@@ -18,10 +18,11 @@ to spot filter overshoot, jitter, covariance and model-probability problems.
 - `FilterRun` takes an optional recorder and records both after predict and after correct, calling `predict()` and `correct()` separately (equivalent to `track()`).
 - Minimal JSON writer in the same header; no new dependency (rapidjson only exists in the tracker conan build).
 - `TruthSample` gains `acceleration`, set per segment like `yawRate`.
+- `Box` gains `category` (`std::string_view`, keeps the presets `constexpr`): `kCar` → `vehicle`, `kPerson` → `person`.
 
 ```cpp
 ScenarioRecorder rec("turn");                                    // no-op unless RV_SCENARIO_DIR is set
-rec.truth(truth, {.id = 1, .category = "vehicle"});
+rec.truth(truth, 1);                                             // object id; category from the truth Box
 FilterRun run(productionConfig(), &rec);
 run.feed(rec.detections(observe(truth, camera), "camera"));      // pass-through, records detections
 ```
@@ -33,7 +34,7 @@ All timestamps are ISO 8601 UTC with microseconds, counted from the `system_cloc
 | File                | Format                                                                                                                                                                                                                                                                               |
 | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `groundtruth.jsonl` | Canonical GT (evaluation README). Adds optional `size`, `rotation` (heading quaternion) and `velocity`, plus `truth: {speed, yaw_rate, acceleration}`                                                                                                                                |
-| `detections.jsonl`  | Canonical input, `camera-data.schema.json` from `ITEP-97104_tracker_3d_detections`: `translation`, `size`; `rotation` only from orienting sensors. Sensor id = recorder argument (identity sensor pose assumed)                                                                      |
+| `detections.jsonl`  | Canonical input, `camera-data.schema.json` from `ITEP-97104_tracker_3d_detections` (validated against a copy, branch not merged): `translation`, `size`; `rotation` only from orienting sensors. Sensor id = recorder argument (identity sensor pose assumed)                        |
 | `tracks.jsonl`      | Canonical tracker output (`scene-data.schema.json`), combined estimate after correct; usable by `JitterEvaluator` and `DiagnosticEvaluator`                                                                                                                                          |
 | `estimator.jsonl`   | Line 1 `config`: models, q, r, P0, UKF alpha/beta/kappa, transition matrix, state and measurement names. Then one `step` per phase (`predict`, `correct`, `coast`): `track_id`, `dt`, `sensor_id`, mixing matrix; combined and per-model `x`, `P` (12x12), `z_pred`, `S` (7x7), `mu` |
 
@@ -66,27 +67,23 @@ Videos (matplotlib `FuncAnimation` → H.264 MP4, optional GIF):
 
 - Overview (default): whole scene, all objects; ground-truth and estimated boxes (position, size, heading) with trails.
 - Zoom (opt-in, separate file): follow camera on one object. Shows everything above plus:
-  - detection box;
   - predicted (prior) position;
   - velocity arrow;
-  - χ² gate ellipse from `S_xy`;
-  - per-model positions;
-  - optional error magnification;
-  - model-probability strip with a time cursor.
+  - χ² gate ellipse from `S_xy`.
 
 ## 4. Steps (one commit each)
 
-1. Recorder and JSON writer, `TruthSample::acceleration`, recorder test (writes to a temporary directory).
+1. Recorder and JSON writer, `TruthSample::acceleration`, `Box::category`, recorder test (writes to a temporary directory).
 2. Recording in `MotionScenarioTests` (C-7 cases, C-8, C-9).
-3. `scenario_data.py` and pytest tests with small fixture files; schema validation of generated files.
+3. `scenario_data.py` and pytest tests with small fixture files; schema validation of generated files (`detections.jsonl` against a copy of the 3D `camera-data.schema.json` in the visualization tests).
 4. `plot_scenario.py` with tests (smoke test, run overlay).
 5. `render_video.py` with tests (smoke test on a short fixture, ffmpeg skipped if missing).
 6. Docs: `visualization/README.md` (workflow: `RV_SCENARIO_DIR=... RobotVisionTests --gtest_filter=...`, then the CLIs), links from the evaluation README and the robot-vision test docs.
 
 Verification: `make -C tracker test-robot-vision` and `tools/tracker/evaluation/run_tests.sh unit`.
 
-## 5. Open points
+## 5. Out of scope
 
-- The 3D `camera-data.schema.json` is not yet on `feature/prob-tracking-extracted`. Schema validation in step 3 needs it: merge `ITEP-97104_tracker_3d_detections` first, or validate against a copy until then?
-- Category per object: recorder argument (proposed) or a `category` field in `Box`?
-- Out of scope: tracker-level runs (`MultipleObjectTracker`, lifecycle, association), and a scene configuration with identity-pose sensors for replaying through the Tracker service.
+- Tracker-level runs (`MultipleObjectTracker`, lifecycle, association).
+- A scene configuration with identity-pose sensors for replaying through the Tracker service.
+- Merging `ITEP-97104_tracker_3d_detections`; the schema copy is replaced by `tracker/schema/camera-data.schema.json` once it lands.
