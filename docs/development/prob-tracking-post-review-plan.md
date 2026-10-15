@@ -54,7 +54,7 @@ Both branches 1 and 2 should be merged to a new feature branch `feature/prob-tra
    - My proposed additions:
      - Introduce per-model process noise, including yaw and yaw rate so that CTRV learns the turn rate (yaw review E3)
      - Treat detections without orientation as having no yaw measurement (reduced update in `UnscentedKalmanFilterMod::correct`, or a very large yaw noise) instead of a zero-innovation update; update the "predict" wording in the selective-yaw ADR (yaw review 2)
-     - Give each motion model its own predicted-measurement buffer in `MultiModelKalmanEstimator::initialize()`; PR 4's Mahalanobis gate is centred on this mean (yaw review E2)
+     - **[DONE in #2056]** Give each motion model its own predicted measurement: `TrackedObject` matrices are fixed-size `cv::Matx`, so copies own their data; `MultiModelKalmanEstimator` is move-only; unused `TrackManager::getTrack()` / `getKalmanEstimator()` and their Python bindings removed. PR 4's Mahalanobis gate is centred on this mean (yaw review E2)
      - Extend the tests coverage to include more motion models (manoeuvring motion, sudden stops)
      - Extend the tests coverage to include {CV, CA, CTRV} models set (exercise predictState(), not only singleModelPredict()).
      - Extend the tests coverage for yaw: yaw uncertainty unchanged after a camera-only update, LiDAR yaw responsiveness after a camera-only period, camera-only CTRV yaw stays bounded with mixing enabled, a turning target learns the turn rate, per-model predicted measurements differ (yaw review 2, E1-E3)
