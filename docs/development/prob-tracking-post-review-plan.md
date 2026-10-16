@@ -24,24 +24,26 @@ References like "baseline 9.4" point to Section 9 items in [robot-vision-trackin
 
 2. **[IN REVIEW]** Multicamera geometry fusion. Branch multi-camera-geometry-fusion. Base branch: main
    - Carried over from feature/prob-tracking
-     - multicamera geometry fusion (time-chunking, streaming, birth clustering with configured distanceThreshold)
-     - required supporting changes in Controller
+     - multicamera geometry fusion (time-chunking, birth clustering with configured distanceThreshold)
    - My proposed additions:
      - fixes
        - unequal weights for birth clustering + UT
-       - removing measurements after using in streaming average
        - enable running robot-vision UT in CI
      - related evaluation / additional testing
-       - increase coverage for streaming and fuseGeometry (dynamic objects, more than 2 cameras, test all averaged values, edge cases)
-       - verify that fuse streaming improves, if yes - tune kStreamingMultiCamHold or make it configurable / adaptive
+       - increase coverage for fuseGeometry (dynamic objects, more than 2 cameras, test all averaged values, edge cases)
        - Evaluate and document impact
-       - verify performance impact of streaming fusion in robot-vision benchmark (by extending robot vision benchmark with multicamera scenario on a temporary evaluation branch)
+       - verify performance impact of streaming fusion in robot-vision benchmark (by extending robot vision benchmark with multicamera scenario on a temporary evaluation branch). Result: about 1% of Immediate-mode `track()` time, see the streaming fusion removal below
          - temporary branch name: `tdorau/tmp-rv-benchmark-multicamera`
          - added on top of original `feature/prob-tracking` benchmark:
            - separate overlap / non-overlap mode
            - separate immediate / time-chunking tracker scenarios
            - People who keep walking from frame to frame, and detections without Kalman matrices. PR 4 still drew new random people every frame.
            - parameter `--distance-threshold` (Euclidean only), replacing `--association-config`.
+   - Streaming (Controller Immediate mode) fusion removed after review ([discussion](https://github.com/open-edge-platform/scenescape/pull/2028#discussion_r4232521428)). Branch: tdorau/remove-streaming-fusion. Base branch: multi-camera-geometry-fusion
+     - Removed: the 250 ms per-camera measurement cache (`kStreamingMultiCamHold`) and the Controller `camera_id` attribute that keyed it. Immediate mode is identical to main again
+     - Reason: it adds a second smoothing layer on top of the Kalman filter, and the Controller is going to be deprecated (Tracker Service uses only time-chunking)
+     - Impact of the removal (Controller Immediate, 3 interleaved runs): Unity HOTA +0.002, DIST_T_mean −5 mm, but rms_jerk +154% and acceleration_variance +390%; Wildtrack within noise except IDF1 −0.014. Time-chunking and Tracker Service within noise. Immediate-mode `track()` about 1% faster in the multi-camera robot-vision benchmark
+     - No longer needed: removing measurements after use in the streaming average, tuning `kStreamingMultiCamHold`, streaming test coverage
 
 Both branches 1 and 2 should be merged to a new feature branch `feature/prob-tracking-extracted` (see below) through main before the final evaluation.
 
@@ -68,6 +70,7 @@ Both branches 1 and 2 should be merged to a new feature branch `feature/prob-tra
        - Measure speed acquisition for a target that is born already moving fast; if it lags, revisit the 0.05 velocity prior cap (delta 9.2)
      - Handle a failed Cholesky factorisation in `UnscentedKalmanFilterMod::getSigmaPoints`: its result is ignored today, so sigma points are silently built from a partly factorised matrix. On failure symmetrize the covariance, add diagonal jitter and retry, log once; UT with a non-positive-definite covariance (baseline 9.4)
      - Evaluate the sigma-point weights (kappa = 3 - n gives centre weights -3 for the mean and -1 for the covariance) against kappa = 0 after per-model process noise. With beta = 2 they cannot break positive definiteness, but they extrapolate the CTRV predicted mean under strong nonlinearity (multi-step coasts with uncertain turn rate, single long predicts after reactivating a suspended track). Keep and document, or change + UT (baseline 9.4, delta 9.10)
+     - Re-evaluate Controller Immediate-mode jitter (rms_jerk, acceleration_variance) after the IMM-UKF changes, and find what in the filter achieves the jitter reduction the removed streaming fusion gave, without double smoothing (PR 2 review)
      - Build robot-vision as strict C++20 everywhere + CI (`tracker-service.yml`) building the Controller image when `controller/src/robot_vision/**` changes
 
 4. **[TODO]** Mahalanobis association. Branch: feature/prob-tracking-extracted-association. Base branch: feature/prob-tracking-extracted
