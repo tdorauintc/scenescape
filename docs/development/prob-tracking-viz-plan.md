@@ -11,6 +11,7 @@ Visualization only: fixes are diagnosed and verified in unit tests.
 
 - Branch `tdorau/prob-tracking-viz`, stacked on `tdorau/imm-ukf-improvements`; PR into `feature/prob-tracking-extracted` after it.
 - C++ writes JSONL data from the tests; Python turns it into PNG plots and MP4 videos.
+- Status: implemented (`a967511b0`..`d35057263`); workflow in `tools/tracker/evaluation/visualization/README.md`.
 
 ## 1. Data capture (C++, `controller/src/robot_vision/test/support/`)
 
@@ -23,7 +24,7 @@ Visualization only: fixes are diagnosed and verified in unit tests.
 
 ```cpp
 ScenarioRecorder rec("turn");                                    // no-op unless RV_SCENARIO_DIR is set
-rec.truth(truth, 1);                                             // object id; category from the truth Box
+rec.truth(truth);                                                // object id 1; category from the truth Box
 FilterRun run(productionConfig(), &rec);
 run.feed(rec.detections(observe(truth, camera), "camera"));      // pass-through, records detections
 ```
@@ -43,36 +44,39 @@ All timestamps are ISO 8601 UTC with microseconds, counted from the `system_cloc
 
 ## 3. Python tools (`tools/tracker/evaluation/visualization/`)
 
-They reuse the evaluation `.venv`, `requirements.txt` and `utils/format_converters.py`; nothing new is needed (matplotlib, numpy, pandas, system `ffmpeg`).
+They reuse the evaluation `.venv`, `requirements.txt`, `utils/format_converters.py` and `utils/timeline.py`; nothing new is needed (matplotlib, numpy, pandas, system `ffmpeg`).
+Tracks are paired with ground-truth objects by `match_tracks()`, moved from `DiagnosticEvaluator` to `utils/tracks.py`, so real tracker output (UUID track ids) works too.
 
 | Module / CLI       | Purpose                                                                                                                                           |
 | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `scenario_data.py` | Loads a scenario directory into time-aligned tables per object or track; any file may be missing (e.g. real tracker output: no `estimator.jsonl`) |
-| `plot_scenario.py` | Static PNGs; `--plots` selects a subset                                                                                                           |
-| `render_video.py`  | Single run. Default: overview MP4; `--zoom <id>`: separate zoomed MP4; `--gif`, `--speed`                                                         |
+| `plot_scenario.py` | Static PNGs in `<dir>/plots/`; `--plots` selects a subset                                                                                         |
+| `render_video.py`  | Overview MP4 in `<dir>/videos/`; each `--zoom <id>` adds a zoomed MP4; `--gif` (GIF instead of MP4), `--speed`, `--trail`, `--zoom-size`          |
 
 Default plot set:
 
-1. Top-down trajectory: ground truth, detections, estimate.
-2. Position error (total, along-track, cross-track) with a ±2σ band from `P`.
-3. Speed, heading/yaw and yaw rate: estimate vs truth.
-4. Size (l, w, h): estimate vs truth vs detections.
-5. Model probabilities.
-6. Standard deviations √diag `P`: position, velocity, yaw, yaw rate, size.
+1. `trajectory`: top-down ground truth, detections, estimate.
+2. `position_error`: total, along-track, cross-track, with a ±2σ band from `P`.
+3. `speed_yaw`: speed, heading/yaw and yaw rate, estimate vs truth.
+4. `size`: l, w, h, estimate vs truth vs detections.
+5. `model_probability`.
+6. `std_dev`: √diag `P` for position, velocity, yaw, yaw rate, size.
 
-Videos (matplotlib `FuncAnimation` → H.264 MP4, optional GIF):
+Videos (matplotlib animation writers → H.264 MP4 or GIF; real time, at most 30 fps, 2 s trails):
 
 - Overview (default): whole scene, all objects; ground-truth and estimated boxes (position, size, heading) with trails.
 - Zoom (opt-in, separate file): follow camera on one object. Shows everything above plus:
   - predicted position (`z_pred`);
   - velocity arrow;
-  - χ² gate ellipse from `S_xy`.
+  - χ² gate ellipse from `S_xy` (p = 0.99, as production);
+  - window 4× the object's largest dimension, at least 4 m.
 
 ## 4. Steps (one commit each)
 
 1. Recorder and JSON writer, `FilterRun` observer hook, `TruthSample::acceleration`, `Box::category`, recorder test (writes to a temporary directory).
 2. Recording in `MotionScenarioTests` (C-7 cases, C-8, C-9).
 3. `scenario_data.py` and pytest tests with small fixture files; schema validation of generated files (`detections.jsonl` against a copy of the 3D `camera-data.schema.json` in the visualization tests).
+   - Refactor before step 4: `DiagnosticEvaluator._match_tracks` moved unchanged to `utils/tracks.py`.
 4. `plot_scenario.py` with tests (smoke test).
 5. `render_video.py` with tests (smoke test on a short fixture, ffmpeg skipped if missing).
 6. Docs: `visualization/README.md` (workflow: `RV_SCENARIO_DIR=... RobotVisionTests --gtest_filter=...`, then the CLIs), links from the evaluation README and the robot-vision test docs.
