@@ -38,6 +38,7 @@ References follow the post-review plan: "yaw review N/EN" → [pr-review-yaw-fus
 - Step 4 is test-first: the failing test is committed first, then the fix with before/after values in its commit message.
 - Tests whose final bound depends on a pending decision (C-6, C-8, C-9) land in step 3 pinning current behaviour; the fix commit updates them, and the updated version must fail without the fix.
 - Verification per step: `make -C tracker test-robot-vision`; filtered `RobotVisionTests --gtest_filter=...` while iterating.
+- PR 2 reached main as #2028 without streaming fusion (#2061): the 6 streaming tests in `MultiCameraFusionTests.cpp` and `OrientationFusionTest.StreamingFusePreservesOrientingYaw` are gone. `feature/prob-tracking-extracted` merged main (`703566358`) and #2056 merged that (`00c456892`); `FilterRun`-based tests and their §7 values are unaffected.
 
 ## 3. Step 1: split `TrackingTests.cpp`
 

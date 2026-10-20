@@ -22,7 +22,7 @@ References like "baseline 9.4" point to Section 9 items in [robot-vision-trackin
      - Doc updates
      - Evaluate and document impact
 
-2. **[IN REVIEW]** Multicamera geometry fusion. Branch multi-camera-geometry-fusion. Base branch: main
+2. **[DONE]** ~~Multicamera geometry fusion. Branch multi-camera-geometry-fusion. Base branch: main~~ Merged to main as #2028 (`feaf1d6d5`, squash), without streaming fusion
    - Carried over from feature/prob-tracking
      - multicamera geometry fusion (time-chunking, birth clustering with configured distanceThreshold)
    - My proposed additions:
@@ -39,17 +39,17 @@ References like "baseline 9.4" point to Section 9 items in [robot-vision-trackin
            - separate immediate / time-chunking tracker scenarios
            - People who keep walking from frame to frame, and detections without Kalman matrices. PR 4 still drew new random people every frame.
            - parameter `--distance-threshold` (Euclidean only), replacing `--association-config`.
-   - Streaming (Controller Immediate mode) fusion removed after review ([discussion](https://github.com/open-edge-platform/scenescape/pull/2028#discussion_r4232521428)). Branch: tdorau/remove-streaming-fusion. Base branch: multi-camera-geometry-fusion
+   - Streaming (Controller Immediate mode) fusion removed after review ([discussion](https://github.com/open-edge-platform/scenescape/pull/2028#discussion_r4232521428)). #2061 (branch tdorau/remove-streaming-fusion), merged into multi-camera-geometry-fusion before #2028
      - Removed: the 250 ms per-camera measurement cache (`kStreamingMultiCamHold`) and the Controller `camera_id` attribute that keyed it. Immediate mode is identical to main again
      - Reason: it adds a second smoothing layer on top of the Kalman filter, and the Controller is going to be deprecated (Tracker Service uses only time-chunking)
      - Impact of the removal (Controller Immediate, 3 interleaved runs): Unity HOTA +0.002, DIST_T_mean −5 mm, but rms_jerk +154% and acceleration_variance +390%; Wildtrack within noise except IDF1 −0.014. Time-chunking and Tracker Service within noise. Immediate-mode `track()` about 1% faster in the multi-camera robot-vision benchmark
      - No longer needed: removing measurements after use in the streaming average, tuning `kStreamingMultiCamHold`, streaming test coverage
 
-Both branches 1 and 2 should be merged to a new feature branch `feature/prob-tracking-extracted` (see below) through main before the final evaluation.
+Both branches 1 and 2 are in main; `feature/prob-tracking-extracted` merged main after #2028 (`703566358`).
 
 ## What to extract into a new PR and merge first into a new feature branch (keeping the order), then to main:
 
-3. **[IN-PROGRESS]** IMM-UKF changes. Branch: feature/prob-tracking-extracted. Base branch: multi-camera-geometry-fusion
+3. **[IN-PROGRESS]** IMM-UKF changes. Branch: feature/prob-tracking-extracted. Base branch: main (multi-camera-geometry-fusion until #2028)
    - Carried over from feature/prob-tracking
      - Fixing IMM S_pred and mixing, process-noise redesign and the new initial uncertainty (MultiModelKalmanEstimator.cpp)
      - Fixing UKF (UnscentedKalmanFilter.cpp)
