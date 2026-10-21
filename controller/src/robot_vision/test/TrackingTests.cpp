@@ -3,12 +3,14 @@
 
 #include <gtest/gtest.h>
 #include <chrono>
+#include <cmath>
 #include <iostream>
 #include <rv/Utils.hpp>
 #include <rv/tracking/MultiModelKalmanEstimator.hpp>
 #include <rv/tracking/MultipleObjectTracker.hpp>
 #include <rv/tracking/Classification.hpp>
 #include <rv/tracking/ObjectMatching.hpp>
+#include <rv/tracking/OrientationAttributes.hpp>
 #include <rv/tracking/TrackedObject.hpp>
 #include <rv/tracking/TrackManager.hpp>
 
@@ -992,4 +994,75 @@ TEST(MultipleObjectTrackerTest, StreamingMultiCameraUpdatesAverageWorldPosition)
   ASSERT_EQ(tracks.size(), 1U);
   EXPECT_NEAR(tracks[0].x, midX, 0.2);
   EXPECT_NEAR(tracks[0].y, midY, 0.2);
+}
+
+TEST(MultipleObjectTrackerTest, FollowsClimbingZAndYaw)
+{
+  // Non-planar path: filter must track measured z and yaw, not stay on z=0.
+  rv::tracking::TrackManagerConfig trackerConfig;
+  trackerConfig.mMotionModels = {rv::tracking::MotionModel::CV};
+  trackerConfig.mDefaultProcessNoise = 1e-5;
+  trackerConfig.mDefaultMeasurementNoise = 1e-3;
+  trackerConfig.mInitStateCovariance = 1.0;
+  trackerConfig.mMaxUnreliableTime = 0.0;
+  trackerConfig.mNonMeasurementTimeDynamic = 2.0;
+
+  rv::tracking::MultipleObjectTracker objectTracker(trackerConfig);
+  auto timestamp = std::chrono::system_clock::now();
+  objectTracker.track(std::vector<rv::tracking::TrackedObject>{}, timestamp);
+
+  constexpr double stepS = 0.1;
+  constexpr double totalS = 5.0;
+  constexpr double vx = 0.4;
+  constexpr double vy = 0.2;
+  constexpr double vz = 0.4;
+  constexpr double yawRate = 0.15;
+
+  for (double t = stepS; t < totalS; t += stepS)
+  {
+    timestamp += std::chrono::milliseconds(static_cast<int>(stepS * 1000));
+    rv::tracking::TrackedObject measurement;
+    measurement.x = vx * t;
+    measurement.y = vy * t;
+    measurement.z = vz * t;
+    measurement.yaw = yawRate * t;
+    measurement.length = 0.5;
+    measurement.width = 0.5;
+    measurement.height = 1.8;
+    measurement.attributes[rv::tracking::orientation::HAS_ORIENTATION] =
+      rv::tracking::orientation::TRUE_VALUE;
+    objectTracker.track(std::vector<rv::tracking::TrackedObject>{measurement}, timestamp,
+                        rv::tracking::DistanceType::Euclidean, 2.0);
+  }
+
+  auto tracks = objectTracker.getTracks();
+  ASSERT_EQ(tracks.size(), 1U);
+  const double expectedT = totalS - stepS;
+  const double expectedZ = vz * expectedT;
+  EXPECT_NEAR(tracks[0].x, vx * expectedT, 0.15);
+  EXPECT_NEAR(tracks[0].y, vy * expectedT, 0.15);
+  // No vz in state: z is measurement-driven and lags, but must leave z=0.
+  EXPECT_GT(tracks[0].z, 1.0);
+  EXPECT_LT(std::abs(tracks[0].z - expectedZ), std::abs(0.0 - expectedZ) * 0.5);
+  EXPECT_NEAR(tracks[0].yaw, yawRate * expectedT, 0.25);
+}
+
+TEST(MultiModelKalmanEstimatorTest, PredictHoldsZWithoutMeasurement)
+{
+  rv::tracking::MultiModelKalmanEstimator estimator;
+  rv::tracking::TrackedObject seed;
+  seed.x = 0.0;
+  seed.y = 0.0;
+  seed.z = 2.5;
+  seed.yaw = 0.3;
+  seed.length = 0.5;
+  seed.width = 0.5;
+  seed.height = 1.8;
+
+  auto timestamp = std::chrono::system_clock::now();
+  estimator.initialize(seed, timestamp, 1e-5, 1e-3, 1.0, {rv::tracking::MotionModel::CV});
+  estimator.predict(timestamp + std::chrono::seconds(2));
+  auto state = estimator.currentState();
+  EXPECT_NEAR(state.z, 2.5, 1e-3);
+  EXPECT_NEAR(state.yaw, 0.3, 1e-3);
 }
