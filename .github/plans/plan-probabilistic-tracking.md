@@ -193,7 +193,19 @@ Tracker builds `controller/src/robot_vision` in-tree (`tracker/CMakeLists.txt`),
 | T5 | Assert published `velocity[2]` / `translation[2]` | `track_publisher_test.cpp` | Done |
 | T6 | Unit: translation path preserves Z | `coordinate_transformer_test.cpp`, `message_handler_test.cpp` | Done |
 
-**Still deferred (not this slice):** mesh projection for bbox-only cameras; consuming schema `distance` alone without `translation`.
+**Still deferred / follow-ups from Z review:**
+
+| # | Item | Notes |
+|---|------|-------|
+| F1 | 3D detections: `bounding_box_px` only required with ReID embedding | **Done:** translation-only accepted; ReID embedding without bbox skipped. |
+| F2 | Wildtrack (planar) eval after χ² `df=3` | Gate loosened ~9.21→11.34 at p=0.99 for planar scenes. **Run Wildtrack eval; mitigate from results** (do not pre-mitigate). |
+| F3 | Ingest 3D detection `rotation` into tracker / UKF yaw | Today `tracking_worker` still publishes identity quaternion. **TODO.** |
+| F4a | Size: detection `size` → asset prior | **Done:** `ObjectClassConfig.prior_size` / transformer when translation omits `size`. |
+| F4b | Size inference when no detection size and no asset prior | **TODO:** replace hard-coded `0.5` placeholder — e.g. bbox projection when `bounding_box_px` present, else category default. |
+| F5 | Mesh / DEM foot-ray for bbox-only cameras | Separate PR. |
+| F6 | Schema `distance` alone without `translation` | Deferred. |
+
+**Birth clustering note (not association default):** Unmatched detection→detection fusion always uses Euclidean ~`kDefaultBirthClusterRadiusM` (2 m), even when track→detection association is `position_mahalanobis`. Raw detections lack `predictedMeasurementCov`, so Mahalanobis cannot birth-cluster. Independent of whether Mahalanobis is the production association default.
 
 ### Tracker validation
 
@@ -210,6 +222,11 @@ cd tracker && make test-unit   # 492 passed (local build-debug-z + ctest)
 3. [ ] Phase 3 default flip to combined
 4. [x] Controller non-planar Z/`vz` + 3D association (`0f4c1b5a` / `ee393034`)
 5. [x] Tracker Z/`translation` ingest + χ² df=3 parity + `vz` publish tests
+6. [ ] F2: Wildtrack eval post–χ² df=3; mitigate from results
+7. [ ] F3: Tracker 3D detection rotation → yaw
+8. [x] F1: Allow translation-only 3D OD; require `bounding_box_px` only with ReID
+9. [x] F4a: Size = detection → asset prior
+10. [ ] F4b: Size inference (no detection size, no asset prior)
 
 ```mermaid
 gantt

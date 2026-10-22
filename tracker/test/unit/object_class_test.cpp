@@ -22,11 +22,16 @@ TEST(ObjectClassTest, ParseManagerListPayload) {
     EXPECT_EQ(person.shift_type, ObjectClassConfig::kShiftType1);
     ASSERT_TRUE(person.footprint_half.has_value());
     EXPECT_DOUBLE_EQ(*person.footprint_half, 0.25);
+    ASSERT_TRUE(person.prior_size.has_value());
+    EXPECT_DOUBLE_EQ((*person.prior_size)[0], 0.5);
+    EXPECT_DOUBLE_EQ((*person.prior_size)[1], 0.5);
+    EXPECT_DOUBLE_EQ((*person.prior_size)[2], 1.0); // default z_size
 
     const auto plane = lookupObjectClass(map, "FW190D");
     EXPECT_EQ(plane.shift_type, ObjectClassConfig::kShiftType2);
     ASSERT_TRUE(plane.footprint_half.has_value());
     EXPECT_DOUBLE_EQ(*plane.footprint_half, 0.5);
+    ASSERT_TRUE(plane.prior_size.has_value());
 }
 
 TEST(ObjectClassTest, UnknownCategoryDefaultsToType1) {
@@ -34,6 +39,7 @@ TEST(ObjectClassTest, UnknownCategoryDefaultsToType1) {
     const auto cfg = lookupObjectClass(empty, "vehicle");
     EXPECT_EQ(cfg.shift_type, ObjectClassConfig::kShiftType1);
     EXPECT_FALSE(cfg.footprint_half.has_value());
+    EXPECT_FALSE(cfg.prior_size.has_value());
 }
 
 TEST(ObjectClassTest, CategoryMatchIsCaseSensitive) {

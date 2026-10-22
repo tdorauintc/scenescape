@@ -104,9 +104,11 @@ TrackingWorker::TrackingWorker(TrackingScope scope, std::string scene_name, int 
 
     // Build coordinate transformers
     for (const auto& [camera_id, camera] : cameras) {
-        transformers_.emplace(camera_id, CoordinateTransformer(camera.intrinsics, camera.extrinsics,
-                                                               object_class.shift_type,
-                                                               object_class.footprint_half));
+        transformers_.emplace(camera_id,
+                              CoordinateTransformer(camera.intrinsics, camera.extrinsics,
+                                                    object_class.shift_type,
+                                                    object_class.footprint_half,
+                                                    object_class.prior_size));
     }
 
     LOG_INFO("TrackingWorker initialized with {} cameras for scope {}/{} (shift_type={}, "

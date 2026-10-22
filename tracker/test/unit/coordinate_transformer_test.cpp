@@ -152,9 +152,10 @@ const std::vector<YawToQuaternionTestCase> kYawToQuaternionTests = {
 // clang-format on
 
 // Helper to create CoordinateTransformer from test config
-CoordinateTransformer make_transformer(const CameraTestConfig& cfg,
-                                       int shift_type = ObjectClassConfig::kShiftType1,
-                                       std::optional<double> footprint_half = std::nullopt) {
+CoordinateTransformer make_transformer(
+    const CameraTestConfig& cfg, int shift_type = ObjectClassConfig::kShiftType1,
+    std::optional<double> footprint_half = std::nullopt,
+    std::optional<std::array<double, 3>> prior_size = std::nullopt) {
     CameraIntrinsics intrinsics;
     intrinsics.fx = cfg.fx;
     intrinsics.fy = cfg.fy;
@@ -170,7 +171,7 @@ CoordinateTransformer make_transformer(const CameraTestConfig& cfg,
     extrinsics.rotation = cfg.rotation;
     extrinsics.scale = cfg.scale;
 
-    return CoordinateTransformer(intrinsics, extrinsics, shift_type, footprint_half);
+    return CoordinateTransformer(intrinsics, extrinsics, shift_type, footprint_half, prior_size);
 }
 
 // Helper: create Detection from bbox params
@@ -691,6 +692,32 @@ TEST(TransformDetectionsTest, Translation_WithoutSizeUsesDefaultFootprint) {
     EXPECT_NEAR(result[0].length, 0.5, 1e-9);
     EXPECT_NEAR(result[0].width, 0.5, 1e-9);
     EXPECT_NEAR(result[0].height, 0.5, 1e-9);
+}
+
+TEST(TransformDetectionsTest, Translation_WithoutSizeUsesAssetPrior) {
+    CameraTestConfig cfg = {"test-cam",
+                            500.0,
+                            500.0,
+                            320.0,
+                            240.0,
+                            0.0,
+                            0.0,
+                            0.0,
+                            0.0,
+                            {0.0, 0.0, 0.0},
+                            {0.0, 0.0, 0.0},
+                            {1.0, 1.0, 1.0}};
+    auto transformer = make_transformer(cfg, ObjectClassConfig::kShiftType1, 0.25,
+                                        std::array<double, 3>{0.6, 0.5, 1.8});
+
+    Detection det = make_detection(0.0f, 0.0f, 1.0f, 1.0f);
+    det.translation = {{1.0, 2.0, 0.5}};
+
+    auto result = transformer.transformDetections(std::vector<Detection>{det});
+    ASSERT_EQ(result.size(), 1u);
+    EXPECT_NEAR(result[0].length, 0.6, 1e-9);
+    EXPECT_NEAR(result[0].width, 0.5, 1e-9);
+    EXPECT_NEAR(result[0].height, 1.8, 1e-9);
 }
 
 } // namespace

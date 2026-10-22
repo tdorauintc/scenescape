@@ -311,6 +311,54 @@ TEST_F(MessageHandlerTest, BufferedData_ParsesTranslationAndSize) {
     EXPECT_DOUBLE_EQ((*det.size)[2], 1.8);
 }
 
+TEST_F(MessageHandlerTest, AcceptsTranslationOnlyWithoutBoundingBox) {
+    MessageHandler handler(mock_client_, test_registry_, test_buffer_, test_config_, false);
+    handler.start();
+
+    std::string input_payload = R"({
+        "id": "cam1",
+        "timestamp": "2026-01-27T12:00:00.000Z",
+        "objects": {
+            "person": [{
+                "id": 1,
+                "translation": [1.0, 2.0, 0.5],
+                "size": [0.5, 0.5, 1.8]
+            }]
+        }
+    })";
+
+    mock_client_->simulateMessage("scenescape/data/camera/cam1", input_payload);
+
+    auto buffer_data = test_buffer_.pop_all();
+    TrackingScope expected_scope{"test-scene-001", "person"};
+    ASSERT_EQ(buffer_data.at(expected_scope).at("cam1").detections.size(), 1u);
+    EXPECT_TRUE(buffer_data.at(expected_scope).at("cam1").detections[0].translation.has_value());
+}
+
+TEST_F(MessageHandlerTest, RejectsReidEmbeddingWithoutBoundingBox) {
+    MessageHandler handler(mock_client_, test_registry_, test_buffer_, test_config_, false);
+    handler.start();
+
+    std::string input_payload = R"({
+        "id": "cam1",
+        "timestamp": "2026-01-27T12:00:00.000Z",
+        "objects": {
+            "person": [{
+                "id": 1,
+                "translation": [1.0, 2.0, 0.5],
+                "metadata": {"reid": {"embedding_vector": [0.1, 0.2]}}
+            }]
+        }
+    })";
+
+    mock_client_->simulateMessage("scenescape/data/camera/cam1", input_payload);
+
+    EXPECT_EQ(handler.getBufferedCount(), 1);
+    auto buffer_data = test_buffer_.pop_all();
+    TrackingScope expected_scope{"test-scene-001", "person"};
+    EXPECT_TRUE(buffer_data.at(expected_scope).at("cam1").detections.empty());
+}
+
 // Test that invalid JSON is rejected
 TEST_F(MessageHandlerTest, HandleMessage_RejectsInvalidJson) {
     MessageHandler handler(mock_client_, test_registry_, test_buffer_, test_config_, false);

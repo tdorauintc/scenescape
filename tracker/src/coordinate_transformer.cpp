@@ -57,8 +57,10 @@ void addMetadataAttributes(std::string_view metadataJson,
 
 CoordinateTransformer::CoordinateTransformer(const CameraIntrinsics& intrinsics,
                                              const CameraExtrinsics& extrinsics, int shift_type,
-                                             std::optional<double> footprint_half)
-    : shift_type_(shift_type), footprint_half_(std::move(footprint_half)) {
+                                             std::optional<double> footprint_half,
+                                             std::optional<std::array<double, 3>> prior_size)
+    : shift_type_(shift_type), footprint_half_(std::move(footprint_half)),
+      prior_size_(std::move(prior_size)) {
     // Build intrinsics matrix K = [fx 0 cx; 0 fy cy; 0 0 1]
     intrinsics_matrix_ = cv::Matx33d(intrinsics.fx, 0.0, intrinsics.cx, 0.0, intrinsics.fy,
                                      intrinsics.cy, 0.0, 0.0, 1.0);
@@ -265,7 +267,12 @@ CoordinateTransformer::transformDetections(std::span<const Detection> detections
                 obj.length = (*detections[i].size)[0];
                 obj.width = (*detections[i].size)[1];
                 obj.height = (*detections[i].size)[2];
+            } else if (prior_size_.has_value()) {
+                obj.length = (*prior_size_)[0];
+                obj.width = (*prior_size_)[1];
+                obj.height = (*prior_size_)[2];
             } else {
+                // Placeholder until bbox/size inference (plan F4) lands.
                 obj.length = obj.width = obj.height = 0.5;
             }
 

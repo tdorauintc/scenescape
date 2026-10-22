@@ -61,10 +61,13 @@ public:
      * @param footprint_half Optional camloc size offset in metres. When set,
      *        uses this instead of half the projected bbox width — matching
      *        Controller MovingObject.mapObjectDetectionToWorld asset sizes.
+     * @param prior_size Optional asset [x,y,z] size (metres). Used when a
+     *        translation detection omits ``size``.
      */
     CoordinateTransformer(const CameraIntrinsics& intrinsics, const CameraExtrinsics& extrinsics,
                           int shift_type = ObjectClassConfig::kShiftType1,
-                          std::optional<double> footprint_half = std::nullopt);
+                          std::optional<double> footprint_half = std::nullopt,
+                          std::optional<std::array<double, 3>> prior_size = std::nullopt);
 
     /**
      * @brief Projection mode used for the detection foot point.
@@ -75,6 +78,10 @@ public:
      * @brief Optional fixed half-footprint (metres) used for the camloc bearing offset.
      */
     [[nodiscard]] const std::optional<double>& footprintHalf() const { return footprint_half_; }
+
+    [[nodiscard]] const std::optional<std::array<double, 3>>& priorSize() const {
+        return prior_size_;
+    }
 
     /**
      * @brief Batch-transform detections from pixel space to world-space TrackedObjects.
@@ -161,6 +168,7 @@ private:
     cv::Point3d camera_origin_;
     int shift_type_;
     std::optional<double> footprint_half_; // metres
+    std::optional<std::array<double, 3>> prior_size_; // asset [x,y,z] metres
 
     static constexpr double kFallbackHorizonDistance = 100.0;
     static constexpr double kEarthRadius = 6371000.0;

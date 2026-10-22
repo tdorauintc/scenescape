@@ -3,6 +3,7 @@
 
 #pragma once
 
+#include <array>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -24,6 +25,8 @@ struct ObjectClassConfig {
     /// Camloc bearing offset half-size in metres (Controller mean([x,y])/2).
     /// Empty (category has no asset) → fall back to half the projected bbox width.
     std::optional<double> footprint_half;
+    /// Asset prior size [x_size, y_size, z_size] metres when the category has an asset.
+    std::optional<std::array<double, 3>> prior_size;
 };
 
 /// Asset name → projection config.

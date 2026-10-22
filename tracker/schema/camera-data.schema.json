@@ -43,7 +43,11 @@
   "$defs": {
     "detection": {
       "type": "object",
-      "required": ["bounding_box_px"],
+      "description": "Pixel bbox and/or camera-frame translation required. ReID embeddings require bounding_box_px for embedding quality gating (enforced in message_handler).",
+      "anyOf": [
+        { "required": ["bounding_box_px"] },
+        { "required": ["translation"] }
+      ],
       "properties": {
         "id": {
           "type": "integer",
@@ -52,7 +56,7 @@
         },
         "bounding_box_px": {
           "$ref": "#/$defs/bounding_box",
-          "description": "Bounding box in pixel coordinates"
+          "description": "Bounding box in pixel coordinates. Required when metadata carries a ReID embedding."
         },
         "metadata": {
           "type": "object",
@@ -74,7 +78,7 @@
         },
         "size": {
           "type": "array",
-          "description": "Optional object size [length, width, height] in metres. Preferred over bbox-projected size when translation is present.",
+          "description": "Optional object size [length, width, height] in metres. Preferred over asset prior / inferred size when translation is present.",
           "minItems": 3,
           "maxItems": 3,
           "items": { "type": "number" }

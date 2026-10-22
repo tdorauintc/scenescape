@@ -28,10 +28,12 @@ ObjectClassConfig parseAssetObject(const rapidjson::Value& asset) {
                             ? ObjectClassConfig::kShiftType2
                             : ObjectClassConfig::kShiftType1;
 
+    const double x_size = readNumber(asset, "x_size", kDefaultEdgeLength);
+    const double y_size = readNumber(asset, "y_size", kDefaultEdgeLength);
+    const double z_size = readNumber(asset, "z_size", kDefaultEdgeLength);
     // Controller: mean([x_size, y_size]) / 2, zero sizes included (metres).
-    config.footprint_half = (readNumber(asset, "x_size", kDefaultEdgeLength) +
-                             readNumber(asset, "y_size", kDefaultEdgeLength)) /
-                            4.0;
+    config.footprint_half = (x_size + y_size) / 4.0;
+    config.prior_size = {x_size, y_size, z_size};
     return config;
 }
 

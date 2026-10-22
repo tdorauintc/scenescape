@@ -417,36 +417,6 @@ std::optional<CameraMessage> MessageHandler::parseCameraMessage(const std::strin
                 detection.id = det["id"].GetInt();
             }
 
-            // Required bounding_box_px - use JSON Pointers for nested field extraction
-            const auto* bbox_x = PTR_BBOX_X.Get(det);
-            const auto* bbox_y = PTR_BBOX_Y.Get(det);
-            const auto* bbox_width = PTR_BBOX_WIDTH.Get(det);
-            const auto* bbox_height = PTR_BBOX_HEIGHT.Get(det);
-
-            if (!bbox_x || !bbox_y || !bbox_width || !bbox_height) {
-                LOG_WARN("Missing bounding_box_px fields in detection");
-                continue;
-            }
-            // Note: Type checking (IsNumber) omitted - schema validation ensures correct types
-
-            detection.bounding_box_px = cv::Rect2f(static_cast<float>(bbox_x->GetDouble()),
-                                                   static_cast<float>(bbox_y->GetDouble()),
-                                                   static_cast<float>(bbox_width->GetDouble()),
-                                                   static_cast<float>(bbox_height->GetDouble()));
-
-            // Optional metadata - serialize the entire metadata object as a raw JSON string
-            if (det.HasMember("metadata") && det["metadata"].IsObject()) {
-                rapidjson::StringBuffer meta_buf;
-                rapidjson::Writer<rapidjson::StringBuffer> meta_writer(meta_buf);
-                det["metadata"].Accept(meta_writer);
-                detection.metadata_json = meta_buf.GetString();
-            }
-
-            // Optional confidence score
-            if (det.HasMember("confidence") && det["confidence"].IsNumber()) {
-                detection.confidence = det["confidence"].GetDouble();
-            }
-
             // Optional camera-frame 3D translation [x, y, z]
             if (det.HasMember("translation") && det["translation"].IsArray() &&
                 det["translation"].Size() == 3 && det["translation"][0].IsNumber() &&
@@ -462,6 +432,55 @@ std::optional<CameraMessage> MessageHandler::parseCameraMessage(const std::strin
                 det["size"][2].IsNumber()) {
                 detection.size = {det["size"][0].GetDouble(), det["size"][1].GetDouble(),
                                   det["size"][2].GetDouble()};
+            }
+
+            // Optional bounding_box_px. Required when ReID embedding is present (gating);
+            // otherwise translation-only 3D detections are allowed without a pixel bbox.
+            const auto* bbox_x = PTR_BBOX_X.Get(det);
+            const auto* bbox_y = PTR_BBOX_Y.Get(det);
+            const auto* bbox_width = PTR_BBOX_WIDTH.Get(det);
+            const auto* bbox_height = PTR_BBOX_HEIGHT.Get(det);
+            const bool has_bbox = bbox_x && bbox_y && bbox_width && bbox_height;
+
+            bool has_reid_embedding = false;
+            if (det.HasMember("metadata") && det["metadata"].IsObject()) {
+                const auto& meta = det["metadata"];
+                if (meta.HasMember("reid") && meta["reid"].IsObject()) {
+                    const auto& reid = meta["reid"];
+                    has_reid_embedding =
+                        (reid.HasMember("embedding_vector") && reid["embedding_vector"].IsArray()) ||
+                        (reid.HasMember("embedding") && reid["embedding"].IsArray());
+                }
+            }
+
+            if (has_reid_embedding && !has_bbox) {
+                LOG_WARN("ReID embedding present without bounding_box_px; skipping detection");
+                continue;
+            }
+            if (!has_bbox && !detection.translation.has_value()) {
+                LOG_WARN("Detection missing bounding_box_px and translation; skipping");
+                continue;
+            }
+
+            if (has_bbox) {
+                // Note: Type checking (IsNumber) omitted - schema validation ensures correct types
+                detection.bounding_box_px = cv::Rect2f(static_cast<float>(bbox_x->GetDouble()),
+                                                       static_cast<float>(bbox_y->GetDouble()),
+                                                       static_cast<float>(bbox_width->GetDouble()),
+                                                       static_cast<float>(bbox_height->GetDouble()));
+            }
+
+            // Optional metadata - serialize the entire metadata object as a raw JSON string
+            if (det.HasMember("metadata") && det["metadata"].IsObject()) {
+                rapidjson::StringBuffer meta_buf;
+                rapidjson::Writer<rapidjson::StringBuffer> meta_writer(meta_buf);
+                det["metadata"].Accept(meta_writer);
+                detection.metadata_json = meta_buf.GetString();
+            }
+
+            // Optional confidence score
+            if (det.HasMember("confidence") && det["confidence"].IsNumber()) {
+                detection.confidence = det["confidence"].GetDouble();
             }
 
             detections.push_back(detection);
