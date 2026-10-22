@@ -593,13 +593,15 @@ void MultipleObjectTracker::track(std::vector<std::vector<tracking::TrackedObjec
   mTrackManager.correct();
 
   // 4. - Group unmatched detections across cameras before creating tracks.
-  // Detection-to-detection clustering must use Euclidean meters (3D): raw
-  // detections do not carry track predictedMeasurementCov, so PositionMahalanobis
-  // treats them as near-delta covariances and fails to fuse the same object seen
-  // by two cameras (duplicate frozen tracks). Use the legacy ~2 m birth radius —
-  // not maxRadiusM — so a Mahalanobis association ceiling (e.g. 10 m) does not
-  // over-merge nearby people at birth. Track-to-detection association above
-  // still uses distanceType / distanceThreshold / maxRadiusM.
+  // Detection-to-detection clustering must use Euclidean meters: raw detections
+  // do not carry track predictedMeasurementCov, so PositionMahalanobis treats
+  // them as near-delta covariances and fails to fuse the same object seen by
+  // two cameras (duplicate frozen tracks). EuclideanBirth uses XY unless both
+  // sides have measured Z (zMeasured), so planar + 3D OD still fuse; two 3D
+  // detections use XYZ so stacked floors stay separate. Legacy ~2 m birth
+  // radius — not maxRadiusM — so a Mahalanobis association ceiling (e.g. 10 m)
+  // does not over-merge nearby people at birth. Track-to-detection association
+  // above still uses distanceType / distanceThreshold / maxRadiusM.
   std::vector<tracking::TrackedObject> newObjects;
   size_t totalUnassignedObjects = 0;
   for (auto &cameraObjects : objectsPerCamera)
@@ -620,7 +622,7 @@ void MultipleObjectTracker::track(std::vector<std::vector<tracking::TrackedObjec
     std::vector<size_t> unassignedTracks;
     std::vector<size_t> unassignedObjects;
     match(newObjects, cameraObjects, assignments, unassignedTracks, unassignedObjects,
-          DistanceType::Euclidean, kDefaultBirthClusterRadiusM, kDefaultBirthClusterRadiusM);
+          DistanceType::EuclideanBirth, kDefaultBirthClusterRadiusM, kDefaultBirthClusterRadiusM);
 
     for (const auto &[newObjectIndex, cameraObjectIndex] : assignments)
     {

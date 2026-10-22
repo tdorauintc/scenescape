@@ -204,8 +204,9 @@ Tracker builds `controller/src/robot_vision` in-tree (`tracker/CMakeLists.txt`),
 | F4b | Size inference when no detection size and no asset prior | **TODO:** replace hard-coded `0.5` placeholder — e.g. bbox projection when `bounding_box_px` present, else category default. |
 | F5 | Mesh / DEM foot-ray for bbox-only cameras | Separate PR. |
 | F6 | Schema `distance` alone without `translation` | Deferred. |
+| F7 | Hybrid birth: `EuclideanBirth` + `zMeasured` | **Done:** XY if either planar; XYZ when both measured. Revisit after metrics. |
 
-**Birth clustering note (not association default):** Unmatched detection→detection fusion always uses Euclidean ~`kDefaultBirthClusterRadiusM` (2 m), even when track→detection association is `position_mahalanobis`. Raw detections lack `predictedMeasurementCov`, so Mahalanobis cannot birth-cluster. Independent of whether Mahalanobis is the production association default.
+**Birth clustering note (not association default):** Unmatched detection→detection fusion uses `DistanceType::EuclideanBirth` ~`kDefaultBirthClusterRadiusM` (2 m), even when track→detection association is `position_mahalanobis`. Raw detections lack `predictedMeasurementCov`, so Mahalanobis cannot birth-cluster. `EuclideanBirth` is XY when either side lacks `zMeasured` (planar + 3D OD still fuse); XYZ when both have measured Z (stacked floors stay separate). Revisit after metrics / multi-floor datasets.
 
 ### Tracker validation
 
@@ -227,6 +228,7 @@ cd tracker && make test-unit   # 492 passed (local build-debug-z + ctest)
 8. [x] F1: Allow translation-only 3D OD; require `bounding_box_px` only with ReID
 9. [x] F4a: Size = detection → asset prior
 10. [ ] F4b: Size inference (no detection size, no asset prior)
+11. [x] F7: Hybrid birth clustering (`EuclideanBirth` / `zMeasured`)
 
 ```mermaid
 gantt

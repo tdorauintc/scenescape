@@ -1102,6 +1102,41 @@ TEST(ObjectMatchingTest, EuclideanSeparatesStackedFloors)
   EXPECT_TRUE(assignments.empty());
 }
 
+TEST(ObjectMatchingTest, EuclideanBirthUsesXyUnlessBothZMeasured)
+{
+  rv::tracking::TrackedObject planar;
+  planar.x = 1.0;
+  planar.y = 2.0;
+  planar.z = 0.0;
+  planar.zMeasured = false;
+  planar.length = planar.width = planar.height = 0.5;
+
+  rv::tracking::TrackedObject measured = planar;
+  measured.z = 1.5;
+  measured.zMeasured = true;
+
+  rv::tracking::TrackedObject upperMeasured = planar;
+  upperMeasured.z = 4.0; // Δz > kDefaultBirthClusterRadiusM
+  upperMeasured.zMeasured = true;
+
+  std::vector<std::pair<size_t, size_t>> assignments;
+  std::vector<size_t> unassignedTracks;
+  std::vector<size_t> unassignedMeasurements;
+
+  // Mixed planar + measured Z: XY distance (~0) must match within 2 m.
+  rv::tracking::match({planar}, {measured}, assignments, unassignedTracks, unassignedMeasurements,
+                      rv::tracking::DistanceType::EuclideanBirth, 2.0, 2.0);
+  ASSERT_EQ(assignments.size(), 1U);
+
+  assignments.clear();
+  unassignedTracks.clear();
+  unassignedMeasurements.clear();
+  // Both measured, Δz = 4 m: reject.
+  rv::tracking::match({measured}, {upperMeasured}, assignments, unassignedTracks, unassignedMeasurements,
+                      rv::tracking::DistanceType::EuclideanBirth, 2.0, 2.0);
+  EXPECT_TRUE(assignments.empty());
+}
+
 TEST(ObjectMatchingTest, PositionMahalanobisSeparatesStackedFloors)
 {
   rv::tracking::TrackManagerConfig trackerConfig;
@@ -1164,6 +1199,7 @@ TEST(MultipleObjectTrackerTest, BirthClusteringDoesNotFuseStackedFloors)
   floor0.x = 5.0;
   floor0.y = 5.0;
   floor0.z = 0.0;
+  floor0.zMeasured = true;
   floor0.width = floor0.length = floor0.height = 0.5;
 
   rv::tracking::TrackedObject floor1 = floor0;
@@ -1174,7 +1210,40 @@ TEST(MultipleObjectTrackerTest, BirthClusteringDoesNotFuseStackedFloors)
                       timestamp, rv::tracking::DistanceType::Euclidean, 2.0, 0.5);
 
   auto tracks = objectTracker.getTracks();
-  ASSERT_EQ(tracks.size(), 2U) << "detections stacked in Z must not birth-cluster into one track";
+  ASSERT_EQ(tracks.size(), 2U) << "measured-Z detections stacked in Z must not birth-cluster into one track";
+}
+
+TEST(MultipleObjectTrackerTest, BirthClusteringFusesMixedPlanarAndMeasuredZ)
+{
+  rv::tracking::TrackManagerConfig trackerConfig;
+  trackerConfig.mMotionModels = {rv::tracking::MotionModel::CV};
+  trackerConfig.mDefaultProcessNoise = 1e-4;
+  trackerConfig.mDefaultMeasurementNoise = 0.2;
+  trackerConfig.mInitStateCovariance = 1.0;
+  trackerConfig.mMaxUnreliableTime = 0.0;
+  trackerConfig.mNonMeasurementTimeDynamic = 1.0;
+  trackerConfig.mNonMeasurementTimeStatic = 1.6;
+
+  rv::tracking::MultipleObjectTracker objectTracker(trackerConfig, rv::tracking::DistanceType::Euclidean, 2.0);
+  objectTracker.updateTrackerParams(10);
+
+  rv::tracking::TrackedObject planar;
+  planar.x = 5.0;
+  planar.y = 5.0;
+  planar.z = 0.0;
+  planar.zMeasured = false;
+  planar.width = planar.length = planar.height = 0.5;
+
+  rv::tracking::TrackedObject measured = planar;
+  measured.z = 1.5;
+  measured.zMeasured = true;
+
+  auto timestamp = std::chrono::system_clock::now();
+  objectTracker.track(std::vector<std::vector<rv::tracking::TrackedObject>>{{planar}, {measured}},
+                      timestamp, rv::tracking::DistanceType::Euclidean, 2.0, 0.5);
+
+  auto tracks = objectTracker.getTracks();
+  ASSERT_EQ(tracks.size(), 1U) << "planar + measured-Z at same XY should birth-cluster via XY distance";
 }
 
 TEST(MultipleObjectTrackerTest, ConstantZKeepsVzNearZero)

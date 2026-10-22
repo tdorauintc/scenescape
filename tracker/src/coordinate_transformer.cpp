@@ -262,6 +262,7 @@ CoordinateTransformer::transformDetections(std::span<const Detection> detections
                     pose_matrix_(1, 3);
             obj.z = pose_matrix_(2, 0) * cx + pose_matrix_(2, 1) * cy + pose_matrix_(2, 2) * cz +
                     pose_matrix_(2, 3);
+            obj.zMeasured = true;
 
             if (detections[i].size.has_value()) {
                 obj.length = (*detections[i].size)[0];
@@ -329,6 +330,7 @@ CoordinateTransformer::transformDetections(std::span<const Detection> detections
         obj.x = offset_x;
         obj.y = offset_y;
         obj.z = 0.0;
+        obj.zMeasured = false;
         obj.length = width_m; // [width, width, height] convention
         obj.width = width_m;
         obj.height = height_m;

@@ -299,6 +299,7 @@ TEST(TransformDetectionsTest, MatchesPythonReference_Position) {
             << "Test " << tc.name << " world Y mismatch";
         EXPECT_NEAR(result[0].z, 0.0, kWorldTolerance)
             << "Test " << tc.name << " world Z should be 0";
+        EXPECT_FALSE(result[0].zMeasured) << "Test " << tc.name << ": bbox path must not set zMeasured";
     }
 }
 
@@ -662,6 +663,7 @@ TEST(TransformDetectionsTest, Translation_PoseTransformsAndPreservesZ) {
     EXPECT_NEAR(result[0].x, 1.5, 1e-9);
     EXPECT_NEAR(result[0].y, -0.5, 1e-9);
     EXPECT_NEAR(result[0].z, 5.0, 1e-9); // 2.0 + camera height 3.0
+    EXPECT_TRUE(result[0].zMeasured);
     EXPECT_NEAR(result[0].length, 0.6, 1e-9);
     EXPECT_NEAR(result[0].width, 0.5, 1e-9);
     EXPECT_NEAR(result[0].height, 1.8, 1e-9);
@@ -689,6 +691,7 @@ TEST(TransformDetectionsTest, Translation_WithoutSizeUsesDefaultFootprint) {
     auto result = transformer.transformDetections(std::vector<Detection>{det});
     ASSERT_EQ(result.size(), 1u);
     EXPECT_NEAR(result[0].z, 1.25, 1e-9);
+    EXPECT_TRUE(result[0].zMeasured);
     EXPECT_NEAR(result[0].length, 0.5, 1e-9);
     EXPECT_NEAR(result[0].width, 0.5, 1e-9);
     EXPECT_NEAR(result[0].height, 0.5, 1e-9);
