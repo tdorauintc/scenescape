@@ -1016,7 +1016,7 @@ TEST(MultipleObjectTrackerTest, FollowsClimbingZAndYaw)
   constexpr double vx = 0.4;
   constexpr double vy = 0.2;
   constexpr double vz = 0.4;
-  constexpr double yawRate = 0.15;
+  const double yaw = std::atan2(vy, vx);
 
   for (double t = stepS; t < totalS; t += stepS)
   {
@@ -1025,7 +1025,7 @@ TEST(MultipleObjectTrackerTest, FollowsClimbingZAndYaw)
     measurement.x = vx * t;
     measurement.y = vy * t;
     measurement.z = vz * t;
-    measurement.yaw = yawRate * t;
+    measurement.yaw = yaw;
     measurement.length = 0.5;
     measurement.width = 0.5;
     measurement.height = 1.8;
@@ -1041,19 +1041,19 @@ TEST(MultipleObjectTrackerTest, FollowsClimbingZAndYaw)
   const double expectedZ = vz * expectedT;
   EXPECT_NEAR(tracks[0].x, vx * expectedT, 0.15);
   EXPECT_NEAR(tracks[0].y, vy * expectedT, 0.15);
-  // No vz in state: z is measurement-driven and lags, but must leave z=0.
-  EXPECT_GT(tracks[0].z, 1.0);
-  EXPECT_LT(std::abs(tracks[0].z - expectedZ), std::abs(0.0 - expectedZ) * 0.5);
-  EXPECT_NEAR(tracks[0].yaw, yawRate * expectedT, 0.25);
+  EXPECT_NEAR(tracks[0].z, expectedZ, 0.2);
+  EXPECT_NEAR(tracks[0].vz, vz, 0.15);
+  EXPECT_NEAR(tracks[0].yaw, yaw, 0.2);
 }
 
-TEST(MultiModelKalmanEstimatorTest, PredictHoldsZWithoutMeasurement)
+TEST(MultiModelKalmanEstimatorTest, PredictIntegratesVzWithoutMeasurement)
 {
   rv::tracking::MultiModelKalmanEstimator estimator;
   rv::tracking::TrackedObject seed;
   seed.x = 0.0;
   seed.y = 0.0;
   seed.z = 2.5;
+  seed.vz = 0.5;
   seed.yaw = 0.3;
   seed.length = 0.5;
   seed.width = 0.5;
@@ -1061,8 +1061,10 @@ TEST(MultiModelKalmanEstimatorTest, PredictHoldsZWithoutMeasurement)
 
   auto timestamp = std::chrono::system_clock::now();
   estimator.initialize(seed, timestamp, 1e-5, 1e-3, 1.0, {rv::tracking::MotionModel::CV});
+  constexpr double coastDt = 2.0;
   estimator.predict(timestamp + std::chrono::seconds(2));
   auto state = estimator.currentState();
-  EXPECT_NEAR(state.z, 2.5, 1e-3);
+  EXPECT_NEAR(state.z, 2.5 + 0.5 * coastDt, 0.05);
+  EXPECT_NEAR(state.vz, 0.5, 0.05);
   EXPECT_NEAR(state.yaw, 0.3, 1e-3);
 }

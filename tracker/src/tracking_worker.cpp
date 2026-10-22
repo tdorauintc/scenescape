@@ -269,7 +269,7 @@ TrackingWorker::convert_tracks(std::vector<rv::tracking::TrackedObject>&& rv_tra
         track.id = id_map_.at(rv_track.id);
         track.category = category;
         track.translation = {rv_track.x, rv_track.y, rv_track.z};
-        track.velocity = {rv_track.vx, rv_track.vy, 0.0};
+        track.velocity = {rv_track.vx, rv_track.vy, rv_track.vz};
         track.size = {rv_track.length, rv_track.width, rv_track.height};
         // Pixel detections carry no orientation, so RobotVision yaw is unobserved.
         // TEMPORARY: fixes yaw drift regression introduced by c2a80ef38 (ITEP-96642, #1958);
