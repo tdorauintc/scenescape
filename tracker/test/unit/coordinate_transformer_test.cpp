@@ -636,5 +636,62 @@ TEST(TransformDetectionsTest, Confidence_MultipleDetectionsPreservedInOrder) {
     EXPECT_NEAR(std::stod(result[2].attributes.at("confidence")), 0.6, 1e-9);
 }
 
+TEST(TransformDetectionsTest, Translation_PoseTransformsAndPreservesZ) {
+    // Identity rotation, camera at (0, 0, 3): world = camera_point + t.
+    CameraTestConfig cfg = {"test-cam",
+                            500.0,
+                            500.0,
+                            320.0,
+                            240.0,
+                            0.0,
+                            0.0,
+                            0.0,
+                            0.0,
+                            {0.0, 0.0, 3.0},
+                            {0.0, 0.0, 0.0},
+                            {1.0, 1.0, 1.0}};
+    auto transformer = make_transformer(cfg);
+
+    Detection det = make_detection(100.0f, 100.0f, 50.0f, 100.0f, 7);
+    det.translation = {{1.5, -0.5, 2.0}};
+    det.size = {{0.6, 0.5, 1.8}};
+
+    auto result = transformer.transformDetections(std::vector<Detection>{det});
+    ASSERT_EQ(result.size(), 1u);
+    EXPECT_NEAR(result[0].x, 1.5, 1e-9);
+    EXPECT_NEAR(result[0].y, -0.5, 1e-9);
+    EXPECT_NEAR(result[0].z, 5.0, 1e-9); // 2.0 + camera height 3.0
+    EXPECT_NEAR(result[0].length, 0.6, 1e-9);
+    EXPECT_NEAR(result[0].width, 0.5, 1e-9);
+    EXPECT_NEAR(result[0].height, 1.8, 1e-9);
+    EXPECT_EQ(result[0].id, 7);
+}
+
+TEST(TransformDetectionsTest, Translation_WithoutSizeUsesDefaultFootprint) {
+    CameraTestConfig cfg = {"test-cam",
+                            500.0,
+                            500.0,
+                            320.0,
+                            240.0,
+                            0.0,
+                            0.0,
+                            0.0,
+                            0.0,
+                            {0.0, 0.0, 0.0},
+                            {0.0, 0.0, 0.0},
+                            {1.0, 1.0, 1.0}};
+    auto transformer = make_transformer(cfg);
+
+    Detection det = make_detection(0.0f, 0.0f, 1.0f, 1.0f);
+    det.translation = {{0.0, 0.0, 1.25}};
+
+    auto result = transformer.transformDetections(std::vector<Detection>{det});
+    ASSERT_EQ(result.size(), 1u);
+    EXPECT_NEAR(result[0].z, 1.25, 1e-9);
+    EXPECT_NEAR(result[0].length, 0.5, 1e-9);
+    EXPECT_NEAR(result[0].width, 0.5, 1e-9);
+    EXPECT_NEAR(result[0].height, 0.5, 1e-9);
+}
+
 } // namespace
 } // namespace tracker

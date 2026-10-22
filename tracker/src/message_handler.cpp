@@ -447,6 +447,23 @@ std::optional<CameraMessage> MessageHandler::parseCameraMessage(const std::strin
                 detection.confidence = det["confidence"].GetDouble();
             }
 
+            // Optional camera-frame 3D translation [x, y, z]
+            if (det.HasMember("translation") && det["translation"].IsArray() &&
+                det["translation"].Size() == 3 && det["translation"][0].IsNumber() &&
+                det["translation"][1].IsNumber() && det["translation"][2].IsNumber()) {
+                detection.translation = {det["translation"][0].GetDouble(),
+                                         det["translation"][1].GetDouble(),
+                                         det["translation"][2].GetDouble()};
+            }
+
+            // Optional size [length, width, height]
+            if (det.HasMember("size") && det["size"].IsArray() && det["size"].Size() == 3 &&
+                det["size"][0].IsNumber() && det["size"][1].IsNumber() &&
+                det["size"][2].IsNumber()) {
+                detection.size = {det["size"][0].GetDouble(), det["size"][1].GetDouble(),
+                                  det["size"][2].GetDouble()};
+            }
+
             detections.push_back(detection);
         }
 

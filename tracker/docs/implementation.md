@@ -238,6 +238,10 @@ struct BoundingBoxPx { double x, y, width, height; };
 struct Detection {
     std::optional<int64_t> id;  // Frame-local detection ID (optional)
     BoundingBoxPx bounding_box_px;
+    // Optional camera-frame [x,y,z] (metres). When set, pose-transform into
+    // scene frame and preserve Z (skip ground-plane Z=0). See camera-data.schema.json.
+    std::optional<std::array<double, 3>> translation;
+    std::optional<std::array<double, 3>> size;  // [length, width, height] metres
 };
 ```
 

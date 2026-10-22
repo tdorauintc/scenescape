@@ -64,6 +64,20 @@
           "description": "Optional detection confidence score in [0, 1]",
           "minimum": 0,
           "maximum": 1
+        },
+        "translation": {
+          "type": "array",
+          "description": "Optional camera-frame 3D position [x, y, z] in metres (OpenCV camera axes). When present, the tracker pose-transforms into scene frame and tracks Z/vz instead of forcing ground-plane Z=0.",
+          "minItems": 3,
+          "maxItems": 3,
+          "items": { "type": "number" }
+        },
+        "size": {
+          "type": "array",
+          "description": "Optional object size [length, width, height] in metres. Preferred over bbox-projected size when translation is present.",
+          "minItems": 3,
+          "maxItems": 3,
+          "items": { "type": "number" }
         }
       },
       "additionalProperties": true

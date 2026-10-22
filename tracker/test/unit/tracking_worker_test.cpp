@@ -1136,7 +1136,7 @@ TEST_F(TrackingWorkerTest, AssociationConfigSelectsDistanceType) {
     EXPECT_EQ(worker.associationConfig().method, AssociationMethod::PositionMahalanobis);
     EXPECT_EQ(worker.associationConfig().distanceType(),
               rv::tracking::DistanceType::PositionMahalanobis);
-    EXPECT_NEAR(worker.associationConfig().costThreshold(), rv::chi2Threshold(0.99, 2), 1e-6);
+    EXPECT_NEAR(worker.associationConfig().costThreshold(), rv::chi2Threshold(0.99, 3), 1e-6);
     EXPECT_DOUBLE_EQ(worker.associationConfig().max_radius_m, 10.0);
 }
 
@@ -1150,7 +1150,7 @@ TEST_F(TrackingWorkerTest, AssociationConfigDefaultsToPositionMahalanobis) {
     EXPECT_EQ(worker.associationConfig().method, AssociationMethod::PositionMahalanobis);
     EXPECT_EQ(worker.associationConfig().distanceType(),
               rv::tracking::DistanceType::PositionMahalanobis);
-    EXPECT_NEAR(worker.associationConfig().costThreshold(), rv::chi2Threshold(0.99, 2), 1e-6);
+    EXPECT_NEAR(worker.associationConfig().costThreshold(), rv::chi2Threshold(0.99, 3), 1e-6);
     EXPECT_DOUBLE_EQ(worker.associationConfig().max_radius_m, 10.0);
 }
 

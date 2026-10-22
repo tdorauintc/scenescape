@@ -32,6 +32,12 @@ struct Detection {
         metadata_json; ///< Raw JSON string of the detection's metadata object (empty if absent)
     std::optional<double>
         confidence; ///< Detection confidence score in [0, 1] (absent if not provided)
+    /// Optional camera-frame world pose [x, y, z] (metres). When set, transform
+    /// skips ground-plane Z=0 and pose-transforms this point into scene frame.
+    std::optional<std::array<double, 3>> translation;
+    /// Optional object size [length, width, height] (metres). Used when
+    /// ``translation`` is present; otherwise size comes from bbox projection.
+    std::optional<std::array<double, 3>> size;
 };
 
 /**

@@ -277,6 +277,40 @@ TEST_F(MessageHandlerTest, BufferedData_ContainsCorrectDetectionInfo) {
     EXPECT_EQ(det.bounding_box_px.height, 100);
 }
 
+TEST_F(MessageHandlerTest, BufferedData_ParsesTranslationAndSize) {
+    MessageHandler handler(mock_client_, test_registry_, test_buffer_, test_config_, false);
+    handler.start();
+
+    std::string input_payload = R"({
+        "id": "cam1",
+        "timestamp": "2026-01-27T12:00:00.000Z",
+        "objects": {
+            "person": [{
+                "id": 1,
+                "bounding_box_px": {"x": 10, "y": 20, "width": 50, "height": 100},
+                "translation": [1.5, -0.25, 2.0],
+                "size": [0.6, 0.5, 1.8]
+            }]
+        }
+    })";
+
+    mock_client_->simulateMessage("scenescape/data/camera/cam1", input_payload);
+
+    auto buffer_data = test_buffer_.pop_all();
+    ASSERT_EQ(buffer_data.size(), 1);
+
+    TrackingScope expected_scope{"test-scene-001", "person"};
+    const auto& det = buffer_data.at(expected_scope).at("cam1").detections[0];
+    ASSERT_TRUE(det.translation.has_value());
+    EXPECT_DOUBLE_EQ((*det.translation)[0], 1.5);
+    EXPECT_DOUBLE_EQ((*det.translation)[1], -0.25);
+    EXPECT_DOUBLE_EQ((*det.translation)[2], 2.0);
+    ASSERT_TRUE(det.size.has_value());
+    EXPECT_DOUBLE_EQ((*det.size)[0], 0.6);
+    EXPECT_DOUBLE_EQ((*det.size)[1], 0.5);
+    EXPECT_DOUBLE_EQ((*det.size)[2], 1.8);
+}
+
 // Test that invalid JSON is rejected
 TEST_F(MessageHandlerTest, HandleMessage_RejectsInvalidJson) {
     MessageHandler handler(mock_client_, test_registry_, test_buffer_, test_config_, false);

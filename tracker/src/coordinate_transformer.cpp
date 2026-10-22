@@ -244,6 +244,45 @@ CoordinateTransformer::transformDetections(std::span<const Detection> detections
 
 #pragma omp parallel for schedule(static)
     for (int i = 0; i < static_cast<int>(n); ++i) {
+        auto& obj = result[i];
+        obj.id = detections[i].id.value_or(rv::tracking::InvalidObjectId);
+
+        // Prefer measured camera-frame 3D pose when present (RealSense / 3D OD).
+        // Pose-transform into scene frame; do not force ground-plane Z=0.
+        if (detections[i].translation.has_value()) {
+            const auto& cam_t = *detections[i].translation;
+            const double cx = cam_t[0];
+            const double cy = cam_t[1];
+            const double cz = cam_t[2];
+            obj.x = pose_matrix_(0, 0) * cx + pose_matrix_(0, 1) * cy + pose_matrix_(0, 2) * cz +
+                    pose_matrix_(0, 3);
+            obj.y = pose_matrix_(1, 0) * cx + pose_matrix_(1, 1) * cy + pose_matrix_(1, 2) * cz +
+                    pose_matrix_(1, 3);
+            obj.z = pose_matrix_(2, 0) * cx + pose_matrix_(2, 1) * cy + pose_matrix_(2, 2) * cz +
+                    pose_matrix_(2, 3);
+
+            if (detections[i].size.has_value()) {
+                obj.length = (*detections[i].size)[0];
+                obj.width = (*detections[i].size)[1];
+                obj.height = (*detections[i].size)[2];
+            } else {
+                obj.length = obj.width = obj.height = 0.5;
+            }
+
+            if (!detections[i].metadata_json.empty()) {
+                addMetadataAttributes(detections[i].metadata_json, obj.attributes);
+            }
+            if (detections[i].confidence.has_value()) {
+                char buf[32];
+                auto [ptr, ec] = std::to_chars(buf, buf + sizeof(buf), *detections[i].confidence);
+                if (ec == std::errc{}) {
+                    obj.attributes["confidence"] = std::string(buf, ptr);
+                }
+            }
+            detection_valid[i] = 1;
+            continue;
+        }
+
         const size_t base = static_cast<size_t>(i) * kPixelsPerDetection;
 
         // Check all 4 projections succeeded
@@ -280,8 +319,6 @@ CoordinateTransformer::transformDetections(std::span<const Detection> detections
             offset_y += (foot_dy / bearing_len) * half_size;
         }
 
-        auto& obj = result[i];
-        obj.id = detections[i].id.value_or(rv::tracking::InvalidObjectId);
         obj.x = offset_x;
         obj.y = offset_y;
         obj.z = 0.0;

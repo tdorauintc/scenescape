@@ -79,13 +79,14 @@ public:
     /**
      * @brief Batch-transform detections from pixel space to world-space TrackedObjects.
      *
-     * For each detection, projects 4 bbox pixels (foot, BL, BR, TL) through the full
-     * undistort → pose → ray-plane pipeline in a single batched operation. Computes
-     * world position (from foot point) and world size (from corner distances).
+     * For each detection without ``translation``, projects 4 bbox pixels (foot, BL, BR, TL)
+     * through undistort → pose → ray-plane (z=0). When ``translation`` is set (camera frame),
+     * pose-transforms that point into scene frame (preserves Z) and optionally applies
+     * ``size``; ground-plane intersection is skipped for that detection.
      *
-     * Detections where any projection fails are silently skipped.
+     * Detections where any projection fails (and no translation) are silently skipped.
      *
-     * @param detections Span of pixel-space detections (bounding boxes)
+     * @param detections Span of detections (bounding boxes and optional 3D pose)
      * @return TrackedObjects with world-space position and size fields populated.
      *         id, x, y, z, length, width, height are set. Velocity/yaw are zero.
      *         attributes["metadata_json"] is set from Detection::metadata_json when non-empty.
