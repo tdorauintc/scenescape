@@ -33,6 +33,7 @@ class SceneModel:
 
     self.mesh_translation = None
     self.mesh_rotation = None
+    self.mesh_scale = None
     self.scale = scale
     return
 

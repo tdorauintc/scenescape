@@ -5,19 +5,27 @@
 
 Converts 2D detections into mesh-conditioned world points for the existing
 IntelLabs probabilistic tracker. Non-Stairs scenes keep the legacy path.
+
+The scene GLB is transformed into camera/world frame with mesh_translation /
+mesh_rotation / mesh_scale before building AmodalReasoner (DepthMap).
+
+Debug (optional Z-offset isolation):
+  OBSERVATION_PIPELINE_DEBUG=1     — log Stage A–F fields (rate-limited)
+  OBSERVATION_PIPELINE_MODE=full|frustum_only|off
+      full          — frustum + amodal (default)
+      frustum_only  — skip amodal; use depth_est as updated_depth
+      off           — disable conditioning (legacy path)
+  Or write mode to /tmp/observation_pipeline_mode and touch
+  /tmp/observation_pipeline_debug.
 """
 
 from __future__ import annotations
 
+import os
+
 import numpy as np
-import open3d as o3d
 
-import frustum_gaussian as fg
-from observation_conditioning import AmodalReasoner
 from scene_common import log
-from scene_common.geometry import Point
-
-from controller.moving_object import Chronoloc, MovingObject, Vector
 
 # Hard-gate for Phase 1 verification (plan: Stairs-only).
 OBSERVATION_CONDITIONING_SCENE_NAMES = frozenset({"Stairs"})
@@ -25,9 +33,79 @@ OBSERVATION_CONDITIONING_SCENE_NAMES = frozenset({"Stairs"})
 # Default world-up for SceneScape meshes (Z-up).
 DEFAULT_WORLD_UP = np.array([0.0, 0.0, 1.0], dtype=np.float64)
 
+_DEBUG_LIMIT_PER_CAM = int(os.environ.get("OBSERVATION_PIPELINE_DEBUG_LIMIT", "24"))
+_MODE_FILE = "/tmp/observation_pipeline_mode"
+_DEBUG_FILE = "/tmp/observation_pipeline_debug"
+
+
+def _pipeline_debug_enabled() -> bool:
+  if os.path.exists(_DEBUG_FILE):
+    return True
+  return os.environ.get("OBSERVATION_PIPELINE_DEBUG", "").strip().lower() in (
+    "1", "true", "yes", "on",
+  )
+
+
+def _pipeline_mode() -> str:
+  if os.path.exists(_MODE_FILE):
+    try:
+      return open(_MODE_FILE, encoding="utf-8").read().strip().lower() or "full"
+    except OSError:
+      pass
+  return os.environ.get("OBSERVATION_PIPELINE_MODE", "full").strip().lower() or "full"
+
 
 def sceneUsesObservationConditioning(scene_name: str) -> bool:
+  if _pipeline_mode() == "off":
+    return False
   return scene_name in OBSERVATION_CONDITIONING_SCENE_NAMES
+
+
+def _euler_xyz_degrees_to_rmat(rotation) -> np.ndarray:
+  """Match CameraPose / scipy Rotation.from_euler('XYZ', ..., degrees=True)."""
+  rx, ry, rz = [np.deg2rad(float(a)) for a in rotation]
+  cx, sx = np.cos(rx), np.sin(rx)
+  cy, sy = np.cos(ry), np.sin(ry)
+  cz, sz = np.cos(rz), np.sin(rz)
+  # Extrinsic XYZ: R = Rz @ Ry @ Rx
+  rx_m = np.array([[1.0, 0.0, 0.0], [0.0, cx, -sx], [0.0, sx, cx]], dtype=np.float64)
+  ry_m = np.array([[cy, 0.0, sy], [0.0, 1.0, 0.0], [-sy, 0.0, cy]], dtype=np.float64)
+  rz_m = np.array([[cz, -sz, 0.0], [sz, cz, 0.0], [0.0, 0.0, 1.0]], dtype=np.float64)
+  return rz_m @ ry_m @ rx_m
+
+
+def sceneMeshPoseMat(scene) -> np.ndarray:
+  """4x4 mesh→world pose from scene mesh_translation/rotation/scale.
+
+  Uses unit scale when mesh_scale is missing. Does not fall back to
+  Scene.scale (map pixels-per-meter), which is not a GLB scale.
+  Matches CameraPose._poseToPoseMat convention (R|t) @ diag(scale,1).
+  """
+  translation = getattr(scene, "mesh_translation", None) or [0.0, 0.0, 0.0]
+  rotation = getattr(scene, "mesh_rotation", None) or [0.0, 0.0, 0.0]
+  scale = _mesh_scale_xyz(getattr(scene, "mesh_scale", None))
+  rmat = _euler_xyz_degrees_to_rmat(rotation)
+  tvecs = np.asarray(translation, dtype=np.float64).reshape(3, 1)
+  pose_mat = np.vstack((np.hstack((rmat, tvecs)), [0.0, 0.0, 0.0, 1.0]))
+  return pose_mat @ np.diag([scale[0], scale[1], scale[2], 1.0])
+
+
+def _mesh_scale_xyz(mesh_scale) -> list[float]:
+  if mesh_scale is None:
+    return [1.0, 1.0, 1.0]
+  if isinstance(mesh_scale, (int, float)):
+    # Explicit scalar mesh_scale only; never Scene.scale (map px/m).
+    value = float(mesh_scale)
+    if value <= 0.0:
+      return [1.0, 1.0, 1.0]
+    return [value, value, value]
+  try:
+    values = [float(mesh_scale[0]), float(mesh_scale[1]), float(mesh_scale[2])]
+  except (TypeError, IndexError, ValueError):
+    return [1.0, 1.0, 1.0]
+  if any(v <= 0.0 for v in values):
+    return [1.0, 1.0, 1.0]
+  return values
 
 
 class ObservationPipeline:
@@ -35,16 +113,26 @@ class ObservationPipeline:
 
   def __init__(self, scene):
     self.scene = scene
-    self._reasoners: dict[str, AmodalReasoner] = {}
+    self._reasoners: dict[str, object] = {}
     self._reasoner_keys: dict[str, tuple] = {}
+    self._world_mesh = None
+    self._world_mesh_key = None
+    self._debug_counts: dict[str, int] = {}
+    self._logged_mesh_once = False
     return
 
   def invalidate(self):
     self._reasoners.clear()
     self._reasoner_keys.clear()
+    self._world_mesh = None
+    self._world_mesh_key = None
+    self._debug_counts.clear()
+    self._logged_mesh_once = False
     return
 
-  def _mesh_tensor(self):
+  def _raw_mesh_tensor(self):
+    import open3d as o3d
+
     mesh = getattr(self.scene, "map_triangle_mesh", None)
     if mesh is None:
       return None
@@ -54,6 +142,70 @@ class ObservationPipeline:
       return o3d.t.geometry.TriangleMesh.from_legacy(mesh)
     log.warn("ObservationPipeline: unsupported mesh type", type(mesh))
     return None
+
+  def _mesh_pose_key(self, pose_mat: np.ndarray) -> tuple:
+    return tuple(np.round(np.asarray(pose_mat, dtype=np.float64).reshape(-1), 6).tolist())
+
+  def _world_mesh_tensor(self):
+    """Clone map mesh and apply scene mesh pose into camera/world frame."""
+    raw = self._raw_mesh_tensor()
+    if raw is None:
+      return None
+    pose_mat = sceneMeshPoseMat(self.scene)
+    key = (id(getattr(self.scene, "map_triangle_mesh", None)), self._mesh_pose_key(pose_mat))
+    if self._world_mesh is not None and self._world_mesh_key == key:
+      return self._world_mesh
+
+    try:
+      import open3d as o3d
+
+      world = raw.clone()
+      world.transform(o3d.core.Tensor(np.asarray(pose_mat, dtype=np.float64)))
+    except Exception as exc:  # noqa: BLE001
+      log.error("ObservationPipeline: failed to transform mesh to world", exc)
+      return None
+
+    self._world_mesh = world
+    self._world_mesh_key = key
+    if _pipeline_debug_enabled():
+      log.info("ObservationPipeline: mesh→world pose applied",
+               f"translation={getattr(self.scene, 'mesh_translation', None)}",
+               f"rotation={getattr(self.scene, 'mesh_rotation', None)}",
+               f"mesh_scale={_mesh_scale_xyz(getattr(self.scene, 'mesh_scale', None))}")
+    return world
+
+  def _log_mesh_frame_once(self, mesh, cam_origin):
+    if self._logged_mesh_once or not _pipeline_debug_enabled():
+      return
+    self._logged_mesh_once = True
+    try:
+      aabb = mesh.get_axis_aligned_bounding_box()
+      mn = aabb.min_bound.numpy().astype(float)
+      mx = aabb.max_bound.numpy().astype(float)
+      extents = mx - mn
+      cam_origin = np.asarray(cam_origin, dtype=float)
+      log.info(
+        "ObservationPipeline:ZDBG mesh_aabb",
+        f"min={mn.tolist()}",
+        f"max={mx.tolist()}",
+        f"extent={extents.tolist()}",
+        f"mesh_translation={getattr(self.scene, 'mesh_translation', None)}",
+        f"mesh_rotation={getattr(self.scene, 'mesh_rotation', None)}",
+        f"mesh_scale={getattr(self.scene, 'mesh_scale', None)}",
+        f"cam_origin={cam_origin.tolist()}",
+        f"world_up={DEFAULT_WORLD_UP.tolist()}",
+      )
+      inside_xy = (mn[0] <= cam_origin[0] <= mx[0]) and (mn[1] <= cam_origin[1] <= mx[1])
+      log.info(
+        "ObservationPipeline:ZDBG mesh_cam_overlap",
+        f"cam_inside_mesh_xy={inside_xy}",
+        f"cam_z={float(cam_origin[2]):.3f}",
+        f"mesh_z_range=[{mn[2]:.3f},{mx[2]:.3f}]",
+        f"tallest_axis={int(np.argmax(extents))}(0=x,1=y,2=z)",
+      )
+    except Exception as exc:  # noqa: BLE001
+      log.warn("ObservationPipeline:ZDBG mesh dump failed", exc)
+    return
 
   def _camera_intrinsics_dict(self, camera) -> dict[str, float] | None:
     pose = getattr(camera, "pose", None)
@@ -76,20 +228,24 @@ class ObservationPipeline:
       "height": height,
     }
 
-  def _reasoner_for_camera(self, camera) -> AmodalReasoner | None:
-    mesh = self._mesh_tensor()
+  def _reasoner_for_camera(self, camera):
+    from observation_conditioning import AmodalReasoner
+
+    mesh = self._world_mesh_tensor()
     if mesh is None:
       return None
     intr = self._camera_intrinsics_dict(camera)
     if intr is None:
       return None
     pose_mat = np.asarray(camera.pose.pose_mat, dtype=np.float64)
+    mesh_pose = sceneMeshPoseMat(self.scene)
     cam_id = camera.cameraID
     key = (
       round(intr["fx"], 4), round(intr["fy"], 4),
       round(intr["cx"], 4), round(intr["cy"], 4),
       int(intr["width"]), int(intr["height"]),
       tuple(np.round(pose_mat.reshape(-1), 5).tolist()),
+      self._mesh_pose_key(mesh_pose),
       id(self.scene.map_triangle_mesh),
     )
     if self._reasoners.get(cam_id) is not None and self._reasoner_keys.get(cam_id) == key:
@@ -110,6 +266,8 @@ class ObservationPipeline:
         height=int(intr["height"]),
         num_layers=4,
       )
+      if _pipeline_debug_enabled():
+        reasoner.debug = True
     except Exception as exc:  # noqa: BLE001 — fall back to legacy path
       log.error("ObservationPipeline: failed to build AmodalReasoner for",
                 cam_id, exc)
@@ -118,11 +276,25 @@ class ObservationPipeline:
     self._reasoners[cam_id] = reasoner
     self._reasoner_keys[cam_id] = key
     log.info("ObservationPipeline: built AmodalReasoner for", cam_id,
-             f"{int(intr['width'])}x{int(intr['height'])}")
+             f"{int(intr['width'])}x{int(intr['height'])}",
+             f"mode={_pipeline_mode()}")
+    self._log_mesh_frame_once(mesh, pose_mat[:3, 3])
     return reasoner
 
-  def apply(self, objects: list[MovingObject], camera, when) -> list[MovingObject]:
+  def _should_debug(self, cam_id: str) -> bool:
+    if not _pipeline_debug_enabled():
+      return False
+    count = self._debug_counts.get(cam_id, 0)
+    if count >= _DEBUG_LIMIT_PER_CAM:
+      return False
+    self._debug_counts[cam_id] = count + 1
+    return True
+
+  def apply(self, objects: list, camera, when) -> list:
     """Overwrite world locations using frustum + amodal; on failure leave legacy."""
+    from scene_common.geometry import Point
+    from controller.moving_object import Chronoloc, Vector
+
     if not objects:
       return objects
 
@@ -149,7 +321,13 @@ class ObservationPipeline:
     if not detections:
       return objects
 
+    cam_id = camera.cameraID
+    mode = _pipeline_mode()
+    do_dbg = self._should_debug(cam_id)
+
     try:
+      import frustum_gaussian as fg
+
       cam_obs = fg.from_scenescape_detections(
         detections, intr, shape_prior=fg.PERSON_SHAPE_PRIOR)
       pose_mat = np.asarray(camera.pose.pose_mat, dtype=np.float32)
@@ -170,12 +348,55 @@ class ObservationPipeline:
         "edge_valid": world_obs["edge_valid"],
       }
 
-      reasoner = self._reasoner_for_camera(camera)
-      if reasoner is None:
-        return objects
+      if mode == "frustum_only":
+        updated_depth = np.asarray(gaus_rays["depth_est"], dtype=np.float64).copy()
+        updated_var = np.asarray(gaus_rays["depth_sigma"], dtype=np.float64) ** 2
+      else:
+        reasoner = self._reasoner_for_camera(camera)
+        if reasoner is None:
+          return objects
+        updated_depth, updated_var = reasoner.generate(gaus_rays)
 
-      updated_depth, updated_var = reasoner.generate(gaus_rays)
       centroids = gaus_rays["mu"] + gaus_rays["ray"] * updated_depth[:, None]
+
+      if do_dbg:
+        mu_remap_err = float(np.max(np.abs(
+          gaus_rays["mu"] - cam_origin[None, :])))
+        legacy_z = None
+        if usable and getattr(usable[0], "location", None):
+          try:
+            legacy_z = float(usable[0].location[0].point.z)
+          except Exception:  # noqa: BLE001
+            legacy_z = None
+        for i in range(min(count, 3)):
+          bb = detections[i]["bounding_box_px"]
+          d_est = float(gaus_rays["depth_est"][i])
+          d_upd = float(updated_depth[i])
+          log.info(
+            "ObservationPipeline:ZDBG",
+            f"mode={mode}",
+            f"cam={cam_id}",
+            f"A_bb=({bb['x']:.1f},{bb['y']:.1f},{bb['width']:.1f},{bb['height']:.1f})",
+            f"A_K=({intr['fx']:.2f},{intr['fy']:.2f},{intr['cx']:.2f},{intr['cy']:.2f})",
+            f"A_res={int(intr['width'])}x{int(intr['height'])}",
+            f"A_cam_origin={cam_origin.tolist()}",
+            f"B_depth_est={d_est:.3f}",
+            f"B_depth_lo={float(gaus_rays['depth_lo'][i]):.3f}",
+            f"B_depth_hi={float(gaus_rays['depth_hi'][i]):.3f}",
+            f"B_mu_cam_z={float(cam_obs['mu'][i, 2]):.3f}",
+            f"B_score={float(gaus_rays['score'][i]):.3f}",
+            f"B_edge_valid={int(gaus_rays['edge_valid'][i])}",
+            f"C_world_mu={world_obs['mu'][i].tolist()}",
+            f"C_ray={world_obs['ray'][i].tolist()}",
+            f"D_mu_remap_err={mu_remap_err:.6f}",
+            f"D_gaus_mu={gaus_rays['mu'][i].tolist()}",
+            f"E_updated_depth={d_upd:.3f}",
+            f"E_delta_depth={d_upd - d_est:.3f}",
+            f"E_updated_var={float(updated_var[i]):.5f}",
+            f"F_centroid={centroids[i].tolist()}",
+            f"F_legacy_z_before={legacy_z}",
+            f"F_prior_half_height={0.5 * fg.PERSON_SHAPE_PRIOR['mu_z']:.3f}",
+          )
 
       for i, mobj in enumerate(usable):
         world_pt = Point(centroids[i].tolist())
@@ -187,7 +408,7 @@ class ObservationPipeline:
         mobj.observation_sigma = world_obs["Sigma"][i]
 
       log.debug("ObservationPipeline: conditioned", len(usable),
-                "detections for", camera.cameraID)
+                "detections for", camera.cameraID, f"mode={mode}")
     except Exception as exc:  # noqa: BLE001 — keep legacy projection
       log.error("ObservationPipeline: conditioning failed for",
                 camera.cameraID, exc, "; using legacy projection")

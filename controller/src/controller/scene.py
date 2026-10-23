@@ -186,6 +186,12 @@ class Scene(SceneModel):
 
     if 'scale' in scene_data:
       self.scale = scene_data['scale']
+    if 'mesh_translation' in scene_data:
+      self.mesh_translation = scene_data['mesh_translation']
+    if 'mesh_rotation' in scene_data:
+      self.mesh_rotation = scene_data['mesh_rotation']
+    if 'mesh_scale' in scene_data:
+      self.mesh_scale = scene_data['mesh_scale']
     if 'regulated_rate' in scene_data:
       self.regulated_rate = scene_data['regulated_rate']
     if 'external_update_rate' in scene_data:
@@ -411,6 +417,7 @@ class Scene(SceneModel):
     scene.uid = data['uid']
     scene.mesh_translation = data.get('mesh_translation', None)
     scene.mesh_rotation = data.get('mesh_rotation', None)
+    scene.mesh_scale = data.get('mesh_scale', None)
     scene._hydrateFromSceneData(data, reid_runtime_update=False)
     return scene
 
