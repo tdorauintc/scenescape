@@ -7,6 +7,7 @@ setup(
     name='scene_common',
     package_dir={'': '.'},
     packages=find_packages(where='.'),
+    # frustum_gaussian + observation_conditioning are sibling packages under src/
     python_requires='>=3.7',
     license='Apache-2.0',
     version='1.0.0',

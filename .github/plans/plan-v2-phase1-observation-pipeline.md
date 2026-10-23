@@ -7,7 +7,7 @@ SPDX-License-Identifier: Apache-2.0
 
 - **Author(s)**: [Sarat Poluri](https://github.com/spoluri)
 - **Date**: 2026-10-22
-- **Status**: Planned
+- **Status**: Implemented (Stairs-first); live-verified on Stairs MQTT tracks
 - **Source algorithms**: [`scenescape-v2-architecture`](https://github.com/intel-sandbox/scenescape-v2-architecture) (`algorithms/frustum-gaussian`, `algorithms/amodalreasoner`)
 - **Related**: [ADR-0017](../../docs/adr/0017-probabilistic-tracking-association.md), [plan-probabilistic-tracking.md](./plan-probabilistic-tracking.md)
 
@@ -170,9 +170,9 @@ Concrete checks:
 
 | ID | Task | Status |
 |----|------|--------|
-| vendor-frustum | Copy frustum-gaussian into `scene_common/src/frustum_gaussian`; wire build/install in scene_common image | Pending |
-| vendor-oce | Copy amodalreasoner into `scene_common/src/observation_conditioning`; fix imports; install with scene_common | Pending |
-| controller-adapter | Add `observation_pipeline` adapter + Stairs-only gate; per-camera `AmodalReasoner` cache | Pending |
-| wire-detections | Route Stairs detections through frustum → world → OCE → `sceneLoc`/`has_measured_z` into IntelLabsTracking | Pending |
-| tests-smoke | Add smoke/unit tests for packages and Stairs observation path | Pending |
-| verify-stairs | Rebuild controller; Stairs live verify (MQTT/UI) for wall/stairs occlusion cases | Pending |
+| vendor-frustum | Copy frustum-gaussian into `scene_common/src/frustum_gaussian`; wire build/install in scene_common image | Done |
+| vendor-oce | Copy amodalreasoner into `scene_common/src/observation_conditioning`; fix imports; install with scene_common | Done |
+| controller-adapter | Add `observation_pipeline` adapter + Stairs-only gate; per-camera `AmodalReasoner` cache | Done |
+| wire-detections | Route Stairs detections through frustum → world → OCE → `sceneLoc`/`has_measured_z` into IntelLabsTracking | Done |
+| tests-smoke | Add smoke/unit tests for packages and Stairs observation path | Done |
+| verify-stairs | Rebuild controller; Stairs live verify (MQTT/UI) for wall/stairs occlusion cases | Done (MQTT tracks + conditioning logs) |

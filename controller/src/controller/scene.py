@@ -21,6 +21,10 @@ from controller.pose_adjustment import (PoseAdjustment,
                                         MIN_POSE_CACHE_TTL,
                                         POSE_CACHE_TTL_MULTIPLIER)
 from controller.ilabs_tracking import IntelLabsTracking, normalize_association_config
+from controller.observation_pipeline import (
+  ObservationPipeline,
+  sceneUsesObservationConditioning,
+)
 from controller.time_chunking import TimeChunkedIntelLabsTracking, DEFAULT_CHUNKING_RATE_FPS
 from controller.tracking import (MAX_UNRELIABLE_TIME,
                                  NON_MEASUREMENT_TIME_DYNAMIC,
@@ -96,6 +100,8 @@ class Scene(SceneModel):
 
     self._trs_xyz_to_lla = None
     self.use_tracker = True
+
+    self.observation_pipeline = ObservationPipeline(self)
 
     self.pose_adjustment = PoseAdjustment.from_env(
       max_entry_age_seconds=self._get_pose_cache_ttl(),
@@ -189,8 +195,14 @@ class Scene(SceneModel):
     _ = self.trs_xyz_to_lla
     return
 
+  @property
+  def uses_observation_conditioning(self):
+    """True when this scene uses frustum + amodal observation conditioning."""
+    return sceneUsesObservationConditioning(self.name)
+
   def updateScene(self, scene_data):
     self._hydrateFromSceneData(scene_data, reid_runtime_update=True)
+    self.observation_pipeline.invalidate()
     return
 
   def updateTracker(self, max_unreliable_time, non_measurement_time_dynamic,
@@ -256,6 +268,8 @@ class Scene(SceneModel):
       if "intrinsics" not in jdata:
         self._convertPixelBoundingBoxesToMeters(detections, camera.pose.intrinsics.intrinsics, camera.pose.intrinsics.distortion)
       objects = self._createMovingObjectsForDetection(detection_type, detections, when, camera)
+      if self.uses_observation_conditioning:
+        self.observation_pipeline.apply(objects, camera, when)
       self._finishProcessing(detection_type, when, objects)
     return True
 
@@ -414,6 +428,7 @@ class Scene(SceneModel):
     for camID in deleted:
       self.cameras.pop(camID)
     CameraRegistry.getInstance().updateCameras(self.name, self.cameras.keys())
+    self.observation_pipeline.invalidate()
     return
 
   @property

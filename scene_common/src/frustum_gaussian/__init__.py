@@ -1,0 +1,177 @@
+# SPDX-FileCopyrightText: (C) 2026 Intel Corporation
+# SPDX-License-Identifier: Apache-2.0
+#
+# Vendored from scenescape-v2-architecture/algorithms/frustum-gaussian.
+# See NOTICE in this package for provenance requirements.
+
+"""Gaussian frustum projection for multi-camera 3D tracking.
+
+Runtime uses the pure-numpy kernel. Native C++ sources live under
+``frustum_gaussian/cpp/`` for a future scikit-build integration.
+"""
+
+from __future__ import annotations
+
+from typing import Any
+
+import numpy as np
+
+from ._pure import (
+  EDGE_ALL,
+  EDGE_BOTTOM,
+  EDGE_LEFT,
+  EDGE_RIGHT,
+  EDGE_TOP,
+  project_frustum_batch_numpy,
+)
+
+__version__ = "0.1.0"
+
+__all__ = [
+  "EDGE_LEFT", "EDGE_RIGHT", "EDGE_TOP", "EDGE_BOTTOM", "EDGE_ALL",
+  "PERSON_SHAPE_PRIOR",
+  "project_frustum_batch",
+  "transform_to_world_batch",
+  "from_scenescape_detections",
+  "to_scenescape_format",
+]
+
+# Pedestrian prior from ALGORITHM.md typical scene-class table.
+PERSON_SHAPE_PRIOR = {
+  "mu_x": 0.55,
+  "mu_y": 0.55,
+  "mu_z": 1.70,
+  "sigma_x": 0.10,
+  "sigma_y": 0.10,
+  "sigma_z": 0.15,
+}
+
+
+def project_frustum_batch(
+  detections_or_dict: dict[str, np.ndarray] | None = None,
+  intrinsics: np.ndarray | None = None,
+  img_size: np.ndarray | None = None,
+  *,
+  boxes: np.ndarray | None = None,
+  priors: np.ndarray | None = None,
+  sigma_px: float = 2.0,
+  clipped: np.ndarray | None = None,
+  **kwargs: Any,
+) -> dict[str, np.ndarray]:
+  """Project a batch of 2D boxes to ray-elongated Gaussians (camera frame)."""
+  if detections_or_dict is not None and isinstance(detections_or_dict, dict) \
+      and "boxes" in detections_or_dict:
+    boxes = detections_or_dict["boxes"]
+    priors = detections_or_dict["priors"]
+    clipped = detections_or_dict.get("clipped", clipped)
+  if boxes is None or priors is None or intrinsics is None or img_size is None:
+    raise TypeError(
+      "project_frustum_batch requires boxes, priors, intrinsics, and img_size")
+  return project_frustum_batch_numpy(
+    boxes=np.asarray(boxes, dtype=np.float32),
+    intrinsics=np.asarray(intrinsics, dtype=np.float32),
+    img_size=np.asarray(img_size, dtype=np.float32),
+    priors=np.asarray(priors, dtype=np.float32),
+    sigma_px=float(sigma_px),
+    clipped=None if clipped is None else np.asarray(clipped, dtype=np.uint8),
+  )
+
+
+def transform_to_world_batch(
+  obs_dict: dict[str, np.ndarray],
+  pose_mat: np.ndarray,
+) -> dict[str, np.ndarray]:
+  """Transform camera-frame batch Gaussians to world frame.
+
+  ``pose_mat`` is camera→world 4×4 (row-major), matching SceneScape CameraPose.
+  """
+  pm = np.asarray(pose_mat, dtype=np.float32)
+  if pm.shape != (4, 4):
+    raise ValueError(f"pose_mat must be (4,4), got {pm.shape}")
+
+  rot = pm[:3, :3]
+  translation = pm[:3, 3]
+  mu = np.asarray(obs_dict["mu"], dtype=np.float32)
+  sigma = np.asarray(obs_dict["Sigma"], dtype=np.float32)
+  ray = np.asarray(obs_dict["ray"], dtype=np.float32)
+
+  mu_w = (mu @ rot.T) + translation
+  sigma_w = np.einsum("ij,njk,lk->nil", rot, sigma, rot)
+  ray_w = ray @ rot.T
+  ray_norm = np.linalg.norm(ray_w, axis=1, keepdims=True)
+  ray_w = ray_w / np.maximum(ray_norm, 1e-12)
+
+  out = dict(obs_dict)
+  out["mu"] = mu_w.astype(np.float32)
+  out["Sigma"] = sigma_w.astype(np.float32)
+  out["ray"] = ray_w.astype(np.float32)
+  return out
+
+
+def from_scenescape_detections(
+  detections: list[dict[str, Any]],
+  intrinsics: dict[str, float],
+  shape_prior: dict[str, float] | None = None,
+  *,
+  sigma_px: float = 2.0,
+) -> dict[str, np.ndarray]:
+  """Convert SceneScape detection dicts to a batch frustum result (camera frame)."""
+  count = len(detections)
+  if count == 0:
+    return {
+      "mu": np.empty((0, 3), np.float32),
+      "Sigma": np.empty((0, 3, 3), np.float32),
+      "ray": np.empty((0, 3), np.float32),
+      "depth_est": np.empty(0, np.float32),
+      "depth_sigma": np.empty(0, np.float32),
+      "depth_lo": np.empty(0, np.float32),
+      "depth_hi": np.empty(0, np.float32),
+      "score": np.empty(0, np.float32),
+      "edge_valid": np.empty(0, np.uint8),
+    }
+
+  boxes = np.empty((count, 4), dtype=np.float32)
+  for i, det in enumerate(detections):
+    bb = det["bounding_box_px"]
+    if isinstance(bb, dict):
+      x = float(bb["x"])
+      y = float(bb["y"])
+      width = float(bb["width"])
+      height = float(bb["height"])
+    else:
+      x, y, width, height = (float(bb[0]), float(bb[1]), float(bb[2]), float(bb[3]))
+    boxes[i] = [x, y, x + width, y + height]
+
+  intr = np.array(
+    [intrinsics["fx"], intrinsics["fy"], intrinsics["cx"], intrinsics["cy"]],
+    dtype=np.float32,
+  )
+  img_sz = np.array(
+    [intrinsics["width"], intrinsics["height"]],
+    dtype=np.float32,
+  )
+
+  prior = shape_prior if shape_prior is not None else PERSON_SHAPE_PRIOR
+  row = [
+    prior.get("mu_x", 0.55),
+    prior.get("mu_y", 0.55),
+    prior.get("mu_z", 1.70),
+    prior.get("sigma_x", 0.0),
+    prior.get("sigma_y", 0.0),
+    prior.get("sigma_z", 0.0),
+  ]
+  priors = np.tile(row, (count, 1)).astype(np.float32)
+
+  return project_frustum_batch(
+    {"boxes": boxes, "priors": priors},
+    intr, img_sz,
+    sigma_px=sigma_px,
+  )
+
+
+def to_scenescape_format(
+  obs_dict: dict[str, np.ndarray],
+  pose_mat: np.ndarray,
+) -> dict[str, np.ndarray]:
+  """Transform a batch frustum result from camera frame to world frame."""
+  return transform_to_world_batch(obs_dict, pose_mat)

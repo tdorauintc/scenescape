@@ -1,0 +1,30 @@
+[build-system]
+requires = ["scikit-build-core>=0.8", "pybind11>=2.12"]
+build-backend = "scikit_build_core.build"
+
+[project]
+name = "frustum-gaussian"
+version = "0.1.0"
+description = "Gaussian frustum projection for multi-camera 3D object tracking (C++/TBB)"
+readme = "README.md"
+license = { text = "Apache-2.0" }
+requires-python = ">=3.10"
+dependencies = ["numpy>=1.24"]
+
+[project.optional-dependencies]
+dev = ["pytest>=7", "numpy>=1.24"]
+
+[tool.scikit-build]
+cmake.build-type = "Release"
+cmake.verbose = false
+wheel.packages = ["python/frustum_gaussian"]
+# The C++ extension is placed inside the package dir by CMake.
+# scikit-build-core picks it up automatically.
+
+[tool.scikit-build.cmake.define]
+# Pass through any user-set options
+FG_BUILD_TESTS      = "OFF"
+FG_BUILD_BENCHMARKS = "OFF"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
