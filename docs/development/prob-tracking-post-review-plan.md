@@ -55,10 +55,10 @@ Both branches 1 and 2 are in main; `feature/prob-tracking-extracted` merged main
      - Fixing IMM S_pred and mixing, process-noise redesign and the new initial uncertainty (MultiModelKalmanEstimator.cpp)
      - Fixing UKF (UnscentedKalmanFilter.cpp)
    - My proposed additions:
-     - Introduce per-model process noise, including yaw and yaw rate so that CTRV learns the turn rate (yaw review E3)
+     - **[DONE in #2056]** Introduce per-model process noise, including yaw and yaw rate so that CTRV learns the turn rate (yaw review E3, delta 9.8): each model's Q follows its own mixed velocity; CA adds acceleration noise, CTRV turn-rate noise. CTRV now wins car turns (probability 0.18 → 0.57) and learns the turn rate (0 → 0.38 rad/s); Unity HOTA +0.004 and DIST_T −5 to −7 mm in all three configurations; `track()` +1.6 % in the robot-vision benchmark
      - Treat detections without orientation as having no yaw measurement (reduced update in `UnscentedKalmanFilterMod::correct`, or a very large yaw noise) instead of a zero-innovation update; update the "predict" wording in the selective-yaw ADR (yaw review 2)
      - **[DONE in #2056]** Give each motion model its own predicted measurement: `TrackedObject` matrices are fixed-size `cv::Matx`, so copies own their data; `MultiModelKalmanEstimator` is move-only; unused `TrackManager::getTrack()` / `getKalmanEstimator()` and their Python bindings removed. PR 4's Mahalanobis gate is centred on this mean (yaw review E2)
-     - Extend the tests coverage to include more motion models (manoeuvring motion, sudden stops)
+     - **[DONE]** Extend the tests coverage to include more motion models (manoeuvring motion, sudden stops)
      - Extend the tests coverage to include {CV, CA, CTRV} models set (exercise predictState(), not only singleModelPredict()).
      - Extend the tests coverage for yaw: yaw uncertainty unchanged after a camera-only update, LiDAR yaw responsiveness after a camera-only period, camera-only CTRV yaw stays bounded with mixing enabled, a turning target learns the turn rate, per-model predicted measurements differ (yaw review 2, E1-E3)
      - [moved from PR 2] yaw thresholding when unreliable + UT
@@ -67,12 +67,12 @@ Both branches 1 and 2 are in main; `feature/prob-tracking-extracted` merged main
        - Add a small process-noise floor on position, z and size so their covariance does not collapse on long-lived tracks; add a long-duration test checking that the size gain stays non-zero and `errorCov` stays positive definite (prob review 2, G9; delta 9.1)
        - Document the new meaning of `default_process_noise` (x1000 velocity scaling, 1e-3 floor, no position/size noise) and `init_state_covariance` (cap on latent states only, measured states use `measurement_noise`) in `how-to-configure-tracker.md` (prob review 4)
        - Explain or revert the velocity tolerance loosening (0.01 -> 0.05) in `tracking_test.py` (prob review 5)
-       - Add direct UT for `kinematicProcessNoiseCov` (near-zero velocity fallback, diagonal motion, dt scaling, `qVel` floor), for the initial covariance caps, and for re-initialisation not duplicating filters (prob review G8, G14)
+       - Add direct UT for `kinematicProcessNoiseCov` (now `processNoiseCov`) (near-zero velocity fallback, diagonal motion, dt scaling, `qVel` floor), for the initial covariance caps, and for re-initialisation not duplicating filters (prob review G8, G14)
        - Measure speed acquisition for a target that is born already moving fast; if it lags, revisit the 0.05 velocity prior cap (delta 9.2)
      - Handle a failed Cholesky factorisation in `UnscentedKalmanFilterMod::getSigmaPoints`: its result is ignored today, so sigma points are silently built from a partly factorised matrix. On failure symmetrize the covariance, add diagonal jitter and retry, log once; UT with a non-positive-definite covariance (baseline 9.4)
      - Evaluate the sigma-point weights (kappa = 3 - n gives centre weights -3 for the mean and -1 for the covariance) against kappa = 0 after per-model process noise. With beta = 2 they cannot break positive definiteness, but they extrapolate the CTRV predicted mean under strong nonlinearity (multi-step coasts with uncertain turn rate, single long predicts after reactivating a suspended track). Keep and document, or change + UT (baseline 9.4, delta 9.10)
-     - Re-evaluate Controller Immediate-mode jitter (rms_jerk, acceleration_variance) after the IMM-UKF changes, and find what in the filter achieves the jitter reduction the removed streaming fusion gave, without double smoothing (PR 2 review)
-     - Build robot-vision as strict C++20 everywhere + CI (`tracker-service.yml`) building the Controller image when `controller/src/robot_vision/**` changes
+     - Re-evaluate Controller Immediate-mode jitter (rms_jerk, acceleration_variance) after the IMM-UKF changes, and find what in the filter achieves the jitter reduction the removed streaming fusion gave, without double smoothing (PR 2 review). After per-model process noise (Unity, 3 interleaved pairs): Immediate rms_jerk +6 %, acceleration_variance +16 % (within run-to-run noise); Controller time-chunking +39 % / +79 %, Tracker Service −15 % / −22 %
+     - **[DONE]** Build robot-vision as strict C++20 everywhere + CI (`tracker-service.yml`) building the Controller image when `controller/src/robot_vision/**` changes
 
 4. **[TODO]** Mahalanobis association. Branch: feature/prob-tracking-extracted-association. Base branch: feature/prob-tracking-extracted
    - Carried over from feature/prob-tracking
