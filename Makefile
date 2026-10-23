@@ -43,9 +43,13 @@ VIDEO_SOURCE_DIR := sample_data/demo_scenes
 # -f flags are combined, matching pre-split behavior.
 RETAIL_VIDEO_COMPOSE_FILE := $(VIDEO_SOURCE_DIR)/Retail/compose.retail-video.yml
 QUEUING_VIDEO_COMPOSE_FILE := $(VIDEO_SOURCE_DIR)/Queuing/compose.queuing-video.yml
+STAIRS_VIDEO_COMPOSE_FILE := $(VIDEO_SOURCE_DIR)/Stairs/compose.stairs-video.yml
 VIDEO_SOURCE_COMPOSE_FILES := -f $(RETAIL_VIDEO_COMPOSE_FILE) -f $(QUEUING_VIDEO_COMPOSE_FILE)
+# Parent dir containing only Stairs/ for upload-scenes (Retail/Queuing excluded).
+STAIRS_DEMO_SCENES_DIR := $(BUILD_DIR)/stairs-demo-scenes
 DLSTREAMER_SAMPLE_VIDEOS := $(addprefix $(VIDEO_SOURCE_DIR)/Retail/video/,apriltag-cam1.ts apriltag-cam2.ts apriltag-cam3.ts) \
 	$(addprefix $(VIDEO_SOURCE_DIR)/Queuing/video/,qcam1.ts qcam2.ts) \
+	$(addprefix $(VIDEO_SOURCE_DIR)/Stairs/video/,cam1.ts cam2.ts) \
 	tools/pipeline_runner/video/car-detection.ts
 DLSTREAMER_DOCKER_COMPOSE_FILE := ./$(SAMPLE_COMPOSE_DIR)/compose.dl-streamer-example.yml
 DEMO_WAIT_SECONDS ?= "0"
@@ -126,6 +130,7 @@ help:
 	@echo "                              as the super user password for logging into Scenescape)"
 	@echo "  demo-tracker                Start the Scenescape demo with Tracker + Analytics services (no Scene Controller) using Docker Compose"
 	@echo "  demo-lidar                  Start the basic Scenescape demo plus the LiDAR-intersection (LiDAR/Camera) fusion demo"
+	@echo "  demo-stairs                 Start core Scenescape with only the Stairs scene + video (no Retail/Queuing)"
 	@echo "  demo-scenes                 Upload the demo scenes in DEMO_SCENES_DIR to a running deployment via the REST API"
 	@echo "  demo-close                  Stop the running Scenescape demo and remove all volumes"
 	@echo "  demo-k8s                    Start the Scenescape demo using Kubernetes (DEMO_K8S_MODE=core|reid|all, default: core)"
@@ -193,6 +198,8 @@ help:
 	@echo "    default to REID_BACKEND=vdms. Set REID_BACKEND=qdrant to use Qdrant instead."
 	@echo "  - Use 'make demo-lidar' to run the basic LiDAR-intersection (LIDAR/Camera) fusion demo."
 	@echo "    See docs/user-guide/how-to-guides/run-lidar-intersection-demo.md for prerequisites and setup steps."
+	@echo "  - Use 'SUPASS=<password> make demo-stairs' for the Stairs-only demo (scene zip + cam1/cam2)."
+	@echo "    Do not combine with 'make demo' video sources (shared mediaserver port)."
 	@echo ""
 
 # ========================= Build Images =============================
@@ -751,6 +758,40 @@ define start_demo
 	@echo "Or use: make demo-close"
 endef
 
+# Stairs-only variant of start_demo: skips Retail/Queuing video sources.
+# $(1): extra `docker compose` args for the main stack
+define start_demo_stairs
+	@$(MAKE) docker-compose.yml
+	@$(MAKE) .env
+	@if [ -z "$$SUPASS" ]; then \
+		echo "Please set the SUPASS environment variable before starting the demo for the first time."; \
+		echo "The SUPASS environment variable is the super user password for logging into Scenescape."; \
+		exit 1; \
+	fi
+	@if [ "$$BROKER_PORT" != "" ] && [ "$$BROKER_PORT" != "1883" ]; then \
+		echo "Updating docker-compose.yml with custom MQTT broker port: $$BROKER_PORT"; \
+		sed -i -E "s/[0-9]+:1883/$$BROKER_PORT:1883/g" docker-compose.yml; \
+	fi
+	@if [ "$$HTTPS_PORT" != "" ] && [ "$$HTTPS_PORT" != "443" ]; then \
+		echo "Updating docker-compose.yml with custom HTTPS port: $$HTTPS_PORT"; \
+		sed -i -E "s/[0-9]+:443/$$HTTPS_PORT:443/g" docker-compose.yml; \
+	fi
+	@echo "$(1)" > .scenescape-profile
+	@if [ "$(DEMO_WAIT_SECONDS)" != "0" ]; then \
+		echo "Waiting for Scenescape services to be ready..."; \
+		docker compose $(1) up -d --wait --wait-timeout $(DEMO_WAIT_SECONDS); \
+	else \
+		echo "Starting Scenescape services in detached mode..."; \
+		docker compose $(1) up -d; \
+	fi
+	@$(MAKE) stairs-video-source-up
+	@$(MAKE) demo-scenes-stairs
+	@echo ""
+	@echo "Stairs demo is up (scene 'Stairs', cameras stair-cam-1 / stair-cam-2)."
+	@echo "To stop Scenescape, type:"
+	@echo "    make demo-close"
+endef
+
 .PHONY: check-reid-backend
 check-reid-backend:
 	@case "$(strip $(REID_BACKEND))" in \
@@ -771,6 +812,14 @@ demo-scenes:
 	"$$VENV/bin/python3" $(UPLOAD_SCENES) --restauth $(SECRETSDIR)/controller.auth \
 		$(DEMO_SCENES_TLS) --wait $(DEMO_SCENES_WAIT) \
 		$(DEMO_SCENES_URL) $(DEMO_SCENES_DIR)
+
+# Upload only the Stairs scene archive (used by demo-stairs).
+.PHONY: demo-scenes-stairs
+demo-scenes-stairs:
+	@mkdir -p $(STAIRS_DEMO_SCENES_DIR)
+	@rm -rf $(STAIRS_DEMO_SCENES_DIR)/Stairs
+	@ln -sfn $(CURDIR)/$(VIDEO_SOURCE_DIR)/Stairs $(STAIRS_DEMO_SCENES_DIR)/Stairs
+	@$(MAKE) demo-scenes DEMO_SCENES_DIR=$(STAIRS_DEMO_SCENES_DIR)
 
 .PHONY: demo
 demo: $(DEMO_BUILD:build=build-core)
@@ -797,6 +846,12 @@ demo-tracker: $(DEMO_BUILD:build=build-all)
 demo-lidar: $(DEMO_BUILD:build=build-core-lidar)
 	$(call start_demo,$(strip $(LIDAR_COMPOSE_ARGS) --profile controller))
 
+# Stairs-only demo: core controller stack + Stairs scene import + Stairs video
+# (no Retail/Queuing mediaserver / DLStreamer pipelines).
+.PHONY: demo-stairs
+demo-stairs: $(DEMO_BUILD:build=build-core)
+	$(call start_demo_stairs,--profile controller)
+
 .PHONY: demo-close
 demo-close:
 	@if [ ! -f .scenescape-profile ]; then \
@@ -804,6 +859,7 @@ demo-close:
 		exit 1; \
 	fi
 	@$(MAKE) video-source-down
+	@$(MAKE) stairs-video-source-down
 	docker compose $(shell cat .scenescape-profile 2>/dev/null) down -v
 	@rm -f .scenescape-profile
 
@@ -830,6 +886,14 @@ video-source-up: convert-dls-videos
 .PHONY: video-source-down
 video-source-down:
 	-SCENESCAPE_NETWORK=$(COMPOSE_PROJECT_NAME)_scenescape docker compose --project-directory . $(VIDEO_SOURCE_COMPOSE_FILES) down
+
+.PHONY: stairs-video-source-up
+stairs-video-source-up: convert-dls-videos
+	SCENESCAPE_NETWORK=$(COMPOSE_PROJECT_NAME)_scenescape docker compose --project-directory . -f $(STAIRS_VIDEO_COMPOSE_FILE) up -d
+
+.PHONY: stairs-video-source-down
+stairs-video-source-down:
+	-SCENESCAPE_NETWORK=$(COMPOSE_PROJECT_NAME)_scenescape docker compose --project-directory . -f $(STAIRS_VIDEO_COMPOSE_FILE) down
 
 .PHONY: .env
 .env:

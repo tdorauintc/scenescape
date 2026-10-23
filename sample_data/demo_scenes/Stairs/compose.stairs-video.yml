@@ -1,13 +1,17 @@
 # SPDX-FileCopyrightText: (C) 2026 Intel Corporation
 # SPDX-License-Identifier: Apache-2.0
 
-# Stairs scene video source: mediamtx + ffmpeg loopers for cam1/cam2, and
-# DL Streamer Pipeline Server publishing detections over MQTT.
+# Self-contained video source for the Stairs demo scene: its own mediamtx +
+# ffmpeg loopers publish cam1/cam2 over RTSP, and DL Streamer Pipeline Server
+# consumes them and publishes detections over MQTT.
 # Run alongside the main Scenescape stack (same COMPOSE_PROJECT_NAME so the
 # "scenescape" Docker network and vol-models volume are shared), e.g.:
-#   docker compose --project-directory . -f sample_data/Stairs/compose.stairs-video.yml up -d
+#   make demo-stairs
+# or:
+#   make stairs-video-source-up
 #
-# Do not combine with Retail/Queuing video compose files for this workflow.
+# Do not combine with Retail/Queuing video compose files for this workflow
+# (both publish a "mediaserver" on the same host port).
 
 name: scenescape
 
@@ -22,7 +26,7 @@ secrets:
 
 configs:
   stairs-config:
-    file: ./sample_data/Stairs/stairs-config.json
+    file: ./sample_data/demo_scenes/Stairs/stairs-config.json
 
 services:
   mediaserver:
@@ -40,7 +44,7 @@ services:
     image: linuxserver/ffmpeg:version-9.0-cli
     command: -nostdin -re -stream_loop -1 -i /workspace/media/cam1.ts -re -stream_loop -1 -i /workspace/media/cam2.ts -map 0:v -c copy -f rtsp -rtsp_transport tcp rtsp://mediaserver:8554/stairs-cam1 -map 1:v -c copy -f rtsp -rtsp_transport tcp rtsp://mediaserver:8554/stairs-cam2
     volumes:
-      - ./sample_data/Stairs/video:/workspace/media:ro
+      - ./sample_data/demo_scenes/Stairs/video:/workspace/media:ro
     networks:
       scenescape:
     depends_on:
