@@ -4,6 +4,7 @@
 #include <opencv2/core.hpp>
 #include <pybind11/chrono.h>
 #include <pybind11/eigen.h>
+#include <pybind11/numpy.h>
 #include <pybind11/pybind11.h>
 #include <pybind11/stl.h>
 #include <rv/tracking/MultiModelKalmanEstimator.hpp>
@@ -100,7 +101,26 @@ py::class_<rv::tracking::Classification>(tracking, "Classification", "Classifica
                   &rv::tracking::TrackedObject::setVectorXf,
                   py::return_value_policy::take_ownership, "Returns this object's state vector as numpy array.")
     .def_readwrite("measurement_mean", &rv::tracking::TrackedObject::predictedMeasurementMean, "Returns this object's measurement vector as numpy array.")
-    .def_readwrite("measurement_covariance", &rv::tracking::TrackedObject::predictedMeasurementCov, "Measurement covariance matrix, convert to numpy using np.array(tracked_object.measurement_covariance).")
+    .def_property(
+      "measurement_covariance",
+      py::cpp_function(
+        [](rv::tracking::TrackedObject &self) -> cv::Mat & {
+          return self.predictedMeasurementCov;
+        },
+        py::return_value_policy::reference_internal),
+      [](rv::tracking::TrackedObject &self, py::array_t<double> value) {
+        cv::Mat cov = numpy_to_mat(value);
+        const int n = rv::tracking::TrackedObject::MeasurementSize;
+        if (cov.rows != n || cov.cols != n)
+        {
+          throw std::invalid_argument(
+            "measurement_covariance must be a 7x7 float64 matrix");
+        }
+        self.predictedMeasurementCov = cov;
+        self.predictedMeasurementCovInv = cov.inv(cv::DECOMP_SVD);
+      },
+      "Measurement covariance matrix (7x7). Assign a numpy array; "
+      "convert to numpy with np.array(tracked_object.measurement_covariance).")
     .def_readwrite("error_covariance", &rv::tracking::TrackedObject::errorCovariance, "Error covariance matrix, convert to numpy using np.array(tracked_object.error_covariance).")
     .def("__repr__", &rv::tracking::TrackedObject::toString, "String representation.");
 

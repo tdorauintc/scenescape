@@ -240,16 +240,15 @@ export default function AssetManager(
         thisMark.quaternion.copy(qt);
       }
 
+      // MQTT translation is the object center of mass / geometric center.
+      // Default BoxGeometry is origin-centered; do not lift by half height
+      // (that was for ground-plane foot placement with Z≈0).
       let scale = new THREE.Vector3(1, 1, 1);
-      let translate;
       if (obj.asset_scale) {
         scale.fromArray(Array(3).fill(obj.asset_scale));
-        translate = 0;
       } else if (obj.size) {
         scale.fromArray(obj.size);
-        translate = scale.z / 2;
       }
-      thisMark.translateZ(translate);
       thisMark.scale.copy(scale);
       const model = thisMark.getObjectByName("model");
       const indicator = thisMark.getObjectByName("indicator");

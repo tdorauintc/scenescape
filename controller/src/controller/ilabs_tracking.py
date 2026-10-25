@@ -34,12 +34,66 @@ from scene_common.timestamp import get_epoch_time
 DEFAULT_ASSOCIATION_MAX_RADIUS_M = DEFAULT_ASSOCIATION_EUCLIDEAN_MAX_RADIUS_M
 RECOMMENDED_MAHALANOBIS_MAX_RADIUS_M = DEFAULT_ASSOCIATION_MAHALANOBIS_MAX_RADIUS_M
 
+# Matches TrackManagerConfig.default_measurement_noise used at tracker init.
+DEFAULT_MEASUREMENT_NOISE = 2e-1
+# UKF measurement layout: [x, y, z, length, width, height, yaw]
+MEASUREMENT_SIZE = 7
+
 
 def _default_max_radius_for_method(method):
   """Fallback max_radius_m when the configured value is missing or invalid."""
   if method == ASSOCIATION_METHOD_POSITION_MAHALANOBIS:
     return DEFAULT_ASSOCIATION_MAHALANOBIS_MAX_RADIUS_M
   return DEFAULT_ASSOCIATION_EUCLIDEAN_MAX_RADIUS_M
+
+
+def measurement_covariance_from_observation(
+    sscape_object, default_noise=DEFAULT_MEASUREMENT_NOISE):
+  """Build 7×7 measurement covariance for RobotVision TrackedObject.
+
+  Frustum / observation pipeline attach world-frame position Σ as
+  ``observation_sigma`` (3×3). Embed that in the (x, y, z) block; fill
+  length/width/height/yaw with ``default_noise`` on the diagonal. When Σ is
+  absent, return an isotropic default (legacy behavior).
+  """
+  cov = np.eye(MEASUREMENT_SIZE, dtype=np.float64) * float(default_noise)
+  sigma = getattr(sscape_object, 'observation_sigma', None)
+  if sigma is None:
+    return cov
+  try:
+    pos = np.asarray(sigma, dtype=np.float64)
+  except (TypeError, ValueError):
+    return cov
+  if pos.shape != (3, 3) or not np.all(np.isfinite(pos)):
+    return cov
+  # Symmetrize for numerical stability (outer-product Σ can be slightly asymmetric).
+  pos = 0.5 * (pos + pos.T)
+  cov[0:3, 0:3] = pos
+  return cov
+
+
+def apply_measurement_covariance(rv_object, covariance):
+  """Write 7×7 covariance onto a TrackedObject.measurement_covariance.
+
+  Prefers direct assignment (numpy-aware binding). Falls back to in-place
+  buffer copy for older robot_vision builds that only expose Mat readwrite.
+  """
+  cov = np.asarray(covariance, dtype=np.float64)
+  if cov.shape != (MEASUREMENT_SIZE, MEASUREMENT_SIZE):
+    raise ValueError(
+      f"measurement_covariance must be {MEASUREMENT_SIZE}x{MEASUREMENT_SIZE}, "
+      f"got {cov.shape}")
+  try:
+    rv_object.measurement_covariance = cov
+    return
+  except (TypeError, ValueError, AttributeError):
+    pass
+  dest = np.asarray(rv_object.measurement_covariance)
+  if dest.shape != cov.shape:
+    raise ValueError(
+      f"TrackedObject measurement_covariance shape {dest.shape} "
+      f"does not match {cov.shape}")
+  np.copyto(dest, cov)
 
 
 def normalize_association_config(association_config=None):
@@ -250,7 +304,7 @@ class IntelLabsTracking(Tracking):
     tracker_config = rv.tracking.TrackManagerConfig()
 
     tracker_config.default_process_noise = 1e-4
-    tracker_config.default_measurement_noise = 2e-1
+    tracker_config.default_measurement_noise = DEFAULT_MEASUREMENT_NOISE
     tracker_config.init_state_covariance = 1
 
     tracker_config.motion_models = [rv.tracking.MotionModel.CV, rv.tracking.MotionModel.CA,
@@ -343,6 +397,10 @@ class IntelLabsTracking(Tracking):
     rv_object.length = size[0]
     rv_object.width = size[1]
     rv_object.height = size[2]
+    # Frustum / observation Σ → measurement_covariance (7×7). Association Phase 2
+    # and UKF correct Phase 3 consume this; do not drop it here.
+    apply_measurement_covariance(
+      rv_object, measurement_covariance_from_observation(sscape_object))
     # Only pass detector yaw when the sensor provided an orientation. Camera
     # detections leave yaw unset so Kalman correct can neutralize that axis.
     attributes = {'info': sscape_object.uuid}

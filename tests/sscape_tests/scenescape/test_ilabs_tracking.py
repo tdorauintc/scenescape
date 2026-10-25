@@ -7,10 +7,15 @@ from types import SimpleNamespace
 import numpy as np
 import pytest
 
-from controller.ilabs_tracking import (IntelLabsTracking, _quaternion_to_yaw,
+from controller.ilabs_tracking import (DEFAULT_MEASUREMENT_NOISE,
+                                       IntelLabsTracking,
+                                       MEASUREMENT_SIZE,
+                                       _quaternion_to_yaw,
                                        _yaw_to_quaternion,
+                                       apply_measurement_covariance,
                                        association_match_params,
                                        build_association_window,
+                                       measurement_covariance_from_observation,
                                        normalize_association_config)
 from scene_common.geometry import Point
 
@@ -204,6 +209,62 @@ def test_to_rv_object_omits_orientation_without_detection_rotation():
   assert rv_object.yaw == 0.0
   assert 'has_orientation' not in rv_object.attributes
   assert rv_object.zMeasured is False
+
+
+def test_measurement_covariance_from_observation_default_without_sigma():
+  cov = measurement_covariance_from_observation(SimpleNamespace())
+  assert cov.shape == (MEASUREMENT_SIZE, MEASUREMENT_SIZE)
+  assert np.allclose(cov, np.eye(MEASUREMENT_SIZE) * DEFAULT_MEASUREMENT_NOISE)
+
+
+def test_measurement_covariance_from_observation_embeds_position_sigma():
+  sigma = np.array([
+    [0.4, 0.1, 0.0],
+    [0.1, 0.5, 0.0],
+    [0.0, 0.0, 0.9],
+  ], dtype=np.float64)
+  cov = measurement_covariance_from_observation(
+    SimpleNamespace(observation_sigma=sigma))
+  assert np.allclose(cov[0:3, 0:3], sigma)
+  assert cov[3, 3] == pytest.approx(DEFAULT_MEASUREMENT_NOISE)
+  assert cov[6, 6] == pytest.approx(DEFAULT_MEASUREMENT_NOISE)
+
+
+def test_measurement_covariance_from_observation_rejects_invalid_sigma():
+  for bad in (np.eye(2), np.full((3, 3), np.nan), "not-a-matrix"):
+    cov = measurement_covariance_from_observation(
+      SimpleNamespace(observation_sigma=bad))
+    assert np.allclose(cov, np.eye(MEASUREMENT_SIZE) * DEFAULT_MEASUREMENT_NOISE)
+
+
+def test_to_rv_object_passes_observation_sigma_as_measurement_covariance():
+  sigma = np.diag([0.25, 0.36, 1.0]).astype(np.float64)
+  detected_object = SimpleNamespace(
+    sceneLoc=Point(1.0, 2.0, 3.0),
+    size=[1.0, 0.5, 1.7],
+    rotation=[0.0, 0.0, 0.0, 1.0],
+    confidence=0.9,
+    info={},
+    frameCount=1,
+    metadata={},
+    has_detection_rotation=False,
+    has_measured_z=True,
+    observation_sigma=sigma,
+  )
+  tracker = IntelLabsTracking.__new__(IntelLabsTracking)
+
+  rv_object = tracker.to_rv_object(detected_object)
+  cov = np.array(rv_object.measurement_covariance, dtype=float)
+
+  assert cov.shape == (MEASUREMENT_SIZE, MEASUREMENT_SIZE)
+  assert np.allclose(cov[0:3, 0:3], sigma)
+  assert cov[3, 3] == pytest.approx(DEFAULT_MEASUREMENT_NOISE)
+
+
+def test_apply_measurement_covariance_rejects_wrong_shape():
+  rv_object = rv.tracking.TrackedObject()
+  with pytest.raises(ValueError, match='measurement_covariance must be'):
+    apply_measurement_covariance(rv_object, np.eye(3))
 
 
 @pytest.mark.parametrize("yaw", [
