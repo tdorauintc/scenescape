@@ -377,6 +377,69 @@ Artifacts: `/tmp/zverify/cam_dets_summary.json`, `*_bb.jpg`, `pose_mesh_ray.json
 
 ---
 
+## Step 8 — Frustum vs monocular metric depth (few frames)
+
+**Question:** Is frustum `depth_est` (BB + `PERSON_SHAPE_PRIOR`) systematically off vs a SOTA indoor metric depth model on the same Stairs frames?
+
+**Method:**
+
+- Model: `depth-anything/Depth-Anything-V2-Metric-Indoor-Large-hf` (Depth Anything V2 Metric, indoor / Hypersim family).
+- Same DLStreamer person BB for both methods (no second detector).
+- `d_frustum` = `frustum_gaussian.from_scenescape_detections` → `depth_est`.
+- `d_mono` = median DA-V2 metric depth in the **inner 50%** of the BB.
+- World Z via the same cam pose + frustum ray: `Xw = origin + ray_w * d`.
+- Script: [`tmp_zverify_mono_depth_compare.py`](../../tmp_zverify_mono_depth_compare.py); output: [`tmp_zverify_out/mono_depth_compare.json`](../../tmp_zverify_out/mono_depth_compare.json).
+- Network: Intel DMZ proxy (`proxy-dmz.intel.com:911/912`) for HF/PyPI downloads.
+
+**Frames:**
+
+| Cam | Frame | BB (xywh) |
+|-----|-------|-----------|
+| stair-cam-1 | `tmp_zverify_out/stair-cam-1_frame_t15.jpg` | 843, 81, 251, 503 |
+| stair-cam-2 | `tmp_zverify_out/stair-cam-2_frame_t15.jpg` | 873, 85, 146, 352 |
+
+**Results (along-ray range, meters):**
+
+| Cam | `d_frustum` | `d_mono` | Δd (frustum − mono) | world Z frustum | world Z mono | mesh center `t_hit` |
+|-----|------------:|---------:|--------------------:|----------------:|-------------:|--------------------:|
+| stair-cam-1 | 2.60 | 4.85 | **−2.24** | 1.46 | 0.85 | 6.06 |
+| stair-cam-2 | 3.89 | 5.33 | **−1.43** | 1.30 | 0.95 | 6.10 |
+
+**Interpretation:**
+
+- Frustum is **systematically closer** than DA-V2 Metric by ~1.4–2.2 m on these cardboard-person BBs (same K / pose).
+- That matches the known orientation-agnostic prior / `dim_est` bias (effective size &lt; full μ_z=1.70 → too-close depth) more than a random noise issue.
+- Mono world Z (~0.85–0.95) lands nearer the half-height / floor-person band from Step 6; frustum world Z (~1.3–1.5) is higher because the ray is shorter.
+- Mesh `center_mesh_hit_t` (~6 m) is **scene geometry behind the cutout**, not person depth — useful as background range, not as CoM GT.
+
+**Caveats:** cardboard cutouts + indoor metric model; BB-core median can still mix a little background; CPU run of Large-hf.
+
+### Step 8b — Axis-aware sizing re-eval
+
+**Change:** map BB width → `μ_x` (0.55 m) and BB height → `μ_z` (1.70 m) instead of a single orientation-averaged `dim_est` (~1.15 m). Applied in `_pure.py` and `frustum.cpp`.
+
+**Results after (same frames / BBs / DA-V2):**
+
+| Cam | `d_frustum` before | after | `d_mono` | Δd before | Δd after |
+|-----|-------------------:|------:|---------:|----------:|---------:|
+| stair-cam-1 | 2.60 | **2.92** | 4.85 | −2.24 | **−1.93** |
+| stair-cam-2 | 3.89 | **4.59** | 5.33 | −1.43 | **−0.73** |
+
+Output: [`tmp_zverify_out/mono_depth_compare_axis_aware.json`](../../tmp_zverify_out/mono_depth_compare_axis_aware.json).
+
+**Verdict:** Yes — frustum moves **closer to DA-V2** (Δd shrinks ~0.3 m / ~0.7 m). Residual close bias remains (~0.7–1.9 m), so axis-aware sizing is necessary but not sufficient (BB vs silhouette, cardboard vs person prior, mono model error).
+
+Reproduce:
+
+```bash
+export http_proxy=http://proxy-dmz.intel.com:911
+export https_proxy=http://proxy-dmz.intel.com:912
+PYTHONPATH=scene_common/src tests/.venv/bin/python tmp_zverify_mono_depth_compare.py \
+  --out tmp_zverify_out/mono_depth_compare_axis_aware.json
+```
+
+---
+
 ## Success criteria for this debug effort
 
 - Written note: sign, magnitude, per-camera, detection vs track.

@@ -157,38 +157,20 @@ FrustumObservation project_frustum(const BoundingBox&   bb,
     // dimensions [mu_x, mu_y, mu_z] could be subtending the observed angular
     // extent in either the horizontal or vertical image direction.
     //
-    // We incorporate per-axis sigma to get a physically grounded size range:
-    //   dim_lo  = smallest plausible extent in any direction (1-sigma low)
-    //   dim_hi  = largest  plausible extent in any direction (1-sigma high)
-    //
-    // For a rigid fixed-size object (small sigma): dim_lo ≈ dim_hi → tight range.
-    // For a variable-size object (e.g. people, sigma_z ≈ 0.15m): wider range.
-    // Clamped to > 0: a dimension cannot be negative or zero.
+    // Axis-aware physical sizes: image-horizontal BB ↔ object width (mu_x),
+    // image-vertical BB ↔ object height (mu_z). Orientation-averaged dim_est
+    // systematically underestimated depth for upright pedestrians.
     const float sx = effective_sigma(prior.mu_x, prior.sigma_x);
     const float sy = effective_sigma(prior.mu_y, prior.sigma_y);
     const float sz = effective_sigma(prior.mu_z, prior.sigma_z);
 
-    const float dim_lo  = std::max(1.0e-3f,
-                              std::min({prior.mu_x - sx,
-                                        prior.mu_y - sy,
-                                        prior.mu_z - sz}));
-    const float dim_hi  = std::max({prior.mu_x + sx,
-                                     prior.mu_y + sy,
-                                     prior.mu_z + sz});
-    const float dim_est = 0.5f * (dim_lo + dim_hi);
-
-    // Combined depth uncertainty:
-    //   σ_orient: half the dim range, representing orientation ambiguity.
-    //   max_sigma_prior: largest per-axis 1-sigma uncertainty.
-    // Combined in quadrature — both contribute independently.
-    const float sigma_orient     = 0.5f * (dim_hi - dim_lo);
-    const float max_sigma_prior  = std::max({sx, sy, sz});
-    const float sigma_dim        = std::hypot(sigma_orient, max_sigma_prior);
+    const float dim_x_lo = std::max(1.0e-3f, prior.mu_x - sx);
+    const float dim_x_hi = prior.mu_x + sx;
+    const float dim_z_lo = std::max(1.0e-3f, prior.mu_z - sz);
+    const float dim_z_hi = prior.mu_z + sz;
+    (void)sy;
 
     // ---- 5. Angular subtenses (exact, using atan for wide-angle cameras) -
-    //
-    // Both horizontal (alpha_x) and vertical (alpha_y) axes are treated
-    // symmetrically — no gravity-aligned or azimuth assumptions.
     //
     // Angular measurement uncertainty: two independent edges, each ±sigma_px:
     //   sigma_alpha = sqrt(2) * sigma_px / focal_length
@@ -207,19 +189,14 @@ FrustumObservation project_frustum(const BoundingBox&   bb,
     const float tan_x_half = std::tan(alpha_x * 0.5f);
     const float tan_y_half = std::tan(alpha_y * 0.5f);
 
-    // ---- 6. Depth estimates — both axes use the same dim_est/sigma_dim ----
-    //
-    // dim_est is the best guess for the physical size visible in any direction,
-    // and sigma_dim encodes our uncertainty across all possible orientations.
-    // Using the same values for horizontal and vertical makes the projection
-    // orientation-agnostic: the Gaussian correctly represents "we don't know
-    // which dimension of the object we are looking at."
-    auto [d_x, sd_x] = (lr_valid && dim_est > 0.0f)
-        ? depth_from_angular_size(dim_est, sigma_dim, alpha_x, sigma_alpha_x)
+    // ---- 6. Depth estimates — axis-aware physical size --------------------
+    // Horizontal BB uses width (mu_x); vertical BB uses height (mu_z).
+    auto [d_x, sd_x] = (lr_valid && prior.mu_x > 0.0f)
+        ? depth_from_angular_size(prior.mu_x, sx, alpha_x, sigma_alpha_x)
         : std::pair{INF_DEPTH, INF_DEPTH};
 
-    auto [d_y, sd_y] = (tb_valid && dim_est > 0.0f)
-        ? depth_from_angular_size(dim_est, sigma_dim, alpha_y, sigma_alpha_y)
+    auto [d_y, sd_y] = (tb_valid && prior.mu_z > 0.0f)
+        ? depth_from_angular_size(prior.mu_z, sz, alpha_y, sigma_alpha_y)
         : std::pair{INF_DEPTH, INF_DEPTH};
 
     // ---- 7. Fuse depth estimates (information-form weighting) ------------
@@ -229,26 +206,21 @@ FrustumObservation project_frustum(const BoundingBox&   bb,
     out.depth_est   = d_est;
     out.depth_sigma = sigma_depth;
 
-    // ---- 8a. Geometric depth bounds ----------------------------------------
+    // ---- 8a. Geometric depth bounds (axis-aware) ---------------------------
     //
     // depth_hi — observed bb subtends ≤ true silhouette on every axis, so
-    //   dim_hi / (2*tan_half_obs) >= true_depth, clipped or not.
+    //   dim_*_hi / (2*tan_half_obs) >= true_depth, clipped or not.
     //   Clipping makes the bound looser (larger), never invalid.
-    //   The bounding box itself already carries the resolution information:
-    //   a detection could not exist if the object were too small/distant.
     //
     // depth_lo — only valid when BOTH edges on an axis are unclipped.
     //   Requires the full angular extent to derive a near limit.
     //   When any edge is clipped the object could be arbitrarily close.
-    //
-    // dim_lo / dim_hi already encode sigma, so fixed-size objects (small sigma)
-    // get tight bounds while variable-size objects (e.g. people) get wider ranges.
-    const float hi_x = (tan_x_half > 1e-7f) ? dim_hi / (2.0f * tan_x_half) : INF_DEPTH;
-    const float hi_y = (tan_y_half > 1e-7f) ? dim_hi / (2.0f * tan_y_half) : INF_DEPTH;
+    const float hi_x = (tan_x_half > 1e-7f) ? dim_x_hi / (2.0f * tan_x_half) : INF_DEPTH;
+    const float hi_y = (tan_y_half > 1e-7f) ? dim_z_hi / (2.0f * tan_y_half) : INF_DEPTH;
 
     // Lower bound: only from axes where we observed the full extent.
-    const float lo_x = (lr_valid && tan_x_half > 1e-7f) ? dim_lo / (2.0f * tan_x_half) : 0.0f;
-    const float lo_y = (tb_valid && tan_y_half > 1e-7f) ? dim_lo / (2.0f * tan_y_half) : 0.0f;
+    const float lo_x = (lr_valid && tan_x_half > 1e-7f) ? dim_x_lo / (2.0f * tan_x_half) : 0.0f;
+    const float lo_y = (tb_valid && tan_y_half > 1e-7f) ? dim_z_lo / (2.0f * tan_y_half) : 0.0f;
 
     // Intersect upper bounds; union lower bounds (tightest near-limit wins).
     out.depth_hi = std::min(hi_x, hi_y);
@@ -296,13 +268,11 @@ FrustumObservation project_frustum(const BoundingBox&   bb,
 
     // ---- 9. Lateral uncertainty at depth d_est ---------------------------
     //
-    // Two contributions, treated symmetrically for both axes:
+    // Two contributions per image axis:
     //   (a) Detector edge localization: angular noise projected to lateral dist
-    //   (b) Orientation-agnostic shape uncertainty: sigma_dim * 0.5
-    //       (we don't know which dimension faces each axis)
-    const float half_dim_sigma = sigma_dim * 0.5f;
-    const float sigma_h = d_est * (noise.sigma_px / K.fx) + half_dim_sigma;
-    const float sigma_v = d_est * (noise.sigma_px / K.fy) + half_dim_sigma;
+    //   (b) Matching shape-prior sigma (width for horizontal, height for vertical)
+    const float sigma_h = d_est * (noise.sigma_px / K.fx) + sx * 0.5f;
+    const float sigma_v = d_est * (noise.sigma_px / K.fy) + sz * 0.5f;
 
     // ---- 10. Orthonormal frame aligned with the center ray ---------------
     //
