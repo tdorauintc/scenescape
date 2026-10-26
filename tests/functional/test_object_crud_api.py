@@ -53,6 +53,7 @@ def test_object_crud_api(rest, result_recorder, repo_root):
       "y_size": initial_loop_value + 2,
       "z_size": initial_loop_value + 3,
       "project_to_map": True,
+      "axis_aware_sizing": True,
       "rotation_from_velocity": True
     }
 

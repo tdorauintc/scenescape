@@ -171,6 +171,7 @@ class MovingObject:
     self.tracking_radius = DEFAULT_TRACKING_RADIUS
     self.shift_type = TYPE_1
     self.project_to_map = False
+    self.axis_aware_sizing = True
     self.map_triangle_mesh = None
     self.map_translation = None
     self.map_rotation = None

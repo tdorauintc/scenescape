@@ -46,6 +46,7 @@ def project_frustum_batch_numpy(
   priors:    np.ndarray,  # (N,6) float32 [mu_x,mu_y,mu_z, sx,sy,sz]
   sigma_px:  float = 2.0,
   clipped:   np.ndarray | None = None,  # (N,) uint8, 0xFF = auto
+  axis_aware: bool | np.ndarray = True,
 ) -> dict[str, np.ndarray]:
   N = len(boxes)
   if N == 0:
@@ -77,6 +78,13 @@ def project_frustum_batch_numpy(
   sy   = _eff_sigma(mu_y, priors[:, 4].astype(np.float64))
   sz   = _eff_sigma(mu_z, priors[:, 5].astype(np.float64))
 
+  if isinstance(axis_aware, (bool, np.bool_)) or np.ndim(axis_aware) == 0:
+    aa = np.full(N, bool(axis_aware), dtype=bool)
+  else:
+    aa = np.asarray(axis_aware, dtype=bool)
+    if aa.shape != (N,):
+      raise ValueError(f"axis_aware must be bool or shape (N,), got {aa.shape}")
+
   # ---- 1. Edge clipping ---------------------------------------------------
   if clipped is None:
     clip = np.zeros(N, np.uint8)
@@ -107,14 +115,18 @@ def project_frustum_batch_numpy(
   rlen = np.sqrt(rx*rx + ry*ry + rz*rz)
   rx /= rlen;  ry /= rlen;  rz /= rlen
 
-  # ---- 4. Axis-aware physical sizes ----------------------------------------
-  # Image-horizontal BB extent ↔ object width (mu_x); image-vertical ↔ height
-  # (mu_z). Using a single orientation-averaged dim_est (~1.15 m for people)
-  # systematically underestimated depth for upright pedestrians.
+  # ---- 4. Physical sizes (axis-aware and orientation-averaged) ------------
+  # Axis-aware: image-horizontal BB ↔ width (mu_x); image-vertical ↔ height
+  # (mu_z). Orientation-averaged dim_est is better when yaw is unknown.
   dim_x_lo = np.maximum(1e-3, mu_x - sx)
   dim_x_hi = mu_x + sx
   dim_z_lo = np.maximum(1e-3, mu_z - sz)
   dim_z_hi = mu_z + sz
+  dim_lo = np.maximum(1e-3, np.minimum.reduce([mu_x - sx, mu_y - sy, mu_z - sz]))
+  dim_hi = np.maximum.reduce([mu_x + sx, mu_y + sy, mu_z + sz])
+  dim_est = 0.5 * (dim_lo + dim_hi)
+  sigma_orient = 0.5 * (dim_hi - dim_lo)
+  sigma_dim = np.hypot(sigma_orient, np.maximum.reduce([sx, sy, sz]))
 
   # ---- 5. Angular half-subtenses ------------------------------------------
   alpha_x = np.arctan(xn_max) - np.arctan(xn_min)
@@ -125,7 +137,7 @@ def project_frustum_batch_numpy(
   sigma_angular_x = (sigma_px / fx) / (1.0 + xn_c**2)
   sigma_angular_y = (sigma_px / fy) / (1.0 + yn_c**2)
 
-  # ---- 6. Depth from angular size (per-axis, axis-aware size) -------------
+  # ---- 6. Depth from angular size -----------------------------------------
   tan_x = np.tan(0.5 * alpha_x)
   tan_y = np.tan(0.5 * alpha_y)
 
@@ -143,8 +155,15 @@ def project_frustum_batch_numpy(
   valid_x = alpha_x > 1e-5
   valid_y = alpha_y > 1e-5
 
-  dx, sdx = _depth_sigma(mu_x, sx, alpha_x, sigma_angular_x)
-  dy, sdy = _depth_sigma(mu_z, sz, alpha_y, sigma_angular_y)
+  dx_aa, sdx_aa = _depth_sigma(mu_x, sx, alpha_x, sigma_angular_x)
+  dy_aa, sdy_aa = _depth_sigma(mu_z, sz, alpha_y, sigma_angular_y)
+  dx_avg, sdx_avg = _depth_sigma(dim_est, sigma_dim, alpha_x, sigma_angular_x)
+  dy_avg, sdy_avg = _depth_sigma(dim_est, sigma_dim, alpha_y, sigma_angular_y)
+
+  dx = np.where(aa, dx_aa, dx_avg)
+  sdx = np.where(aa, sdx_aa, sdx_avg)
+  dy = np.where(aa, dy_aa, dy_avg)
+  sdy = np.where(aa, sdy_aa, sdy_avg)
 
   dx  = np.where(valid_x, dx,  INF_DEPTH)
   sdx = np.where(valid_x, sdx, INF_DEPTH)
@@ -164,11 +183,19 @@ def project_frustum_batch_numpy(
                      1.0 / np.sqrt(np.maximum(lam, 1e-30)),
                      np.where(ok_x, sdx, np.where(ok_y, sdy, INF_DEPTH)))
 
-  # ---- 8a. Depth bounds (axis-aware) --------------------------------------
-  hi_x = np.where(tan_x > 1e-7, dim_x_hi / (2.0 * tan_x), INF_DEPTH)
-  hi_y = np.where(tan_y > 1e-7, dim_z_hi / (2.0 * tan_y), INF_DEPTH)
-  lo_x = np.where(lr_valid & (tan_x > 1e-7), dim_x_lo / (2.0 * tan_x), 0.0)
-  lo_y = np.where(tb_valid & (tan_y > 1e-7), dim_z_lo / (2.0 * tan_y), 0.0)
+  # ---- 8a. Depth bounds ---------------------------------------------------
+  hi_x_aa = np.where(tan_x > 1e-7, dim_x_hi / (2.0 * tan_x), INF_DEPTH)
+  hi_y_aa = np.where(tan_y > 1e-7, dim_z_hi / (2.0 * tan_y), INF_DEPTH)
+  lo_x_aa = np.where(lr_valid & (tan_x > 1e-7), dim_x_lo / (2.0 * tan_x), 0.0)
+  lo_y_aa = np.where(tb_valid & (tan_y > 1e-7), dim_z_lo / (2.0 * tan_y), 0.0)
+  hi_x_avg = np.where(tan_x > 1e-7, dim_hi / (2.0 * tan_x), INF_DEPTH)
+  hi_y_avg = np.where(tan_y > 1e-7, dim_hi / (2.0 * tan_y), INF_DEPTH)
+  lo_x_avg = np.where(lr_valid & (tan_x > 1e-7), dim_lo / (2.0 * tan_x), 0.0)
+  lo_y_avg = np.where(tb_valid & (tan_y > 1e-7), dim_lo / (2.0 * tan_y), 0.0)
+  hi_x = np.where(aa, hi_x_aa, hi_x_avg)
+  hi_y = np.where(aa, hi_y_aa, hi_y_avg)
+  lo_x = np.where(aa, lo_x_aa, lo_x_avg)
+  lo_y = np.where(aa, lo_y_aa, lo_y_avg)
   depth_hi = np.minimum(hi_x, hi_y)
   depth_lo = np.maximum(lo_x, lo_y)
   depth_hi = np.where(depth_hi < depth_lo, depth_lo * 2.0, depth_hi)
@@ -181,8 +208,8 @@ def project_frustum_batch_numpy(
   mu_cam = np.stack([rx * d_est, ry * d_est, rz * d_est], axis=1)
 
   # ---- 9. Lateral sigma ---------------------------------------------------
-  sigma_lat_x = d_est * (sigma_px / fx) + sx * 0.5
-  sigma_lat_y = d_est * (sigma_px / fy) + sz * 0.5
+  sigma_lat_x = d_est * (sigma_px / fx) + np.where(aa, sx, sigma_dim) * 0.5
+  sigma_lat_y = d_est * (sigma_px / fy) + np.where(aa, sz, sigma_dim) * 0.5
 
   # ---- 10. Orthonormal frame aligned with center ray ----------------------
   # e_h: image-horizontal tangent (perp to ray in xz-plane)

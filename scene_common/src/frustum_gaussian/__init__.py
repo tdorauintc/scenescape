@@ -56,14 +56,21 @@ def project_frustum_batch(
   priors: np.ndarray | None = None,
   sigma_px: float = 2.0,
   clipped: np.ndarray | None = None,
+  axis_aware: bool | np.ndarray = True,
   **kwargs: Any,
 ) -> dict[str, np.ndarray]:
-  """Project a batch of 2D boxes to ray-elongated Gaussians (camera frame)."""
+  """Project a batch of 2D boxes to ray-elongated Gaussians (camera frame).
+
+  ``axis_aware`` (bool or per-detection mask): when True, BB width maps to
+  ``mu_x`` and height to ``mu_z``; when False, use orientation-averaged size.
+  """
   if detections_or_dict is not None and isinstance(detections_or_dict, dict) \
       and "boxes" in detections_or_dict:
     boxes = detections_or_dict["boxes"]
     priors = detections_or_dict["priors"]
     clipped = detections_or_dict.get("clipped", clipped)
+    if "axis_aware" in detections_or_dict:
+      axis_aware = detections_or_dict["axis_aware"]
   if boxes is None or priors is None or intrinsics is None or img_size is None:
     raise TypeError(
       "project_frustum_batch requires boxes, priors, intrinsics, and img_size")
@@ -74,6 +81,7 @@ def project_frustum_batch(
     priors=np.asarray(priors, dtype=np.float32),
     sigma_px=float(sigma_px),
     clipped=None if clipped is None else np.asarray(clipped, dtype=np.uint8),
+    axis_aware=axis_aware,
   )
 
 
@@ -114,8 +122,13 @@ def from_scenescape_detections(
   shape_prior: dict[str, float] | None = None,
   *,
   sigma_px: float = 2.0,
+  axis_aware: bool | np.ndarray = True,
 ) -> dict[str, np.ndarray]:
-  """Convert SceneScape detection dicts to a batch frustum result (camera frame)."""
+  """Convert SceneScape detection dicts to a batch frustum result (camera frame).
+
+  ``axis_aware`` may be a single bool or a length-N mask (or per-detection
+  ``axis_aware`` / ``axis_aware_sizing`` keys on each detection dict).
+  """
   count = len(detections)
   if count == 0:
     return {
@@ -131,6 +144,7 @@ def from_scenescape_detections(
     }
 
   boxes = np.empty((count, 4), dtype=np.float32)
+  per_det_aa = []
   for i, det in enumerate(detections):
     bb = det["bounding_box_px"]
     if isinstance(bb, dict):
@@ -141,6 +155,13 @@ def from_scenescape_detections(
     else:
       x, y, width, height = (float(bb[0]), float(bb[1]), float(bb[2]), float(bb[3]))
     boxes[i] = [x, y, x + width, y + height]
+    if "axis_aware" in det:
+      per_det_aa.append(bool(det["axis_aware"]))
+    elif "axis_aware_sizing" in det:
+      per_det_aa.append(bool(det["axis_aware_sizing"]))
+
+  if len(per_det_aa) == count:
+    axis_aware = np.asarray(per_det_aa, dtype=bool)
 
   intr = np.array(
     [intrinsics["fx"], intrinsics["fy"], intrinsics["cx"], intrinsics["cy"]],
@@ -166,6 +187,7 @@ def from_scenescape_detections(
     {"boxes": boxes, "priors": priors},
     intr, img_sz,
     sigma_px=sigma_px,
+    axis_aware=axis_aware,
   )
 
 

@@ -88,13 +88,18 @@ struct ShapePrior {
     float sigma_y = 0.0f;   ///< 1-σ depth uncertainty  (m, 0 = auto)
     float sigma_z = 0.0f;   ///< 1-σ height uncertainty (m, 0 = auto)
 
+    /// When true, BB width↔mu_x and height↔mu_z; when false, orientation-averaged size.
+    bool axis_aware = true;
+
     /// When sigma = 0, use this fraction of mu as the prior sigma.
     static constexpr float SIGMA_AUTO_FACTOR = 0.40f;
 
     ShapePrior(float mx, float my, float mz,
-               float sx, float sy, float sz) noexcept
+               float sx, float sy, float sz,
+               bool axis_aware_ = true) noexcept
         : mu_x(mx), mu_y(my), mu_z(mz),
-          sigma_x(sx), sigma_y(sy), sigma_z(sz) {}
+          sigma_x(sx), sigma_y(sy), sigma_z(sz),
+          axis_aware(axis_aware_) {}
     ShapePrior() noexcept = default;
 };
 

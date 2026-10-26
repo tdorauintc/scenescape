@@ -60,3 +60,21 @@ def test_empty_detections():
     "fx": 1, "fy": 1, "cx": 0, "cy": 0, "width": 100, "height": 100,
   })
   assert result["mu"].shape == (0, 3)
+
+
+def test_axis_aware_vs_orientation_averaged_depth():
+  """Upright person BB: axis-aware depth is farther than orientation-averaged."""
+  detections = [{
+    "bounding_box_px": {"x": 843, "y": 81, "width": 251, "height": 503},
+  }]
+  intrinsics = {
+    "fx": 943.69, "fy": 943.69, "cx": 640.0, "cy": 360.0,
+    "width": 1280.0, "height": 720.0,
+  }
+  d_aa = float(fg.from_scenescape_detections(
+    detections, intrinsics, axis_aware=True)["depth_est"][0])
+  d_avg = float(fg.from_scenescape_detections(
+    detections, intrinsics, axis_aware=False)["depth_est"][0])
+  assert d_aa > d_avg
+  assert abs(d_aa - 2.920) < 0.05
+  assert abs(d_avg - 2.604) < 0.05

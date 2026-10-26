@@ -78,7 +78,8 @@ def test_3d_asset_crud_ui(params, repo_root, result_recorder):
     expected_fields_no_model = [
       "id_name", "id_model_3d", "id_mark_color",
       "id_x_size", "id_y_size", "id_z_size",
-      "id_tracking_radius", "id_project_to_map", "id_rotation_from_velocity",
+      "id_tracking_radius", "id_project_to_map", "id_axis_aware_sizing",
+      "id_rotation_from_velocity",
     ]
     for field_id in expected_fields_no_model:
       assert len(browser.find_elements(By.ID, field_id)) == 1, \
@@ -112,7 +113,8 @@ def test_3d_asset_crud_ui(params, repo_root, result_recorder):
     expected_fields_with_model = [
       "id_name", "id_model_3d",
       "id_x_size", "id_y_size", "id_z_size",
-      "id_tracking_radius", "id_project_to_map", "id_rotation_from_velocity",
+      "id_tracking_radius", "id_project_to_map", "id_axis_aware_sizing",
+      "id_rotation_from_velocity",
       "id_scale", "id_rotation_x", "id_rotation_y", "id_rotation_z",
       "id_translation_x", "id_translation_y", "id_translation_z",
     ]

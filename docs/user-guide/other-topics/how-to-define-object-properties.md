@@ -60,6 +60,9 @@ You can apply positive values to expand the bounding box or negative values to s
   the object height so published position remains the geometric center (same 3D UI
   placement as when the option is off). Leave disabled to keep the frustum / amodal
   centroid.
+- **Axis-aware frustum sizing**: When enabled (default), frustum depth treats bounding-box
+  width as object width and height as object height — better for upright people. Disable
+  for an orientation-averaged size when object yaw is unknown (for example some vehicles).
 
 ## 3D Model Configuration
 

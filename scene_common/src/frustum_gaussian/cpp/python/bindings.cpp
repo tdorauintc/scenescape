@@ -332,16 +332,18 @@ PYBIND11_MODULE(_frustum_gaussian_cpp, m) {
 
     // --- ShapePrior ----------------------------------------------------
     py::class_<ShapePrior>(m, "ShapePrior")
-        .def(py::init<float,float,float,float,float,float>(),
+        .def(py::init<float,float,float,float,float,float,bool>(),
              py::arg("mu_x"),    py::arg("mu_y"),    py::arg("mu_z"),
-             py::arg("sigma_x"), py::arg("sigma_y"), py::arg("sigma_z"))
+             py::arg("sigma_x"), py::arg("sigma_y"), py::arg("sigma_z"),
+             py::arg("axis_aware") = true)
         .def(py::init<>())
         .def_readwrite("mu_x",    &ShapePrior::mu_x)
         .def_readwrite("mu_y",    &ShapePrior::mu_y)
         .def_readwrite("mu_z",    &ShapePrior::mu_z)
         .def_readwrite("sigma_x", &ShapePrior::sigma_x)
         .def_readwrite("sigma_y", &ShapePrior::sigma_y)
-        .def_readwrite("sigma_z", &ShapePrior::sigma_z);
+        .def_readwrite("sigma_z", &ShapePrior::sigma_z)
+        .def_readwrite("axis_aware", &ShapePrior::axis_aware);
 
     // --- DetectorNoise -------------------------------------------------
     py::class_<DetectorNoise>(m, "DetectorNoise")

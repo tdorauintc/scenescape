@@ -43,7 +43,7 @@ def validate_object_crud(browser, file_path=None):
   # Based if it's a 3D object, check if the appropriate fields exists and update all fields
   common_elements = "#id_tracking_radius, #id_x_size, #id_y_size, #id_z_size"
   specific_3d_elements = "#id_rotation_x, #id_rotation_y, #id_rotation_z, [id^=id_translation], #id_scale"
-  common_dropdowns = ["id_project_to_map", "id_rotation_from_velocity"]
+  common_dropdowns = ["id_project_to_map", "id_axis_aware_sizing", "id_rotation_from_velocity"]
 
   assert len(browser.find_elements(By.CSS_SELECTOR, common_elements)) == 4, \
     'Not found all common options'

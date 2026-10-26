@@ -145,7 +145,8 @@ def _assets_from_object_classes(object_classes):
       "z_size": float(entry.get("z_size", 1.0)),
     }
     for key in (
-      "tracking_radius", "project_to_map", "rotation_from_velocity",
+      "tracking_radius", "project_to_map", "axis_aware_sizing",
+      "rotation_from_velocity",
       "x_buffer_size", "y_buffer_size", "z_buffer_size",
     ):
       if key in entry:

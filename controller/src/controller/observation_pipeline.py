@@ -405,6 +405,9 @@ class ObservationPipeline:
     try:
       import frustum_gaussian as fg
 
+      for i, mobj in enumerate(usable):
+        detections[i]["axis_aware_sizing"] = bool(
+          getattr(mobj, "axis_aware_sizing", True))
       cam_obs = fg.from_scenescape_detections(
         detections, intr, shape_prior=fg.PERSON_SHAPE_PRIOR)
       pose_mat = np.asarray(camera.pose.pose_mat, dtype=np.float32)

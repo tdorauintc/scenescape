@@ -228,6 +228,7 @@ class Tracking(Thread):
     tracking_radius = DEFAULT_TRACKING_RADIUS
     shift_type = TYPE_1
     project_to_map = False
+    axis_aware_sizing = True
     rotation_from_velocity = False
 
     if sensorType in object_classes:
@@ -243,6 +244,8 @@ class Tracking(Thread):
                           oclass.get('z_buffer_size', 0.0)]
       tracking_radius = oclass.get('tracking_radius', tracking_radius)
       project_to_map = oclass.get('project_to_map', project_to_map)
+      if oclass.get('axis_aware_sizing') is not None:
+        axis_aware_sizing = bool(oclass.get('axis_aware_sizing'))
       shift_type = oclass.get('shift_type', shift_type)
       rotation_from_velocity = oclass.get('rotation_from_velocity', rotation_from_velocity)
       mobj.setPersistentAttributes(mobj.metadata, persist_attributes)
@@ -251,6 +254,7 @@ class Tracking(Thread):
       mobj.setPersistentAttributes(mobj.metadata, persist_attributes)
 
     mobj.project_to_map = project_to_map
+    mobj.axis_aware_sizing = axis_aware_sizing
     mobj.rotation_from_velocity = rotation_from_velocity
     mobj.shift_type = shift_type
 

@@ -1061,6 +1061,17 @@ class Asset3D(models.Model):
   tracking_radius = models.FloatField("Tracking radius (meters)", default=2.0)
   shift_type = models.IntegerField(choices=SHIFT_TYPE, default=1, null=True)
   project_to_map = models.BooleanField(choices=BOOLEAN_CHOICES, default=False, null=True)
+  axis_aware_sizing = models.BooleanField(
+    "Axis-aware frustum sizing",
+    choices=BOOLEAN_CHOICES,
+    default=True,
+    null=True,
+    help_text=(
+      "When enabled, frustum depth uses BB width for object width and BB height "
+      "for object height (better for upright people). When disabled, uses an "
+      "orientation-averaged size (better when yaw is unknown)."
+    ),
+  )
 
   # Physics properties
   geometric_center = ListField(
