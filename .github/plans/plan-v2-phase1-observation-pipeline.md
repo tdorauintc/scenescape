@@ -7,12 +7,12 @@ SPDX-License-Identifier: Apache-2.0
 
 - **Author(s)**: [Sarat Poluri](https://github.com/spoluri)
 - **Date**: 2026-10-22
-- **Status**: Implemented (Stairs-first); live-verified on Stairs MQTT tracks
+- **Status**: Implemented (Stairs-first); live-verified; follow-ons for mesh frame, axis-aware sizing, `project_to_map`, and Σ→R shipped
 - **Source algorithms**: [`scenescape-v2-architecture`](https://github.com/intel-sandbox/scenescape-v2-architecture) (`algorithms/frustum-gaussian`, `algorithms/amodalreasoner`)
-- **Related**: [ADR-0017](../../docs/adr/0017-probabilistic-tracking-association.md), [plan-probabilistic-tracking.md](./plan-probabilistic-tracking.md)
-- **Commit**: `682c2a79` (`feat/full-v2-tracking-pipeline`)
+- **Related**: [ADR-0017](../../docs/adr/0017-probabilistic-tracking-association.md), [plan-probabilistic-tracking.md](./plan-probabilistic-tracking.md), [debug-z-offset-stairs.md](./debug-z-offset-stairs.md)
+- **Commits** (`feat/full-v2-tracking-pipeline`): `682c2a79` (initial), `115c2362` (mesh→world), `1dc10f13` (Σ→R), `9530f8e0` (axis-aware frustum), `e33657c1` (`project_to_map` mesh foot→CoM), `f0ae67f2` (asset `axis_aware_sizing`)
 
-This plan is the **as-built** record for Phase 1: tasks, integration points, and Stairs verification. Full architecture lives in the v2-architecture repo; ADR-0017 covers the Mahalanobis/UKF association layer reused here.
+This plan is the **as-built** record for Phase 1: tasks, integration points, Stairs verification, and post-debug follow-ons. Full architecture lives in the v2-architecture repo; ADR-0017 covers the Mahalanobis/UKF association layer reused here. Z-offset bisect evidence lives in [debug-z-offset-stairs.md](./debug-z-offset-stairs.md).
 
 ---
 
@@ -41,14 +41,21 @@ flowchart LR
   create --> gate{uses_observation_conditioning?}
   gate -->|no| track[IntelLabsTracking]
   gate -->|yes| pipe[ObservationPipeline.apply]
-  pipe --> fg[from_scenescape_detections + transform_to_world_batch]
+  pipe --> fg["frustum (axis_aware from asset)"]
   fg --> oce[AmodalReasoner.generate]
-  oce --> set[sceneLoc / has_measured_z / observation_sigma]
+  oce --> p2m{"project_to_map?"}
+  p2m -->|yes| foot["depth-map foot + half-height CoM"]
+  p2m -->|no| cent[frustum/amodal centroid]
+  foot --> set[sceneLoc / has_measured_z / observation_sigma]
+  cent --> set
   set --> track
-  track --> mqtt[scenescape/data/scene/.../person]
+  track --> r["measurement_covariance from Σ"]
+  r --> mqtt[scenescape/data/scene/.../person]
 ```
 
 Hook site: [`Scene`](../../controller/src/controller/scene.py) after object creation, before `_finishProcessing` — not inside `MovingObject.mapObjectDetectionToWorld`. On Stairs, conditioning **overwrites** the legacy world location; on failure or missing mesh/reasoner, the legacy projection is left unchanged.
+
+**MQTT contract:** `translation` is always the geometric / mass center (CoM). The 3D UI places assets at `translation` with no `project_to_map` / axis-aware branching.
 
 ---
 
@@ -61,6 +68,7 @@ Hook site: [`Scene`](../../controller/src/controller/scene.py) after object crea
 | Runtime kernel | Pure NumPy in [`_pure.py`](../../scene_common/src/frustum_gaussian/_pure.py); public API in [`__init__.py`](../../scene_common/src/frustum_gaussian/__init__.py) |
 | C++ / pybind | Sources kept under [`cpp/`](../../scene_common/src/frustum_gaussian/cpp/) for a future scikit-build; **not** built in the controller image yet |
 | SceneScape bridge | `from_scenescape_detections`, `transform_to_world_batch`, `PERSON_SHAPE_PRIOR` (~0.55×0.55×1.70 m) |
+| Axis-aware sizing | Default **on**: BB width↔`μ_x`, height↔`μ_z`. Off → orientation-averaged `dim_est`. Per-detection via `axis_aware` / detection dict `axis_aware_sizing` (Python + C++) |
 | Provenance | `NOTICE`, `README.md`, `ALGORITHM.md`, `AGENTS.md` |
 
 Import: `import frustum_gaussian as fg`.
@@ -109,23 +117,33 @@ Wired in [`scene.py`](../../controller/src/controller/scene.py):
 
 Built lazily in `_reasoner_for_camera`:
 
-- Mesh: `scene.map_triangle_mesh` (legacy Open3D mesh → tensor mesh if needed)
+- Mesh: **world-frame** tensor from `_world_mesh_tensor()` — applies scene `mesh_translation` / `mesh_rotation` / `mesh_scale` (unit default; never map `Scene.scale`) to `map_triangle_mesh` (H2 fix; see [debug-z-offset-stairs.md](./debug-z-offset-stairs.md))
 - Intrinsics: `fx,fy,cx,cy` + resolution from camera pose
 - Extrinsics: `camera.pose.pose_mat` (camera→world)
 - World-up: `[0, 0, 1]` (`DEFAULT_WORLD_UP`)
-- Cache key: rounded intrinsics/resolution/pose + `id(map_triangle_mesh)`
+- Cache key: rounded intrinsics/resolution/pose + mesh pose key + `id(map_triangle_mesh)`
 - `num_layers=4`
+
+### Object-library knobs (per asset / category)
+
+| Asset field | Default | Effect on Stairs observation path |
+|-------------|---------|-----------------------------------|
+| `axis_aware_sizing` | `True` | Passed into frustum as `axis_aware` (width/height vs orientation-averaged `dim_est`) |
+| `project_to_map` | `False` | After frustum/amodal: BB **foot** → depth-map mesh hit, then lift half `size_z` (else prior `μ_z/2`) along world-up → **CoM** `translation` |
+
+Wired: Manager model/API/UI → `Tracking` → `MovingObject` → `ObservationPipeline.apply`. Docs: [how-to-define-object-properties.md](../../docs/user-guide/other-topics/how-to-define-object-properties.md). Migration: `0006_asset3d_axis_aware_sizing`.
 
 ### Per-frame steps (Stairs)
 
-1. Collect pixel BBs from each `MovingObject.boundingBoxPixels`
+1. Collect pixel BBs from each `MovingObject.boundingBoxPixels`; stamp `axis_aware_sizing` from the asset
 2. `fg.from_scenescape_detections(..., shape_prior=fg.PERSON_SHAPE_PRIOR)` → camera-frame Gaussians
 3. `fg.transform_to_world_batch(cam_obs, pose_mat)`
 4. Remap batch to amodal `gaus_rays` with `mu` = **camera origin in world** (tiled), plus world-frame `ray` / depth / `Sigma`
-5. `AmodalReasoner.generate(gaus_rays)` → `updated_depth`, `updated_var`
-6. Centroid: `mu + ray * updated_depth`; write `orig_point`, `location`, `vectors`
-7. `has_measured_z = True` so UKF / `zMeasured` path is used
-8. Attach `observation_depth_var` and `observation_sigma` (Σ available for a later ADR R-matrix phase; tracker still uses conditioned mean + existing Mahalanobis today)
+5. `AmodalReasoner.generate(gaus_rays)` → `updated_depth`, `updated_var` (or frustum-only / skip when mode/`reasoner` dictates)
+6. Centroid: `mu + ray * updated_depth`
+7. If `project_to_map`: replace with depth-map **foot** hit + half-height CoM lift (MQTT stays CoM; UI unchanged)
+8. Write `orig_point`, `location`, `vectors`; `has_measured_z = True`
+9. Attach `observation_depth_var` and `observation_sigma` (3×3 world Σ)
 
 Fallback: any exception or missing reasoner/mesh → log and keep legacy projection for that frame.
 
@@ -134,6 +152,7 @@ Fallback: any exception or missing reasoner/mesh → log and keep legacy project
 - No information-form multi-camera fuser (arch Phase 3a) in this slice
 - Consumer remains `TimeChunkedIntelLabsTracking` / `IntelLabsTracking` + ADR-0017 Mahalanobis
 - Stairs deployment requires `use_tracker: true`
+- **Σ → R:** `ilabs_tracking.measurement_covariance_from_observation` embeds `observation_sigma` in the 7×7 `measurement_covariance` (x,y,z block) for UKF / association (ADR Phase 3 path started; see [plan-probabilistic-tracking.md](./plan-probabilistic-tracking.md))
 
 ---
 
@@ -141,8 +160,9 @@ Fallback: any exception or missing reasoner/mesh → log and keep legacy project
 
 | Suite | Path | Coverage |
 |-------|------|----------|
-| Frustum smoke | [`tests/sscape_tests/frustum_gaussian/`](../../tests/sscape_tests/frustum_gaussian/) | `project_frustum_batch`, `from_scenescape_detections`, `transform_to_world_batch`, empty batch |
-| Gate | [`tests/sscape_tests/observation_pipeline/`](../../tests/sscape_tests/observation_pipeline/) | Stairs allow-list; non-Stairs scenes remain false |
+| Frustum smoke | [`tests/sscape_tests/frustum_gaussian/`](../../tests/sscape_tests/frustum_gaussian/) | `project_frustum_batch`, `from_scenescape_detections`, `transform_to_world_batch`, empty batch, axis-aware vs averaged depth |
+| Gate / mesh pose / foot→CoM | [`tests/sscape_tests/observation_pipeline/`](../../tests/sscape_tests/observation_pipeline/) | Stairs allow-list; mesh→world pose; depth-map foot project + half-height helpers |
+| Asset CRUD | [`tests/functional/test_object_crud_api.py`](../../tests/functional/test_object_crud_api.py), UI object/3D asset CRUD | `axis_aware_sizing` field present |
 
 ---
 
@@ -161,12 +181,13 @@ Checked:
 
 ## 5. Out of scope (next phases)
 
-- General scene config flag / UI toggle
+- General scene config flag / UI toggle for enabling observation conditioning (still Stairs hard-gate)
 - Information-form multi-camera fuser (arch Phase 3a)
-- Feeding full Σ into UKF `correct(..., R)` (ADR Phase 3) — fields are attached but unused by the tracker today
-- Building the frustum C++ extension in the Docker image (numpy path is production for Phase 1)
+- Completing ADR Phase 3 default flip / full eval of per-measurement R (Σ is now written into `measurement_covariance`; see probabilistic-tracking plan)
+- Building the frustum C++ extension in the Docker image (numpy path is production for Phase 1; C++ sources keep `axis_aware` in sync)
 - Tracker-service C++ port of frustum/amodal
 - Dynamic-mesh OCE (amodal Phase 2)
+- Amodal “project onto support surface” for underestimated depth when no occluder/wall bound fires (depth-map foot path covers the `project_to_map` case only)
 
 ---
 
@@ -178,9 +199,11 @@ Checked:
 | [`scene_common/src/observation_conditioning/**`](../../scene_common/src/observation_conditioning) | Vendored amodal / OCE |
 | [`scene_common/src/setup.py`](../../scene_common/src/setup.py) | Installs sibling packages via `find_packages` |
 | [`controller/Dockerfile`](../../controller/Dockerfile) | COPY both packages into runtime image |
-| [`controller/src/controller/observation_pipeline.py`](../../controller/src/controller/observation_pipeline.py) | Gate, cache, BB → conditioned world points |
+| [`controller/src/controller/observation_pipeline.py`](../../controller/src/controller/observation_pipeline.py) | Gate, mesh→world, frustum/amodal, optional `project_to_map` foot→CoM |
 | [`controller/src/controller/scene.py`](../../controller/src/controller/scene.py) | Stairs hook + invalidate |
-| [`tests/sscape_tests/frustum_gaussian/`](../../tests/sscape_tests/frustum_gaussian/), [`tests/sscape_tests/observation_pipeline/`](../../tests/sscape_tests/observation_pipeline/) | Smoke / gate tests |
+| [`controller/src/controller/ilabs_tracking.py`](../../controller/src/controller/ilabs_tracking.py) | `observation_sigma` → 7×7 `measurement_covariance` |
+| [`manager/.../Asset3D`](../../manager/src/manager/models.py) | `project_to_map`, `axis_aware_sizing` |
+| [`tests/sscape_tests/frustum_gaussian/`](../../tests/sscape_tests/frustum_gaussian/), [`tests/sscape_tests/observation_pipeline/`](../../tests/sscape_tests/observation_pipeline/) | Smoke / gate / mesh / axis-aware tests |
 
 ---
 
@@ -191,6 +214,10 @@ Checked:
 | vendor-frustum | Vendor frustum-gaussian (numpy runtime + cpp sources retained); install via scene_common + controller Dockerfile COPY | Done |
 | vendor-oce | Vendor amodalreasoner as `observation_conditioning`; package-relative imports; lazy `AmodalReasoner` | Done |
 | controller-adapter | `ObservationPipeline` + Stairs-only gate; per-camera `AmodalReasoner` cache + invalidate | Done |
-| wire-detections | Stairs: frustum → world → OCE → `sceneLoc` / `has_measured_z` (+ optional Σ attrs) into IntelLabsTracking | Done |
+| wire-detections | Stairs: frustum → world → OCE → `sceneLoc` / `has_measured_z` (+ Σ attrs) into IntelLabsTracking | Done |
 | tests-smoke | `tests/sscape_tests/frustum_gaussian` + `observation_pipeline` gate tests | Done |
 | verify-stairs | Rebuild controller; Stairs live verify (MQTT tracks + conditioning logs) | Done |
+| mesh-world-frame | Transform scene GLB by mesh pose before `DepthMap` / amodal (H2) | Done |
+| sigma-to-R | Pass `observation_sigma` through `to_rv_object` as measurement R | Done |
+| axis-aware-frustum | Axis-aware width/height sizing; asset `axis_aware_sizing` (default on) | Done |
+| project-to-map-mesh | Asset `project_to_map`: depth-map foot + half-height CoM (stable MQTT/UI contract) | Done |

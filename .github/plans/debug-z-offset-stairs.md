@@ -1,6 +1,6 @@
 ---
 name: Debug Z offset
-overview: Binary-isolation debug of Stairs observation Z (characterize → bisect frustum vs amodal → hypotheses) plus recorded findings. Primary root cause was mesh frame (H2); residual multi-meter MQTT Z is ghost/out-of-mesh detections, not floor-centroid math.
+overview: Binary-isolation debug of Stairs observation Z plus findings and follow-on fixes. Primary root cause was mesh frame (H2). Follow-ons shipped - axis-aware frustum (asset toggle), project_to_map mesh foot then CoM lift, observation_sigma as R. Residual multi-meter MQTT Z remains ghost/out-of-mesh detections.
 todos:
   - id: characterize
     content: "Step 0: Characterize Z error (sign, magnitude, per-cam, depth-dependent) from MQTT + expected floor"
@@ -19,6 +19,9 @@ todos:
     status: completed
   - id: fix-gate
     content: "Step 5: Only then choose fix; do not patch until stage is identified"
+    status: completed
+  - id: follow-ons
+    content: "Post-debug: axis-aware frustum + asset toggle; project_to_map foot→CoM; Σ→R; DA-V2 eval (Steps 8–8c)"
     status: completed
 isProject: false
 ---
@@ -457,6 +460,22 @@ Output: [`tmp_zverify_out/mesh_proj_vs_dav2.json`](../../tmp_zverify_out/mesh_pr
 
 ---
 
+## Follow-on fixes shipped (after H2)
+
+As-built Phase 1 record: [plan-v2-phase1-observation-pipeline.md](./plan-v2-phase1-observation-pipeline.md).
+
+| Change | Commit | Notes |
+|--------|--------|-------|
+| Mesh→world before `DepthMap` / amodal | `115c2362` | H2; amodal can engage (`E_delta_depth` ≠ 0) |
+| `observation_sigma` → tracker R | `1dc10f13` | 3×3 Σ embedded in 7×7 `measurement_covariance` |
+| Axis-aware frustum sizing | `9530f8e0` | BB width↔`μ_x`, height↔`μ_z`; closer to DA-V2 (Step 8b) |
+| Asset `axis_aware_sizing` | `f0ae67f2` | Object-library toggle (default on); off = orientation-averaged |
+| `project_to_map` mesh foot → CoM | `e33657c1` | Depth-map foot hit + half-height lift; MQTT `translation` stays CoM (no UI `if`) |
+
+**Still open / residual:** ghost / tiny-BB tracks with runaway frustum depth; amodal does not snap underestimated free-standing depth to the support surface unless `project_to_map` is on (or an occluder/wall bound fires).
+
+---
+
 ## Success criteria for this debug effort
 
 - Written note: sign, magnitude, per-camera, detection vs track.
@@ -464,7 +483,7 @@ Output: [`tmp_zverify_out/mesh_proj_vs_dav2.json`](../../tmp_zverify_out/mesh_pr
 - Single hypothesis from H1–H7 marked confirmed with the A/B evidence.
 - No production fix committed until that confirmation exists.
 
-**Status:** met. H2 confirmed and fixed; Steps 6–7 document residual ghosts / ingress clean.
+**Status:** met. H2 confirmed and fixed; Steps 6–8c document residual ghosts, DA-V2 depth bias, and mesh-foot / axis-aware follow-ons.
 
 ---
 

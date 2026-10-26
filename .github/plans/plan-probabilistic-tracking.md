@@ -128,13 +128,13 @@ cd tracker && make test-unit-coverage
 
 ### 3.1 Tasks
 
-| Task | Location |
-|------|----------|
-| `correct(measurement, R_optional)` | `MultiModelKalmanEstimator.*` |
-| Thread R onto `TrackedObject` before correct | `tracking_worker.cpp`, `ilabs_tracking.py` |
-| Global filter noise knobs in config | schema, loader |
-| Deprecate `tracking_radius` in manager + user guide | `manager/`, `docs/user-guide/` |
-| (Later) multi-cam class/confidence fusion | `fuseMetadata` |
+| Task | Location | Notes |
+|------|----------|-------|
+| `correct(measurement, R_optional)` | `MultiModelKalmanEstimator.*` | |
+| Thread R onto `TrackedObject` before correct | `tracking_worker.cpp`, `ilabs_tracking.py` | **Partial:** Stairs observation path sets `observation_sigma`; `ilabs_tracking.measurement_covariance_from_observation` embeds it in the 7×7 `measurement_covariance` (x,y,z). See Phase 1 plan follow-on `1dc10f13`. |
+| Global filter noise knobs in config | schema, loader | |
+| Deprecate `tracking_radius` in manager + user guide | `manager/`, `docs/user-guide/` | |
+| (Later) multi-cam class/confidence fusion | `fuseMetadata` | |
 
 ### Phase 3 validation
 
