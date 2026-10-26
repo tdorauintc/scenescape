@@ -438,6 +438,23 @@ PYTHONPATH=scene_common/src tests/.venv/bin/python tmp_zverify_mono_depth_compar
   --out tmp_zverify_out/mono_depth_compare_axis_aware.json
 ```
 
+### Step 8c — Mesh depth-map projection vs DA-V2
+
+**Question:** Does O(1) depth-map mesh projection (same map as amodal) land closer to DA-V2 than axis-aware frustum?
+
+Same locked BBs / `d_mono` as Step 8b. Mesh hit via `AmodalReasoner.depth_map.t_hit_map` at BB **center** and BB **foot**.
+
+| Cam | `d_frustum` | `d_mono` | `d_mesh_center` | `d_mesh_foot` | closer than frustum |
+|-----|------------:|---------:|----------------:|--------------:|---------------------|
+| stair-cam-1 | 2.92 | 4.85 | 7.65 (|Δ|=2.81) | **foot 4.22 (|Δ|=0.62)** |
+| stair-cam-2 | 4.59 | 5.33 | 6.10 (|Δ|=0.77) | **foot 5.47 (|Δ|=0.14)** |
+
+Mean \|Δ\| vs DA-V2: frustum **1.33 m**, mesh center **1.79 m** (worse), mesh foot **0.38 m** (better).
+
+**Verdict:** BB-**center** mesh projection hits background behind the cardboard and is **not** closer to DA-V2. BB-**foot** mesh projection (planar analogue) **is** closer. Enabled behind object-library **Project to map** (`project_to_map`) in `observation_pipeline.py`: foot on mesh, then lift by half height along world-up so MQTT `translation` stays CoM (no UI branching).
+
+Output: [`tmp_zverify_out/mesh_proj_vs_dav2.json`](../../tmp_zverify_out/mesh_proj_vs_dav2.json).
+
 ---
 
 ## Success criteria for this debug effort

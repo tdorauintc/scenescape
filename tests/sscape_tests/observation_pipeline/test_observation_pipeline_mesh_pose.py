@@ -3,9 +3,15 @@
 
 """Unit tests for scene mesh→world pose used by ObservationPipeline."""
 
+from types import SimpleNamespace
+
 import numpy as np
 
-from controller.observation_pipeline import _mesh_scale_xyz, sceneMeshPoseMat
+from controller.observation_pipeline import (
+  ObservationPipeline,
+  _mesh_scale_xyz,
+  sceneMeshPoseMat,
+)
 
 
 class _FakeScene:
@@ -62,3 +68,52 @@ def test_scene_mesh_pose_ignores_map_scale_attribute():
   )
   pose = sceneMeshPoseMat(scene)
   np.testing.assert_allclose(pose, np.eye(4), atol=1e-9)
+
+
+def test_project_bb_foot_to_mesh_uses_depth_map_lookup():
+  """Foot pixel → t_hit from DepthMap → world point along that ray."""
+  # Identity camera at origin looking +Z; fx=fy=1, cx=cy=0 → pixel (0,1) → ray ~ (0,1,1).
+  pose = np.eye(4, dtype=np.float64)
+  intr = {"fx": 1.0, "fy": 1.0, "cx": 0.0, "cy": 0.0, "width": 4, "height": 4}
+  t_hit_map = np.full((4, 4), np.inf, dtype=np.float32)
+  # BB bottom-center at u=0.5*2=1 → round 1, v=0+2=2 → map[2,1]
+  t_hit_map[2, 1] = 5.0
+  reasoner = SimpleNamespace(
+    depth_map=SimpleNamespace(t_hit_map=t_hit_map, width=4, height=4))
+  pipe = ObservationPipeline(_FakeScene())
+  hit = pipe._project_bb_foot_to_mesh(
+    reasoner, {"x": 0.0, "y": 0.0, "width": 2.0, "height": 2.0}, pose, intr)
+  assert hit is not None
+  # ray_c = normalize((1-0)/1, (2-0)/1, 1) = normalize(1,2,1)
+  expected_dir = np.array([1.0, 2.0, 1.0])
+  expected_dir /= np.linalg.norm(expected_dir)
+  np.testing.assert_allclose(hit, expected_dir * 5.0, atol=1e-5)
+
+
+def test_project_bb_foot_to_mesh_returns_none_on_miss():
+  pose = np.eye(4, dtype=np.float64)
+  intr = {"fx": 1.0, "fy": 1.0, "cx": 0.0, "cy": 0.0, "width": 4, "height": 4}
+  reasoner = SimpleNamespace(
+    depth_map=SimpleNamespace(
+      t_hit_map=np.full((4, 4), np.inf, dtype=np.float32),
+      width=4, height=4))
+  pipe = ObservationPipeline(_FakeScene())
+  hit = pipe._project_bb_foot_to_mesh(
+    reasoner, {"x": 0.0, "y": 0.0, "width": 2.0, "height": 2.0}, pose, intr)
+  assert hit is None
+
+
+def test_com_from_foot_hit_lifts_along_world_up():
+  foot = np.array([4.0, 5.0, 0.1], dtype=np.float64)
+  com = ObservationPipeline._com_from_foot_hit(foot, half_height_m=0.85)
+  np.testing.assert_allclose(com, [4.0, 5.0, 0.95], atol=1e-9)
+
+
+def test_object_half_height_prefers_asset_size_z():
+  mobj = SimpleNamespace(size=[0.5, 0.5, 1.8])
+  assert ObservationPipeline._object_half_height(mobj, default_height_m=1.7) == 0.9
+
+
+def test_object_half_height_falls_back_to_prior():
+  mobj = SimpleNamespace(size=None)
+  assert ObservationPipeline._object_half_height(mobj, default_height_m=1.7) == 0.85

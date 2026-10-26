@@ -55,6 +55,11 @@ You can apply positive values to expand the bounding box or negative values to s
 
 - **Rotation from velocity**: When enabled, orientation of the object is inferred from the computed velocity.
 - **Project to map**: When enabled, objects will be projected onto the map surface.
+  For scenes that use the observation pipeline (for example Stairs), this snaps the
+  bounding-box foot onto the scene mesh via the camera depth map, then lifts by half
+  the object height so published position remains the geometric center (same 3D UI
+  placement as when the option is off). Leave disabled to keep the frustum / amodal
+  centroid.
 
 ## 3D Model Configuration
 

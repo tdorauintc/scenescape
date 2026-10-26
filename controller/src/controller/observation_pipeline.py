@@ -9,6 +9,12 @@ IntelLabs probabilistic tracker. Non-Stairs scenes keep the legacy path.
 The scene GLB is transformed into camera/world frame with mesh_translation /
 mesh_rotation / mesh_scale before building AmodalReasoner (DepthMap).
 
+When an object-library asset has ``project_to_map`` enabled, the BB foot is
+snapped to the precomputed camera depth map (mesh surface), then lifted by
+half object height along world-up so published ``translation`` remains the
+geometric / mass center (CoM). The 3D UI always places assets at that CoM
+with no ``project_to_map`` branching.
+
 Debug (optional Z-offset isolation):
   OBSERVATION_PIPELINE_DEBUG=1     — log Stage A–F fields (rate-limited)
   OBSERVATION_PIPELINE_MODE=full|frustum_only|off
@@ -290,6 +296,76 @@ class ObservationPipeline:
     self._debug_counts[cam_id] = count + 1
     return True
 
+  @staticmethod
+  def _depth_map_t_hit(reasoner, u: float, v: float) -> float | None:
+    """O(1) first-hit range from the camera DepthMap at pixel (u, v)."""
+    dm = reasoner.depth_map
+    if dm.t_hit_map is None:
+      return None
+    x = int(round(u))
+    y = int(round(v))
+    if x < 0 or y < 0 or x >= dm.width or y >= dm.height:
+      return None
+    t = dm.t_hit_map[y, x]
+    if np.ndim(t) > 0:
+      t = t[0]
+    t = float(t)
+    if not np.isfinite(t) or t <= 0.0:
+      return None
+    return t
+
+  @staticmethod
+  def _pixel_ray_world(intr: dict, pose_mat: np.ndarray, u: float, v: float):
+    """Unit world ray from camera origin through pixel (u, v)."""
+    fx = float(intr["fx"])
+    fy = float(intr["fy"])
+    cx = float(intr["cx"])
+    cy = float(intr["cy"])
+    ray_c = np.array([(u - cx) / fx, (v - cy) / fy, 1.0], dtype=np.float64)
+    ray_c /= np.linalg.norm(ray_c) + 1e-12
+    rot = np.asarray(pose_mat[:3, :3], dtype=np.float64)
+    origin = np.asarray(pose_mat[:3, 3], dtype=np.float64)
+    ray_w = rot @ ray_c
+    ray_w /= np.linalg.norm(ray_w) + 1e-12
+    return origin, ray_w
+
+  def _project_bb_foot_to_mesh(self, reasoner, bb: dict, pose_mat: np.ndarray,
+                               intr: dict) -> np.ndarray | None:
+    """Project BB bottom-center onto the scene mesh via the precomputed depth map.
+
+    Same geometric idea as legacy planar foot projection, but the hit is the
+    GLB surface (stairs/landings) instead of z=0. Used when the object-library
+    ``project_to_map`` flag is enabled (caller lifts to CoM afterward).
+    """
+    u = float(bb["x"]) + 0.5 * float(bb["width"])
+    v = float(bb["y"]) + float(bb["height"])
+    t_hit = self._depth_map_t_hit(reasoner, u, v)
+    if t_hit is None:
+      return None
+    origin, ray_w = self._pixel_ray_world(intr, pose_mat, u, v)
+    return origin + ray_w * t_hit
+
+  @staticmethod
+  def _object_half_height(mobj, default_height_m: float) -> float:
+    """Half object height (m) for foot→CoM lift; prefer asset size_z."""
+    size = getattr(mobj, "size", None)
+    if size is not None and len(size) >= 3:
+      try:
+        hz = float(size[2])
+        if np.isfinite(hz) and hz > 0.0:
+          return 0.5 * hz
+      except (TypeError, ValueError):
+        pass
+    return 0.5 * float(default_height_m)
+
+  @staticmethod
+  def _com_from_foot_hit(foot_xyz: np.ndarray, half_height_m: float,
+                         world_up: np.ndarray | None = None) -> np.ndarray:
+    """Lift a mesh foot contact point to geometric / mass center along world-up."""
+    up = DEFAULT_WORLD_UP if world_up is None else np.asarray(world_up, dtype=np.float64)
+    up = up / (np.linalg.norm(up) + 1e-12)
+    return np.asarray(foot_xyz, dtype=np.float64) + up * float(half_height_m)
+
   def apply(self, objects: list, camera, when) -> list:
     """Overwrite world locations using frustum + amodal; on failure leave legacy."""
     from scene_common.geometry import Point
@@ -324,6 +400,7 @@ class ObservationPipeline:
     cam_id = camera.cameraID
     mode = _pipeline_mode()
     do_dbg = self._should_debug(cam_id)
+    want_mesh_project = any(getattr(o, "project_to_map", False) for o in usable)
 
     try:
       import frustum_gaussian as fg
@@ -348,16 +425,37 @@ class ObservationPipeline:
         "edge_valid": world_obs["edge_valid"],
       }
 
-      if mode == "frustum_only":
+      reasoner = None
+      if mode != "frustum_only" or want_mesh_project:
+        reasoner = self._reasoner_for_camera(camera)
+        if reasoner is None and mode != "frustum_only":
+          return objects
+
+      if mode == "frustum_only" or reasoner is None:
         updated_depth = np.asarray(gaus_rays["depth_est"], dtype=np.float64).copy()
         updated_var = np.asarray(gaus_rays["depth_sigma"], dtype=np.float64) ** 2
       else:
-        reasoner = self._reasoner_for_camera(camera)
-        if reasoner is None:
-          return objects
         updated_depth, updated_var = reasoner.generate(gaus_rays)
 
       centroids = gaus_rays["mu"] + gaus_rays["ray"] * updated_depth[:, None]
+      mesh_projected = [False] * count
+
+      # Object-library "Project to map": foot on mesh, then lift to CoM so MQTT
+      # translation stays the geometric center (UI places assets there unchanged).
+      if want_mesh_project and reasoner is not None:
+        default_h = float(fg.PERSON_SHAPE_PRIOR["mu_z"])
+        for i, mobj in enumerate(usable):
+          if not getattr(mobj, "project_to_map", False):
+            continue
+          foot = self._project_bb_foot_to_mesh(
+            reasoner, detections[i]["bounding_box_px"], pose_mat, intr)
+          if foot is None:
+            continue
+          half_h = self._object_half_height(mobj, default_h)
+          centroids[i] = self._com_from_foot_hit(foot, half_h)
+          mesh_projected[i] = True
+          # Mesh contact is sharp; keep a small depth variance on the CoM.
+          updated_var[i] = min(float(updated_var[i]), 0.05 ** 2)
 
       if do_dbg:
         mu_remap_err = float(np.max(np.abs(
@@ -394,6 +492,7 @@ class ObservationPipeline:
             f"E_delta_depth={d_upd - d_est:.3f}",
             f"E_updated_var={float(updated_var[i]):.5f}",
             f"F_centroid={centroids[i].tolist()}",
+            f"F_mesh_project={mesh_projected[i]}",
             f"F_legacy_z_before={legacy_z}",
             f"F_prior_half_height={0.5 * fg.PERSON_SHAPE_PRIOR['mu_z']:.3f}",
           )
@@ -408,7 +507,8 @@ class ObservationPipeline:
         mobj.observation_sigma = world_obs["Sigma"][i]
 
       log.debug("ObservationPipeline: conditioned", len(usable),
-                "detections for", camera.cameraID, f"mode={mode}")
+                "detections for", camera.cameraID, f"mode={mode}",
+                f"mesh_project={sum(mesh_projected)}")
     except Exception as exc:  # noqa: BLE001 — keep legacy projection
       log.error("ObservationPipeline: conditioning failed for",
                 camera.cameraID, exc, "; using legacy projection")
