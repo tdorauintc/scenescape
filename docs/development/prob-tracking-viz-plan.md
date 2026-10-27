@@ -34,12 +34,12 @@ run.feed(observe(truth, camera));                                // records dete
 
 All timestamps are ISO 8601 UTC with microseconds, counted from the `system_clock` epoch (`atSeconds(t)`). All records carry an object or track id, ready for more than one object.
 
-| File                | Format                                                                                                                                                                                                                                                     |
-| ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `groundtruth.jsonl` | Canonical GT (evaluation README). Adds optional `size`, `rotation` (heading quaternion) and `velocity`, plus `truth: {speed, yaw_rate, acceleration}`                                                                                                      |
-| `detections.jsonl`  | Canonical input, `camera-data.schema.json` from `ITEP-97104_tracker_3d_detections` (validated against a copy, branch not merged): `translation`, `size`; `rotation` only from orienting sensors. Sensor id = `Sensor::id` (identity sensor pose assumed)   |
-| `tracks.jsonl`      | Canonical tracker output (`scene-data.schema.json`), estimate after every `FilterRun` step; usable by `JitterEvaluator` and `DiagnosticEvaluator`                                                                                                          |
-| `estimator.jsonl`   | Line 1 `config`: models, q, r, P0, UKF alpha/beta/kappa, transition matrix, model probability limits, state and measurement names. Then one `step` per `FilterRun` step: `track_id`, model probabilities `mu`, state `x`, `P` (12x12), `z_pred`, `S` (7x7) |
+| File                | Format                                                                                                                                                                                                                                                                      |
+| ------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `groundtruth.jsonl` | Canonical GT (evaluation README). Adds optional `size`, `rotation` (heading quaternion) and `velocity`, plus `truth: {speed, yaw_rate, acceleration}`                                                                                                                       |
+| `detections.jsonl`  | Canonical input, `tracker/schema/camera-data.schema.json` with 3D detections (#2050; validated against it since `5ccd64279`, before against a copy): `translation`, `size`; `rotation` only from orienting sensors. Sensor id = `Sensor::id` (identity sensor pose assumed) |
+| `tracks.jsonl`      | Canonical tracker output (`scene-data.schema.json`), estimate after every `FilterRun` step; usable by `JitterEvaluator` and `DiagnosticEvaluator`                                                                                                                           |
+| `estimator.jsonl`   | Line 1 `config`: models, q, r, P0, UKF alpha/beta/kappa, transition matrix, model probability limits, state and measurement names. Then one `step` per `FilterRun` step: `track_id`, model probabilities `mu`, state `x`, `P` (12x12), `z_pred`, `S` (7x7)                  |
 
 - `x`, `P` and `mu` are the combined estimate after the step. `z_pred` and association `S` (most likely model) come from the last predict, as used for gating; null at init.
 
@@ -76,7 +76,7 @@ Videos (matplotlib animation writers → H.264 MP4 or GIF; real time, at most 30
 
 1. Recorder and JSON writer, `FilterRun` observer hook, `TruthSample::acceleration`, `Box::category`, recorder test (writes to a temporary directory).
 2. Recording in `MotionScenarioTests` (C-7 cases, C-8, C-9).
-3. `scenario_data.py` and pytest tests with small fixture files; schema validation of generated files (`detections.jsonl` against a copy of the 3D `camera-data.schema.json` in the visualization tests).
+3. `scenario_data.py` and pytest tests with small fixture files; schema validation of generated files (`detections.jsonl` against the Tracker 3D `camera-data.schema.json`).
    - Refactor before step 4: `DiagnosticEvaluator._match_tracks` moved unchanged to `utils/tracks.py`.
 4. `plot_scenario.py` with tests (smoke test).
 5. `render_video.py` with tests (smoke test on a short fixture, ffmpeg skipped if missing).
@@ -89,4 +89,4 @@ Verification: `make -C tracker test-robot-vision` and `tools/tracker/evaluation/
 - Filter diagnostics (prior vs posterior, per-model states, NEES / NIS, run comparison); covered by unit tests.
 - Tracker-level runs (`MultipleObjectTracker`, lifecycle, association).
 - A scene configuration with identity-pose sensors for replaying through the Tracker service.
-- Merging `ITEP-97104_tracker_3d_detections`; the schema copy is replaced by `tracker/schema/camera-data.schema.json` once it lands.
+- Merging `ITEP-97104_tracker_3d_detections` (merged as #2050; the schema copy was replaced by `tracker/schema/camera-data.schema.json` in `5ccd64279`).
