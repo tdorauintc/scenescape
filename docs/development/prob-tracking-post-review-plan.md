@@ -89,11 +89,11 @@ Both branches 1 and 2 are in main; `feature/prob-tracking-extracted` merged main
      - Evaluate / mitigate performance impact of numpy.linalg.eigh / cv::eigen on association window publishing
      - Make the fixed radius in birth clustering (kDefaultBirthClusterRadiusM) configurable
      - Wrap the yaw difference in the legacy `Mahalanobis` cost (`-rv::deltaTheta(measurement.yaw, predictedYaw)`) and apply the same speed gate as `prepareYawMeasurement` + UT including the ±π wrap (yaw review 3)
-     - **[DONE]** Update with `feature/prob-tracking-extracted` (`ab0caa89c`): streaming fusion removal, C++20, tests split by component (z review E3)
+     - **[IN-PROGRESS]** Update with `feature/prob-tracking-extracted`: streaming fusion removal, C++20, tests split by component. Merge `ab0caa89c` pushed as `tdorau/prob-tracking-extracted-association-update`, waiting for a PR (z review E3)
      - Fix the session-scoped `controller.ilabs_tracking.rv` mock in `scene_pytest/conftest.py`: 5 association tests fail in full-suite pytest runs (z review E4)
      - Prepare for #2056: `cv::Matx` covariance access in `ObjectMatching.cpp` and `association_window.hpp`, removed `TrackManager::getTrack()` in the C++ and Python tests, Kalman matrices in the benchmark harness (z review I1)
 
-5. **[IN-PROGRESS]** Non-planar Z / `vz` tracking. Branch: feature/prob-tracking-extracted-3d. Base branch: feature/prob-tracking-extracted-association
+5. **[IN-PROGRESS]** Non-planar Z / `vz` tracking. Branch: feature/prob-tracking-extracted-3d (work branch `tdorau/prob-tracking-extracted-3d` until the feature branch exists). Base branch: feature/prob-tracking-extracted-association
    - Carried over from `feat/tracking-z-axis` (based on an older association branch)
      - `vz` in the UKF state (13 states, named `StateIndex` / `MeasurementIndex`), integrated by CV / CA / CTRV
      - XYZ association: Euclidean and `PositionMahalanobis` (3×3, χ² df 3); the UI association window keeps χ² df 2
