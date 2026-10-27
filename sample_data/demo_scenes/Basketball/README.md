@@ -54,7 +54,9 @@ path as Stairs).
 
 `gvadetect` applies **class-agnostic** NMS, so the basketball box is often
 suppressed when it overlaps the person. For live ball tracking, stop the
-DLStreamer pipeline instances and run the OpenVINO sidecar (class-aware NMS):
+DLStreamer pipeline instances and run the OpenVINO sidecar (class-aware NMS).
+The sidecar also answers UI `getimage` / `getcalibrationimage` commands so
+camera video preview keeps working without DLStreamer:
 
 ```bash
 # after demo-basketball is up and pipelines are healthy:

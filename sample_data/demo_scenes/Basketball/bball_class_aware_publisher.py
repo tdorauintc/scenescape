@@ -5,14 +5,23 @@
 
 gvadetect uses class-agnostic NMS, which suppresses the basketball BB when it
 overlaps the person. This sidecar reads RTSP, runs the same YOLO-World IR with
-per-class NMS, and publishes scenescape/data/camera/<id> payloads.
+per-class NMS, and publishes:
+
+- scenescape/data/camera/<id>           detection metadata every frame
+- scenescape/image/camera/<id>          JPEG preview on ``getimage``
+- scenescape/image/calibration/camera/<id>  unannotated JPEG on
+                                            ``getcalibrationimage``
+
+The UI requests previews by publishing to scenescape/cmd/camera/<id>.
 """
 
 from __future__ import annotations
 
 import argparse
+import base64
 import json
 import ssl
+import threading
 import time
 from datetime import datetime, timezone
 
@@ -23,6 +32,10 @@ from openvino import Core
 
 
 LABELS = ["person", "basketball"]
+COLORS = {
+  "person": (0, 255, 0),
+  "basketball": (0, 140, 255),
+}
 
 
 def letterbox(im, new_shape=640):
@@ -103,6 +116,39 @@ class Detector:
     return {k: v for k, v in objects.items() if v}
 
 
+def annotate(frame, objects):
+  out = frame.copy()
+  for lab, dets in objects.items():
+    color = COLORS.get(lab, (255, 255, 255))
+    for det in dets:
+      bb = det["bounding_box_px"]
+      x, y, w, h = bb["x"], bb["y"], bb["width"], bb["height"]
+      cv2.rectangle(out, (x, y), (x + w, y + h), color, 2)
+      cv2.putText(
+        out, f"{lab} {det['confidence']:.2f}", (x, max(0, y - 5)),
+        cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 1, cv2.LINE_AA)
+  return out
+
+
+def jpeg_b64(bgr) -> str:
+  ok, buf = cv2.imencode(".jpg", bgr, [int(cv2.IMWRITE_JPEG_QUALITY), 80])
+  if not ok:
+    raise RuntimeError("JPEG encode failed")
+  return base64.b64encode(buf).decode("utf-8")
+
+
+class CameraState:
+  def __init__(self, cam_id: str, cap: cv2.VideoCapture):
+    self.cam_id = cam_id
+    self.cap = cap
+    self.lock = threading.Lock()
+    self.frame = None
+    self.objects = {}
+    self.timestamp = None
+    self.want_preview = False
+    self.want_calibration = False
+
+
 def main():
   ap = argparse.ArgumentParser()
   ap.add_argument("--xml", required=True)
@@ -116,43 +162,96 @@ def main():
   args = ap.parse_args()
 
   det = Detector(args.xml)
+  cams: dict[str, CameraState] = {}
+
   try:
     client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)
   except AttributeError:
     client = mqtt.Client()
   client.tls_set(ca_certs=args.ca, cert_reqs=ssl.CERT_REQUIRED)
   client.tls_insecure_set(True)
-  client.connect(args.broker, args.port, 60)
-  client.loop_start()
 
-  caps = []
+  def on_connect(client, _userdata, _flags, rc, *_args):
+    if rc != 0:
+      print(f"MQTT connect failed rc={rc}", flush=True)
+      return
+    for cam_id in cams:
+      topic = f"scenescape/cmd/camera/{cam_id}"
+      client.subscribe(topic)
+      print(f"subscribed {topic}", flush=True)
+
+  def on_message(_client, _userdata, message):
+    cam_id = message.topic.rsplit("/", 1)[-1]
+    state = cams.get(cam_id)
+    if state is None:
+      return
+    payload = message.payload.decode("utf-8", errors="replace")
+    with state.lock:
+      if payload == "getimage":
+        state.want_preview = True
+      elif payload == "getcalibrationimage":
+        state.want_calibration = True
+
+  client.on_connect = on_connect
+  client.on_message = on_message
+
   for cam_id, url in args.camera:
     cap = cv2.VideoCapture(url)
     if not cap.isOpened():
       raise SystemExit(f"failed to open {url}")
-    caps.append((cam_id, cap))
+    cams[cam_id] = CameraState(cam_id, cap)
+
+  client.connect(args.broker, args.port, 60)
+  client.loop_start()
 
   period = 1.0 / max(args.fps, 1e-3)
-  print("publishing", [c[0] for c in caps], flush=True)
+  print("publishing", list(cams), flush=True)
   while True:
     t0 = time.time()
-    for cam_id, cap in caps:
-      ok, frame = cap.read()
+    for cam_id, state in cams.items():
+      ok, frame = state.cap.read()
       if not ok:
-        cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
+        state.cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
         continue
       objects = det.detect(frame, thr=args.threshold)
       for i, lab in enumerate(LABELS):
         for o in objects.get(lab, []):
           o["id"] = i + 1
-      payload = {
-        "id": cam_id,
-        "timestamp": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z",
-        "rate": args.fps,
-        "objects": objects,
-      }
-      topic = f"scenescape/data/camera/{cam_id}"
-      client.publish(topic, json.dumps(payload), qos=0)
+      ts = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
+      with state.lock:
+        state.frame = frame
+        state.objects = objects
+        state.timestamp = ts
+        want_preview = state.want_preview
+        want_calibration = state.want_calibration
+        state.want_preview = False
+        state.want_calibration = False
+
+      client.publish(
+        f"scenescape/data/camera/{cam_id}",
+        json.dumps({
+          "id": cam_id,
+          "timestamp": ts,
+          "rate": args.fps,
+          "objects": objects,
+        }),
+        qos=0,
+      )
+
+      if want_preview:
+        annotated = annotate(frame, objects)
+        client.publish(
+          f"scenescape/image/camera/{cam_id}",
+          json.dumps({"id": cam_id, "timestamp": ts, "image": jpeg_b64(annotated)}),
+          qos=0,
+        )
+      if want_calibration:
+        client.publish(
+          f"scenescape/image/calibration/camera/{cam_id}",
+          json.dumps({"id": cam_id, "timestamp": ts, "image": jpeg_b64(frame)}),
+          qos=0,
+        )
+
     dt = time.time() - t0
     if dt < period:
       time.sleep(period - dt)
