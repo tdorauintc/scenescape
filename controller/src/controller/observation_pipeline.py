@@ -33,8 +33,8 @@ import numpy as np
 
 from scene_common import log
 
-# Hard-gate for Phase 1 verification (plan: Stairs-only).
-OBSERVATION_CONDITIONING_SCENE_NAMES = frozenset({"Stairs"})
+# Hard-gate for Phase 1 verification (Stairs + Basketball demos).
+OBSERVATION_CONDITIONING_SCENE_NAMES = frozenset({"Stairs", "Basketball"})
 
 # Default world-up for SceneScape meshes (Z-up).
 DEFAULT_WORLD_UP = np.array([0.0, 0.0, 1.0], dtype=np.float64)
@@ -408,6 +408,18 @@ class ObservationPipeline:
       for i, mobj in enumerate(usable):
         detections[i]["axis_aware_sizing"] = bool(
           getattr(mobj, "axis_aware_sizing", True))
+        # Prefer Asset3D size (object library) as frustum shape prior so
+        # non-person classes (e.g. basketball) are not forced to PERSON_SHAPE_PRIOR.
+        size = getattr(mobj, "size", None)
+        if size is not None and len(size) >= 3:
+          detections[i]["shape_prior"] = {
+            "mu_x": float(size[0]),
+            "mu_y": float(size[1]),
+            "mu_z": float(size[2]),
+            "sigma_x": 0.0,
+            "sigma_y": 0.0,
+            "sigma_z": 0.0,
+          }
       cam_obs = fg.from_scenescape_detections(
         detections, intr, shape_prior=fg.PERSON_SHAPE_PRIOR)
       pose_mat = np.asarray(camera.pose.pose_mat, dtype=np.float32)

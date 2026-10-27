@@ -172,16 +172,18 @@ def from_scenescape_detections(
     dtype=np.float32,
   )
 
-  prior = shape_prior if shape_prior is not None else PERSON_SHAPE_PRIOR
-  row = [
-    prior.get("mu_x", 0.55),
-    prior.get("mu_y", 0.55),
-    prior.get("mu_z", 1.70),
-    prior.get("sigma_x", 0.0),
-    prior.get("sigma_y", 0.0),
-    prior.get("sigma_z", 0.0),
-  ]
-  priors = np.tile(row, (count, 1)).astype(np.float32)
+  default = shape_prior if shape_prior is not None else PERSON_SHAPE_PRIOR
+  priors = np.empty((count, 6), dtype=np.float32)
+  for i, det in enumerate(detections):
+    prior = det.get("shape_prior") or default
+    priors[i] = [
+      float(prior.get("mu_x", 0.55)),
+      float(prior.get("mu_y", 0.55)),
+      float(prior.get("mu_z", 1.70)),
+      float(prior.get("sigma_x", 0.0)),
+      float(prior.get("sigma_y", 0.0)),
+      float(prior.get("sigma_z", 0.0)),
+    ]
 
   return project_frustum_batch(
     {"boxes": boxes, "priors": priors},

@@ -98,7 +98,7 @@ Import: `import frustum_gaussian as fg`.
 [`sceneUsesObservationConditioning`](../../controller/src/controller/observation_pipeline.py) — hard allow-list:
 
 ```python
-OBSERVATION_CONDITIONING_SCENE_NAMES = frozenset({"Stairs"})
+OBSERVATION_CONDITIONING_SCENE_NAMES = frozenset({"Stairs", "Basketball"})
 ```
 
 Exposed on the scene as `Scene.uses_observation_conditioning`. No scene-config / UI flag yet.

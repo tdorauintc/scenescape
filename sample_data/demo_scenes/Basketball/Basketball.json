@@ -1,0 +1,95 @@
+{
+  "uid": "25941744-0662-41d2-b2e8-f50e09ccfe10",
+  "name": "Basketball",
+  "map_type": "map_upload",
+  "use_tracker": true,
+  "map": "/media/Basketball.png",
+  "cameras": [
+    {
+      "uid": "bball-cam1",
+      "name": "bball-cam1",
+      "intrinsics": {
+        "fx": 914.0,
+        "fy": 914.0,
+        "cx": 640.0,
+        "cy": 360.0
+      },
+      "distortion": {
+        "k1": 0,
+        "k2": 0,
+        "p1": 0,
+        "p2": 0,
+        "k3": 0
+      },
+      "resolution": [
+        1280,
+        720
+      ],
+      "scene": "25941744-0662-41d2-b2e8-f50e09ccfe10",
+      "cv_subsystem": "AUTO",
+      "undistort": false,
+      "modelconfig": "model_config.json",
+      "use_camera_pipeline": false
+    },
+    {
+      "uid": "bball-cam2",
+      "name": "bball-cam2",
+      "intrinsics": {
+        "fx": 914.0,
+        "fy": 914.0,
+        "cx": 640.0,
+        "cy": 360.0
+      },
+      "distortion": {
+        "k1": 0,
+        "k2": 0,
+        "p1": 0,
+        "p2": 0,
+        "k3": 0
+      },
+      "resolution": [
+        1280,
+        720
+      ],
+      "scene": "25941744-0662-41d2-b2e8-f50e09ccfe10",
+      "cv_subsystem": "AUTO",
+      "undistort": false,
+      "modelconfig": "model_config.json",
+      "use_camera_pipeline": false
+    }
+  ],
+  "mesh_translation": [
+    0,
+    0,
+    0
+  ],
+  "mesh_rotation": [
+    0,
+    0,
+    0
+  ],
+  "mesh_scale": [
+    1,
+    1,
+    1
+  ],
+  "scale": 100,
+  "regulated_rate": 15,
+  "external_update_rate": 15,
+  "camera_calibration": "Markerless",
+  "apriltag_size": 0.162,
+  "number_of_localizations": 50,
+  "global_feature": "netvlad",
+  "local_feature": {
+    "sift": {}
+  },
+  "matcher": {
+    "NN-ratio": {}
+  },
+  "minimum_number_of_matches": 20,
+  "inlier_threshold": 0.5,
+  "geospatial_provider": "google",
+  "map_zoom": 15,
+  "map_bearing": 0,
+  "georeferenced": false
+}

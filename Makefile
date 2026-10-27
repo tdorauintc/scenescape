@@ -44,12 +44,16 @@ VIDEO_SOURCE_DIR := sample_data/demo_scenes
 RETAIL_VIDEO_COMPOSE_FILE := $(VIDEO_SOURCE_DIR)/Retail/compose.retail-video.yml
 QUEUING_VIDEO_COMPOSE_FILE := $(VIDEO_SOURCE_DIR)/Queuing/compose.queuing-video.yml
 STAIRS_VIDEO_COMPOSE_FILE := $(VIDEO_SOURCE_DIR)/Stairs/compose.stairs-video.yml
+BASKETBALL_VIDEO_COMPOSE_FILE := $(VIDEO_SOURCE_DIR)/Basketball/compose.basketball-video.yml
 VIDEO_SOURCE_COMPOSE_FILES := -f $(RETAIL_VIDEO_COMPOSE_FILE) -f $(QUEUING_VIDEO_COMPOSE_FILE)
 # Parent dir containing only Stairs/ for upload-scenes (Retail/Queuing excluded).
 STAIRS_DEMO_SCENES_DIR := $(BUILD_DIR)/stairs-demo-scenes
+# Parent dir containing only Basketball/ (+ object-library) for upload-scenes.
+BASKETBALL_DEMO_SCENES_DIR := $(BUILD_DIR)/basketball-demo-scenes
 DLSTREAMER_SAMPLE_VIDEOS := $(addprefix $(VIDEO_SOURCE_DIR)/Retail/video/,apriltag-cam1.ts apriltag-cam2.ts apriltag-cam3.ts) \
 	$(addprefix $(VIDEO_SOURCE_DIR)/Queuing/video/,qcam1.ts qcam2.ts) \
 	$(addprefix $(VIDEO_SOURCE_DIR)/Stairs/video/,cam1.ts cam2.ts) \
+	$(addprefix $(VIDEO_SOURCE_DIR)/Basketball/video/,cam1.ts cam2.ts) \
 	tools/pipeline_runner/video/car-detection.ts
 DLSTREAMER_DOCKER_COMPOSE_FILE := ./$(SAMPLE_COMPOSE_DIR)/compose.dl-streamer-example.yml
 DEMO_WAIT_SECONDS ?= "0"
@@ -131,6 +135,7 @@ help:
 	@echo "  demo-tracker                Start the Scenescape demo with Tracker + Analytics services (no Scene Controller) using Docker Compose"
 	@echo "  demo-lidar                  Start the basic Scenescape demo plus the LiDAR-intersection (LiDAR/Camera) fusion demo"
 	@echo "  demo-stairs                 Start core Scenescape with only the Stairs scene + video (no Retail/Queuing)"
+	@echo "  demo-basketball             Start core + mapping with only the Basketball scene + YOLO-World video (no Retail/Queuing)"
 	@echo "  demo-scenes                 Upload the demo scenes in DEMO_SCENES_DIR to a running deployment via the REST API"
 	@echo "  demo-close                  Stop the running Scenescape demo and remove all volumes"
 	@echo "  demo-k8s                    Start the Scenescape demo using Kubernetes (DEMO_K8S_MODE=core|reid|all, default: core)"
@@ -199,6 +204,7 @@ help:
 	@echo "  - Use 'make demo-lidar' to run the basic LiDAR-intersection (LIDAR/Camera) fusion demo."
 	@echo "    See docs/user-guide/how-to-guides/run-lidar-intersection-demo.md for prerequisites and setup steps."
 	@echo "  - Use 'SUPASS=<password> make demo-stairs' for the Stairs-only demo (scene zip + cam1/cam2)."
+	@echo "  - Use 'SUPASS=<password> make demo-basketball' for the Basketball-only demo (YOLO-World + mapping)."
 	@echo "    Do not combine with 'make demo' video sources (shared mediaserver port)."
 	@echo ""
 
@@ -758,9 +764,12 @@ define start_demo
 	@echo "Or use: make demo-close"
 endef
 
-# Stairs-only variant of start_demo: skips Retail/Queuing video sources.
+# Single-scene demo helper: skips Retail/Queuing video sources.
 # $(1): extra `docker compose` args for the main stack
-define start_demo_stairs
+# $(2): make target that brings up the scene's video source
+# $(3): make target that uploads only that scene
+# $(4): human-readable success message
+define start_demo_single_scene
 	@$(MAKE) docker-compose.yml
 	@$(MAKE) .env
 	@if [ -z "$$SUPASS" ]; then \
@@ -784,12 +793,24 @@ define start_demo_stairs
 		echo "Starting Scenescape services in detached mode..."; \
 		docker compose $(1) up -d; \
 	fi
-	@$(MAKE) stairs-video-source-up
-	@$(MAKE) demo-scenes-stairs
+	@$(MAKE) $(2)
+	@$(MAKE) $(3)
 	@echo ""
-	@echo "Stairs demo is up (scene 'Stairs', cameras stair-cam-1 / stair-cam-2)."
+	@echo "$(4)"
 	@echo "To stop Scenescape, type:"
 	@echo "    make demo-close"
+endef
+
+# Stairs-only variant of start_demo: skips Retail/Queuing video sources.
+# $(1): extra `docker compose` args for the main stack
+define start_demo_stairs
+	$(call start_demo_single_scene,$(1),stairs-video-source-up,demo-scenes-stairs,Stairs demo is up (scene 'Stairs', cameras stair-cam-1 / stair-cam-2).)
+endef
+
+# Basketball-only variant: core + mapping (for scene reconstruction / Markerless
+# calibration). Skips Retail/Queuing. $(1): extra `docker compose` args.
+define start_demo_basketball
+	$(call start_demo_single_scene,$(1),basketball-video-source-up,demo-scenes-basketball,Basketball demo is up (scene 'Basketball', cameras bball-cam1 / bball-cam2). Run Markerless reconstruction to build the map and calibrate cameras.)
 endef
 
 .PHONY: check-reid-backend
@@ -820,6 +841,15 @@ demo-scenes-stairs:
 	@rm -rf $(STAIRS_DEMO_SCENES_DIR)/Stairs
 	@ln -sfn $(CURDIR)/$(VIDEO_SOURCE_DIR)/Stairs $(STAIRS_DEMO_SCENES_DIR)/Stairs
 	@$(MAKE) demo-scenes DEMO_SCENES_DIR=$(STAIRS_DEMO_SCENES_DIR)
+
+# Upload only the Basketball scene archive + object library (used by demo-basketball).
+.PHONY: demo-scenes-basketball
+demo-scenes-basketball:
+	@mkdir -p $(BASKETBALL_DEMO_SCENES_DIR)
+	@rm -rf $(BASKETBALL_DEMO_SCENES_DIR)/Basketball
+	@ln -sfn $(CURDIR)/$(VIDEO_SOURCE_DIR)/Basketball $(BASKETBALL_DEMO_SCENES_DIR)/Basketball
+	@cp -f $(CURDIR)/$(VIDEO_SOURCE_DIR)/Basketball/object-library.json $(BASKETBALL_DEMO_SCENES_DIR)/object-library.json
+	@$(MAKE) demo-scenes DEMO_SCENES_DIR=$(BASKETBALL_DEMO_SCENES_DIR)
 
 .PHONY: demo
 demo: $(DEMO_BUILD:build=build-core)
@@ -852,6 +882,12 @@ demo-lidar: $(DEMO_BUILD:build=build-core-lidar)
 demo-stairs: $(DEMO_BUILD:build=build-core)
 	$(call start_demo_stairs,--profile controller)
 
+# Basketball-only demo: core + mapping (reconstruction / Markerless calibration) +
+# Basketball scene import + YOLO-World video (no Retail/Queuing).
+.PHONY: demo-basketball
+demo-basketball: $(DEMO_BUILD:build=build-all)
+	$(call start_demo_basketball,--profile controller --profile mapping)
+
 .PHONY: demo-close
 demo-close:
 	@if [ ! -f .scenescape-profile ]; then \
@@ -860,6 +896,7 @@ demo-close:
 	fi
 	@$(MAKE) video-source-down
 	@$(MAKE) stairs-video-source-down
+	@$(MAKE) basketball-video-source-down
 	docker compose $(shell cat .scenescape-profile 2>/dev/null) down -v
 	@rm -f .scenescape-profile
 
@@ -894,6 +931,14 @@ stairs-video-source-up: convert-dls-videos
 .PHONY: stairs-video-source-down
 stairs-video-source-down:
 	-SCENESCAPE_NETWORK=$(COMPOSE_PROJECT_NAME)_scenescape docker compose --project-directory . -f $(STAIRS_VIDEO_COMPOSE_FILE) down
+
+.PHONY: basketball-video-source-up
+basketball-video-source-up: convert-dls-videos
+	SCENESCAPE_NETWORK=$(COMPOSE_PROJECT_NAME)_scenescape docker compose --project-directory . -f $(BASKETBALL_VIDEO_COMPOSE_FILE) up -d
+
+.PHONY: basketball-video-source-down
+basketball-video-source-down:
+	-SCENESCAPE_NETWORK=$(COMPOSE_PROJECT_NAME)_scenescape docker compose --project-directory . -f $(BASKETBALL_VIDEO_COMPOSE_FILE) down
 
 .PHONY: .env
 .env:

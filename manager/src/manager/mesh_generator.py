@@ -24,6 +24,7 @@ import trimesh
 from scene_common.mqtt import PubSub
 from scene_common.timestamp import get_iso_time
 from scene_common.mesh_util import mergeMesh, checkMeshConnectivity
+from scene_common.options import QUATERNION
 from scene_common import log
 from manager.serializers import CamSerializer
 
@@ -632,7 +633,14 @@ class MeshGenerator:
 
     For cameras that were anchored (had a calibrated pose before generation),
     skip the pose/intrinsics write-back to preserve the trusted calibration.
-    For uncalibrated cameras, apply the MapAnything estimates.
+
+    When some cameras are anchored, unanchored cameras get intrinsics only —
+    MapAnything pose estimates relative to a trusted anchor set are not written
+    back (they can land near an unrelated surface and look wrongly calibrated).
+
+    When no cameras are anchored (standard two-feed reconstruction), write
+    MapAnything pose + intrinsics for every camera so floor-alignment can place
+    them with the mesh.
 
     Args:
       mapping_result: Result from mapping service containing camera_poses and intrinsics
@@ -670,6 +678,7 @@ class MeshGenerator:
           intrinsics_by_id[cid] = K
 
       cameras_list = list(cameras)
+      has_anchors = any(anchored_cameras.values())
       log.info(f"Updating cameras using camera_id matching. Cameras in scene: {len(cameras_list)}")
 
       # Update each camera with corresponding pose and intrinsics
@@ -694,10 +703,15 @@ class MeshGenerator:
             log.info(f"Camera {cam_id} was anchored, preserving calibrated pose (skipping write-back)")
             continue
 
-          # Uncalibrated camera: its estimated pose is only a guess, so leave the
-          # camera at its default pose and let the warning prompt a real calibration.
-          log.info(f"Camera {cam_id} is uncalibrated, leaving pose at default (intrinsics only)")
-          self._updateCameraIntrinsics(camera, intrinsics_matrix)
+          if has_anchors:
+            # Mixed case: estimated pose is only a guess next to trusted anchors.
+            log.info(f"Camera {cam_id} is uncalibrated, leaving pose at default (intrinsics only)")
+            self._updateCameraIntrinsics(camera, intrinsics_matrix)
+            continue
+
+          # No anchors: apply MapAnything pose + intrinsics (two-camera recon path).
+          log.info(f"Camera {cam_id} is uncalibrated (no anchors), applying MapAnything pose")
+          self._updateCameraParameters(camera, pose_data, intrinsics_matrix)
         except Exception as e:
           log.error(f"Failed to update camera {camera.sensor_id}: {e}")
 
@@ -718,6 +732,30 @@ class MeshGenerator:
       camera.cam.save()
     except Exception as e:
       log.error(f"Error updating intrinsics for camera {camera.sensor_id}: {e}")
+
+  def _updateCameraParameters(self, camera, pose_data, intrinsics_matrix):
+    """Update a camera with MapAnything pose (quaternion) and optional intrinsics."""
+    try:
+      rotation_quat = pose_data['rotation']  # [x, y, z, w]
+      translation = pose_data['translation']  # [x, y, z]
+
+      if intrinsics_matrix is not None:
+        intrinsics_array = np.array(intrinsics_matrix)
+        camera.cam.intrinsics_fx = intrinsics_array[0, 0]
+        camera.cam.intrinsics_fy = intrinsics_array[1, 1]
+        camera.cam.intrinsics_cx = intrinsics_array[0, 2]
+        camera.cam.intrinsics_cy = intrinsics_array[1, 2]
+
+      camera.cam.transforms = [
+        translation[0], translation[1], translation[2],
+        rotation_quat[0], rotation_quat[1], rotation_quat[2], rotation_quat[3],
+        1.0, 1.0, 1.0,
+      ]
+      camera.cam.transform_type = QUATERNION
+      camera.cam.save()
+    except Exception as e:
+      log.error(f"Error updating camera {camera.sensor_id}: {e}")
+      raise
 
   def _computeAnchorMeshTransform(self, mapping_result, cameras, anchored_cameras, serializer):
     """
