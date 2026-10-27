@@ -89,7 +89,7 @@ Both branches 1 and 2 are in main; `feature/prob-tracking-extracted` merged main
      - Evaluate / mitigate performance impact of numpy.linalg.eigh / cv::eigen on association window publishing
      - Make the fixed radius in birth clustering (kDefaultBirthClusterRadiusM) configurable
      - Wrap the yaw difference in the legacy `Mahalanobis` cost (`-rv::deltaTheta(measurement.yaw, predictedYaw)`) and apply the same speed gate as `prepareYawMeasurement` + UT including the ±π wrap (yaw review 3)
-     - **[IN-PROGRESS]** Update with `feature/prob-tracking-extracted`: streaming fusion removal, C++20, tests split by component. Merge `ab0caa89c` pushed as `tdorau/prob-tracking-extracted-association-update`, waiting for a PR (z review E3)
+     - **[DONE]** Update with `feature/prob-tracking-extracted`: streaming fusion removal, C++20, tests split by component (#2103: `ab0caa89c`, `e61fb828c`; z review E3)
      - Fix the session-scoped `controller.ilabs_tracking.rv` mock in `scene_pytest/conftest.py`: 5 association tests fail in full-suite pytest runs (z review E4)
      - Prepare for #2056: `cv::Matx` covariance access in `ObjectMatching.cpp` and `association_window.hpp`, removed `TrackManager::getTrack()` in the C++ and Python tests, Kalman matrices in the benchmark harness (z review I1)
 
@@ -100,22 +100,23 @@ Both branches 1 and 2 are in main; `feature/prob-tracking-extracted` merged main
      - Hybrid `EuclideanBirth` birth clustering: XY unless both detections have measured z
      - Controller and Tracker Service publish `vz`; Tracker Service χ² df 3 / df 2 split
      - Unit tests (robot_vision, Controller, Tracker Service) and functional `test_z_tracking.py`
-     - Not carried over: Tracker Service 3D detection input (`translation` / `size`), see step 6
+     - Not carried over: Tracker Service 3D detection input (`translation` / `size`), replaced by #2050 (step 6)
    - My proposed additions / fixes:
      - **[DONE]** Adapt the filter tests from PR 3 to the 13-state layout (z review E2)
      - **[DONE]** `StateSize` as `constexpr` checked against `StateIndex`, so merging #2056 (`StateSize = 12`) conflicts visibly (z review I2)
      - **[DONE]** `std::numbers::pi` and cached χ²(3) threshold (z review Z7)
-     - Gate z only when both the detection and the track have measured z (sticky track flag, like `orientation_observed`), χ² df per pair, and one z reference point for planar and 3D detections + UT with mixed sources (z review Z1, Z2)
+     - **[DONE]** Update with the association branch @ `1fd627aa2`, including #2050 (`d20bb3775`, no conflicts); `zMeasured` on the Tracker translation path + `TrackingWorker` tests for stacked-floor and climbing 3D detections (`9b2879806`); Tracker z-tracking docs (`ac90ba78e`) (z review E5)
+     - Gate z only when both the detection and the track have measured z (sticky track flag, like `orientation_observed`), χ² df per pair, and one z reference point for planar and 3D detections + UT with mixed sources. With #2050 this applies to the Tracker Service too: a mixed track publishes a midpoint height, splits on a camera → 3D handover at 2 m centre height, and gets spurious `vz` when sensors alternate (z review Z1, Z2)
      - Draw the association window with the same df as matching (z review Z3)
      - `vz` process noise per model in #2056's `processNoiseCov` (smaller than the horizontal one), or `vz` pinned for ground-bound categories + noisy-z coast UT (z review Z4)
-     - Docs: 3-DOF gate in `how-to-configure-tracker.md`, design doc, ADR-0017 and `data_formats.md` (z review Z9)
+     - Docs: 3-DOF gate in `how-to-configure-tracker.md`, design doc, ADR-0017 and `data_formats.md`; Tracker doc done (z review Z9)
      - Extend the tests coverage: production IMM with vertical motion, mixed planar / 3D association; run `test_z_tracking.py` (z review Z10)
      - Evaluate and document impact (Wildtrack, Unity) against the association branch (z review Z2)
-     - After #2056 reaches the association branch: keep `StateSize = 13`, move #2056's `processNoiseCov` to `StateIndex` and add `Q(vz)` (z review I2)
+     - After #2056 reaches the association branch: keep `StateSize = 13`, move #2056's `processNoiseCov` to `StateIndex`, add `Q(vz)`, keep both test source lists (z review I2)
 
-6. **[TODO]** Tracker Service 3D detection input. Branch: ITEP-97104_tracker_3d_detections. Base branch: main, reaches the feature branches through main merges
+6. **[DONE]** ~~Tracker Service 3D detection input. Branch: ITEP-97104_tracker_3d_detections. Base branch: main~~ Merged to main as #2050 (`be9a92bb7`), reached feature/prob-tracking-extracted (`d8646063b`), feature/prob-tracking-extracted-association (`1fd627aa2`) and feature/prob-tracking-extracted-3d (`d20bb3775`)
    - Detection `translation` / `size` / `rotation` and detections without a pixel bounding box; replaces the Tracker Service input changes of `feat/tracking-z-axis`
-   - Follow-up in feature/prob-tracking-extracted-3d once it arrives: set `zMeasured` on the translation path, check the χ² df split and `vz` publishing with 3D detections (z review Z5)
+   - **[DONE]** Follow-up in feature/prob-tracking-extracted-3d: `zMeasured` on the translation path, χ² df split unchanged, `vz` publishing verified end to end with 3D detections (z review Z5, E5)
 
 7. **[TODO]** Dataset and testing. Base branch: feature/prob-tracking-extracted-3d. To be merged finally to main
    - Final accuracy and performance evaluation
