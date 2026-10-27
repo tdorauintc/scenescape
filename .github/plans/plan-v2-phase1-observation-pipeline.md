@@ -47,11 +47,16 @@ flowchart LR
   p2m -->|yes| foot["depth-map foot + half-height CoM"]
   p2m -->|no| cent[frustum/amodal centroid]
   foot --> set[sceneLoc / has_measured_z / observation_sigma]
-  cent --> set
+  cent --> tri{"2nd cam ray?"}
+  tri -->|yes| stereo[skew-ray midpoint + soft floor]
+  tri -->|no| set
+  stereo --> set
   set --> track
   track --> r["measurement_covariance from Σ"]
   r --> mqtt[scenescape/data/scene/.../person]
 ```
+
+**Multi-view triangulation** is *cross-observation conditioning* in the pipeline toolbox (camera-only depth after frustum/amodal; not inside either monocular kernel). Helpers: [`observation_conditioning/triangulation.py`](../../scene_common/src/observation_conditioning/triangulation.py). Enable with `OBSERVATION_TRIANGULATION=1`. Off by default for now (Basketball ~0.2 m baseline was too weak; revisit with better association/baseline). When enabled: category-matched recent rays → skew-line midpoint; soft floor `Z ≥ half size_z`; skip when `project_to_map` already snapped the foot.
 
 Hook site: [`Scene`](../../controller/src/controller/scene.py) after object creation, before `_finishProcessing` — not inside `MovingObject.mapObjectDetectionToWorld`. On Stairs, conditioning **overwrites** the legacy world location; on failure or missing mesh/reasoner, the legacy projection is left unchanged.
 

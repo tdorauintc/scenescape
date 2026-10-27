@@ -1,19 +1,24 @@
 # SPDX-FileCopyrightText: (C) 2026 Intel Corporation
 # SPDX-License-Identifier: Apache-2.0
 
-"""Stairs-first observation pipeline: frustum Gaussian → amodal conditioning.
+"""Observation pipeline: frustum → amodal → optional multi-view triangulation.
 
-Converts 2D detections into mesh-conditioned world points for the existing
-IntelLabs probabilistic tracker. Non-Stairs scenes keep the legacy path.
+Converts 2D camera detections into world points for the IntelLabs tracker.
+Gated scenes (Stairs, Basketball); others keep the legacy path.
 
-The scene GLB is transformed into camera/world frame with mesh_translation /
-mesh_rotation / mesh_scale before building AmodalReasoner (DepthMap).
+Stages (camera-only; other modalities already carry metric range):
+
+1. **Frustum Gaussian** — monocular BB + shape prior → depth / ray
+2. **Amodal conditioning** — per-camera mesh truncation of the depth Gaussian
+3. **Multi-view triangulation** (opt-in cross-observation conditioning) —
+   when another camera recently saw the same category, replace the
+   monocular centroid with the skew-ray midpoint. Kept in the toolbox;
+   off by default until association/baseline are strong enough (short
+   baselines can slide free-moving objects along the camera ray). Helpers
+   live in ``observation_conditioning``.
 
 When an object-library asset has ``project_to_map`` enabled, the BB foot is
-snapped to the precomputed camera depth map (mesh surface), then lifted by
-half object height along world-up so published ``translation`` remains the
-geometric / mass center (CoM). The 3D UI always places assets at that CoM
-with no ``project_to_map`` branching.
+snapped to the mesh then lifted to CoM (skips triangulation for that det).
 
 Debug (optional Z-offset isolation):
   OBSERVATION_PIPELINE_DEBUG=1     — log Stage A–F fields (rate-limited)
@@ -21,6 +26,7 @@ Debug (optional Z-offset isolation):
       full          — frustum + amodal (default)
       frustum_only  — skip amodal; use depth_est as updated_depth
       off           — disable conditioning (legacy path)
+  OBSERVATION_TRIANGULATION=1      — enable stage 3 (off by default)
   Or write mode to /tmp/observation_pipeline_mode and touch
   /tmp/observation_pipeline_debug.
 """
@@ -28,6 +34,7 @@ Debug (optional Z-offset isolation):
 from __future__ import annotations
 
 import os
+from collections import deque
 
 import numpy as np
 
@@ -42,6 +49,8 @@ DEFAULT_WORLD_UP = np.array([0.0, 0.0, 1.0], dtype=np.float64)
 _DEBUG_LIMIT_PER_CAM = int(os.environ.get("OBSERVATION_PIPELINE_DEBUG_LIMIT", "24"))
 _MODE_FILE = "/tmp/observation_pipeline_mode"
 _DEBUG_FILE = "/tmp/observation_pipeline_debug"
+_RAY_BUFFER_MAX = 64
+_RAY_BUFFER_MAX_AGE_S = 0.25
 
 
 def _pipeline_debug_enabled() -> bool:
@@ -59,6 +68,13 @@ def _pipeline_mode() -> str:
     except OSError:
       pass
   return os.environ.get("OBSERVATION_PIPELINE_MODE", "full").strip().lower() or "full"
+
+
+def _triangulation_enabled() -> bool:
+  """Multi-view triangulation is opt-in (see module docstring)."""
+  return os.environ.get("OBSERVATION_TRIANGULATION", "").strip().lower() in (
+    "1", "true", "yes", "on",
+  )
 
 
 def sceneUsesObservationConditioning(scene_name: str) -> bool:
@@ -118,6 +134,7 @@ class ObservationPipeline:
   """Per-scene cache of AmodalReasoner instances keyed by camera id."""
 
   def __init__(self, scene):
+    self._ray_buffer: deque = deque(maxlen=_RAY_BUFFER_MAX)
     self.scene = scene
     self._reasoners: dict[str, object] = {}
     self._reasoner_keys: dict[str, tuple] = {}
@@ -134,7 +151,61 @@ class ObservationPipeline:
     self._world_mesh_key = None
     self._debug_counts.clear()
     self._logged_mesh_once = False
+    self._ray_buffer.clear()
     return
+
+  def _prune_ray_buffer(self, when: float) -> None:
+    while self._ray_buffer and (
+        when - float(self._ray_buffer[0].timestamp) > _RAY_BUFFER_MAX_AGE_S):
+      self._ray_buffer.popleft()
+
+  def _refine_with_triangulation(
+    self,
+    *,
+    cam_id: str,
+    category: str,
+    when: float,
+    origin: np.ndarray,
+    ray: np.ndarray,
+    mono_point: np.ndarray,
+    mono_var: float,
+    skip: bool,
+  ) -> tuple[np.ndarray, float, bool]:
+    """Try multi-view triangulation against recent other-camera rays.
+
+    Returns (point, variance, used_triangulation).
+    """
+    from observation_conditioning.triangulation import (
+      RayObservation,
+      try_triangulate_pair,
+    )
+
+    self._prune_ray_buffer(when)
+    obs = RayObservation(
+      cam_id=str(cam_id),
+      category=str(category or "unknown"),
+      timestamp=float(when),
+      origin=np.asarray(origin, dtype=np.float64).reshape(3).copy(),
+      ray=np.asarray(ray, dtype=np.float64).reshape(3).copy(),
+      mono_point=np.asarray(mono_point, dtype=np.float64).reshape(3).copy(),
+      mono_var=float(mono_var),
+    )
+
+    best = None
+    if not skip:
+      for other in self._ray_buffer:
+        result = try_triangulate_pair(obs, other)
+        if result is None:
+          continue
+        if best is None or result.gap < best.gap:
+          best = result
+
+    self._ray_buffer.append(obs)
+
+    if best is None:
+      return mono_point, mono_var, False
+    return best.point, best.variance, True
+
 
   def _raw_mesh_tensor(self):
     import open3d as o3d
@@ -512,7 +583,45 @@ class ObservationPipeline:
             f"F_prior_half_height={0.5 * fg.PERSON_SHAPE_PRIOR['mu_z']:.3f}",
           )
 
+      tri_count = 0
+      use_tri = _triangulation_enabled()
       for i, mobj in enumerate(usable):
+        used_tri = False
+        if use_tri:
+          category = str(getattr(mobj, "category", None) or "unknown")
+          ray_i = np.asarray(gaus_rays["ray"][i], dtype=np.float64)
+          mono_pt = np.asarray(centroids[i], dtype=np.float64)
+          mono_var = float(updated_var[i])
+          point, var, used_tri = self._refine_with_triangulation(
+            cam_id=cam_id,
+            category=category,
+            when=float(when),
+            origin=cam_origin.astype(np.float64),
+            ray=ray_i,
+            mono_point=mono_pt,
+            mono_var=mono_var,
+            skip=bool(mesh_projected[i]),
+          )
+          if used_tri:
+            # Soft support: CoM cannot sit below half object height (ball on floor).
+            half_h = self._object_half_height(
+              mobj, float(fg.PERSON_SHAPE_PRIOR["mu_z"]))
+            if point[2] < half_h:
+              point = point.copy()
+              point[2] = half_h
+            tri_count += 1
+            centroids[i] = point
+            updated_var[i] = var
+            if do_dbg:
+              log.info(
+                "ObservationPipeline:ZDBG",
+                f"cam={cam_id}",
+                f"G_triangulated=1",
+                f"G_point={point.tolist()}",
+                f"G_var={var:.5f}",
+                f"G_mono={mono_pt.tolist()}",
+              )
+
         world_pt = Point(centroids[i].tolist())
         mobj.orig_point = world_pt
         mobj.has_measured_z = True
@@ -520,10 +629,12 @@ class ObservationPipeline:
         mobj.vectors = [Vector(camera, world_pt, when)]
         mobj.observation_depth_var = float(updated_var[i])
         mobj.observation_sigma = world_obs["Sigma"][i]
+        mobj.observation_triangulated = bool(used_tri)
 
       log.debug("ObservationPipeline: conditioned", len(usable),
                 "detections for", camera.cameraID, f"mode={mode}",
-                f"mesh_project={sum(mesh_projected)}")
+                f"mesh_project={sum(mesh_projected)}",
+                f"triangulated={tri_count}")
     except Exception as exc:  # noqa: BLE001 — keep legacy projection
       log.error("ObservationPipeline: conditioning failed for",
                 camera.cameraID, exc, "; using legacy projection")
