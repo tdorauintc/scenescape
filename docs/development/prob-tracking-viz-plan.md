@@ -69,7 +69,7 @@ Videos (matplotlib animation writers → H.264 MP4 or GIF; real time, at most 30
 - Zoom (opt-in, separate file): follow camera on one object. Shows everything above plus:
   - predicted position (`z_pred`);
   - velocity arrow;
-  - χ² gate ellipse from `S_xy` (p = 0.99, as production);
+  - 99% confidence ellipse of the predicted position from `S_xy` (not the association gate, which is a Euclidean radius);
   - window 4× the object's largest dimension, at least 4 m.
 
 ## 4. Steps (one commit each)
