@@ -5,7 +5,7 @@ SPDX-License-Identifier: Apache-2.0
 
 # Robot-vision scenario visualization plan
 
-Plots and short videos of the motion scenarios from the robot-vision tests ([prob-tracking-pr3-rv-tests-plan.md](prob-tracking-pr3-rv-tests-plan.md)),
+Plots and short videos of the motion scenarios from the robot-vision tests ([prob-tracking-pr3-rv-tests-plan.md](../plans/prob-tracking-pr3-rv-tests-plan.md)),
 to spot filter overshoot, jitter, covariance and model-probability problems.
 Visualization only: fixes are diagnosed and verified in unit tests.
 
@@ -70,7 +70,7 @@ Videos (matplotlib animation writers → H.264 MP4 or GIF; real time, at most 30
 - Zoom (opt-in, separate file): follow camera on one object. Shows everything above plus:
   - predicted position (`z_pred`);
   - velocity arrow;
-  - 99% confidence ellipse of the predicted position from `S_xy` (on PR 3 not the association gate, which is a Euclidean radius; with PR 4's `position_mahalanobis` it is the gate, up to the `max_radius_m` ceiling). With per-detection R ([post-review plan](prob-tracking-post-review-plan.md) item 7) a detection that carries R is gated with `(H P Hᵀ)_xy + R_xy` instead, so the ellipse is the gate only for detections without R. The recorded `S` holds the default R and `detections.jsonl` has no R, so drawing that gate needs R recorded;
+  - 99% confidence ellipse of the predicted position from `S_xy` (on PR 3 not the association gate, which is a Euclidean radius; with PR 4's `position_mahalanobis` it is the gate, up to the `max_radius_m` ceiling). With per-detection R ([post-review plan](../plans/prob-tracking-post-review-plan.md#pr-7-per-detection-measurement-noise-r) item 7) a detection that carries R is gated with `(H P Hᵀ)_xy + R_xy` instead, so the ellipse is the gate only for detections without R. The recorded `S` holds the default R and `detections.jsonl` has no R, so drawing that gate needs R recorded;
   - window 4× the object's largest dimension, at least 4 m.
 
 ## 4. Steps (one commit each)

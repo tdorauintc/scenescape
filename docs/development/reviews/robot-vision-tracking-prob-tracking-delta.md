@@ -11,11 +11,11 @@ SPDX-License-Identifier: Apache-2.0
 | Analyzed commit   | `188c40e79c38d3f5daf250cb98c1f9fd87163124`                                                                                                                             |
 | Baseline          | `main` at `d6bccbc0f30b7606fa864bff7dcb0a97c09e8e21` (merge base; `robot_vision` is unchanged on `main` up to `25907384a`, the last `main` merged into the branch)     |
 | Baseline report   | [robot-vision-tracking-algorithms.md](robot-vision-tracking-algorithms.md) (section numbers "B-x" below refer to it)                                                    |
-| Scope             | Core algorithms in [controller/src/robot_vision](../../controller/src/robot_vision) and how the two consumers now configure them                                        |
+| Scope             | Core algorithms in [controller/src/robot_vision](../../../controller/src/robot_vision) and how the two consumers now configure them                                        |
 | Out of scope      | Benchmarks, UI association-window rendering, Manager/REST changes, Tracker service foot-point projection (TYPE_2 shift, `footprint_half_m`)                            |
-| Design intent     | [ADR-0017](../adr/0017-probabilistic-tracking-association.md), [design doc](../design/probabilistic-tracking-association.md) ("Phase 1")                                |
+| Design intent     | [ADR-0017](../../adr/0017-probabilistic-tracking-association.md), [design doc](../../design/probabilistic-tracking-association.md) ("Phase 1")                                |
 
-All links are relative to this folder (`docs/development/`) and point to the analyzed commit. Baseline behavior is
+All links are relative to this folder (`docs/development/reviews/`) and point to the analyzed commit. Baseline behavior is
 described in the baseline report, which links to the same files as they were on `main`.
 
 ## 1. Summary
@@ -61,21 +61,21 @@ Status of the baseline findings (B-9):
 
 | File                                                                                                                  | Change                                                                                                  |
 | --------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
-| [UnscentedKalmanFilter.hpp](../../controller/src/robot_vision/include/rv/tracking/UnscentedKalmanFilter.hpp#L120-L129) | Setter fixed; `setProcessNoiseCov()` added                                                              |
-| [UnscentedKalmanFilter.cpp](../../controller/src/robot_vision/src/rv/tracking/UnscentedKalmanFilter.cpp#L189-L212)     | $P_{xz}$ fix in `correct()`                                                                             |
-| [MultiModelKalmanEstimator.hpp](../../controller/src/robot_vision/include/rv/tracking/MultiModelKalmanEstimator.hpp)   | New Q helpers, stored noise parameters                                                                  |
-| [MultiModelKalmanEstimator.cpp](../../controller/src/robot_vision/src/rv/tracking/MultiModelKalmanEstimator.cpp)       | Structured $P_0$, kinematic $Q$, best-model $S$ for association, `initialize()` reset                   |
-| [ObjectMatching.hpp](../../controller/src/robot_vision/include/rv/tracking/ObjectMatching.hpp#L23-L38)                | `PositionMahalanobis`, `max_radius_m` parameter                                                         |
-| [ObjectMatching.cpp](../../controller/src/robot_vision/src/rv/tracking/ObjectMatching.cpp)                            | New cost, cached per-track inverse, Euclidean ceiling                                                   |
-| [Utils.hpp](../../controller/src/robot_vision/include/rv/Utils.hpp#L63-L76)                                            | `chi2Threshold()`                                                                                       |
-| [MultipleObjectTracker.hpp](../../controller/src/robot_vision/include/rv/tracking/MultipleObjectTracker.hpp#L64-L72)   | Birth radius and streaming hold constants, camera measurement cache                                     |
-| [MultipleObjectTracker.cpp](../../controller/src/robot_vision/src/rv/tracking/MultipleObjectTracker.cpp)              | Geometry fusion, streaming fusion, `maxRadiusM` plumbing, Euclidean birth clustering                   |
-| [extensions/tracking.cpp](../../controller/src/robot_vision/python/src/robot_vision/extensions/tracking.cpp)          | New enum value, `max_radius_m` argument, `chi2_threshold()`, `match()` argument order fixed             |
+| [UnscentedKalmanFilter.hpp](../../../controller/src/robot_vision/include/rv/tracking/UnscentedKalmanFilter.hpp#L120-L129) | Setter fixed; `setProcessNoiseCov()` added                                                              |
+| [UnscentedKalmanFilter.cpp](../../../controller/src/robot_vision/src/rv/tracking/UnscentedKalmanFilter.cpp#L189-L212)     | $P_{xz}$ fix in `correct()`                                                                             |
+| [MultiModelKalmanEstimator.hpp](../../../controller/src/robot_vision/include/rv/tracking/MultiModelKalmanEstimator.hpp)   | New Q helpers, stored noise parameters                                                                  |
+| [MultiModelKalmanEstimator.cpp](../../../controller/src/robot_vision/src/rv/tracking/MultiModelKalmanEstimator.cpp)       | Structured $P_0$, kinematic $Q$, best-model $S$ for association, `initialize()` reset                   |
+| [ObjectMatching.hpp](../../../controller/src/robot_vision/include/rv/tracking/ObjectMatching.hpp#L23-L38)                | `PositionMahalanobis`, `max_radius_m` parameter                                                         |
+| [ObjectMatching.cpp](../../../controller/src/robot_vision/src/rv/tracking/ObjectMatching.cpp)                            | New cost, cached per-track inverse, Euclidean ceiling                                                   |
+| [Utils.hpp](../../../controller/src/robot_vision/include/rv/Utils.hpp#L63-L76)                                            | `chi2Threshold()`                                                                                       |
+| [MultipleObjectTracker.hpp](../../../controller/src/robot_vision/include/rv/tracking/MultipleObjectTracker.hpp#L64-L72)   | Birth radius and streaming hold constants, camera measurement cache                                     |
+| [MultipleObjectTracker.cpp](../../../controller/src/robot_vision/src/rv/tracking/MultipleObjectTracker.cpp)              | Geometry fusion, streaming fusion, `maxRadiusM` plumbing, Euclidean birth clustering                   |
+| [extensions/tracking.cpp](../../../controller/src/robot_vision/python/src/robot_vision/extensions/tracking.cpp)          | New enum value, `max_radius_m` argument, `chi2_threshold()`, `match()` argument order fixed             |
 
-Unchanged: motion models, [TrackManager.cpp](../../controller/src/robot_vision/src/rv/tracking/TrackManager.cpp),
-[TrackTracker.cpp](../../controller/src/robot_vision/src/rv/tracking/TrackTracker.cpp),
-[Classification.cpp](../../controller/src/robot_vision/src/rv/tracking/Classification.cpp), and the Apollo matcher
-([rv/apollo](../../controller/src/robot_vision/include/rv/apollo)).
+Unchanged: motion models, [TrackManager.cpp](../../../controller/src/robot_vision/src/rv/tracking/TrackManager.cpp),
+[TrackTracker.cpp](../../../controller/src/robot_vision/src/rv/tracking/TrackTracker.cpp),
+[Classification.cpp](../../../controller/src/robot_vision/src/rv/tracking/Classification.cpp), and the Apollo matcher
+([rv/apollo](../../../controller/src/robot_vision/include/rv/apollo)).
 
 ## 3. Architecture: What Changed
 
@@ -152,9 +152,9 @@ to each filter now actually works.
 
 | Change                         | `main`                                                                                        | Branch                                                                                                                                                                            |
 | ------------------------------ | --------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Cross-covariance $P_{xz}$      | Deviations of *propagated* sigma points × measurement deviations of *redrawn* sigma points      | Both from the **same redrawn** set: $\sum_i W_i^c (\mathcal{X}_i - \hat{x}^-)(\mathcal{Z}_i - \hat{z})^T$ ([L192-L197](../../controller/src/robot_vision/src/rv/tracking/UnscentedKalmanFilter.cpp#L192-L197)) |
-| `setStateAndCovariance()`      | Parameters shadowed members, no effect                                                        | Renamed parameters, members assigned ([hpp L120-L124](../../controller/src/robot_vision/include/rv/tracking/UnscentedKalmanFilter.hpp#L120-L124))                               |
-| `setProcessNoiseCov()`         | –                                                                                             | New, allows a time-varying $Q$ ([hpp L126-L129](../../controller/src/robot_vision/include/rv/tracking/UnscentedKalmanFilter.hpp#L126-L129))                                     |
+| Cross-covariance $P_{xz}$      | Deviations of *propagated* sigma points × measurement deviations of *redrawn* sigma points      | Both from the **same redrawn** set: $\sum_i W_i^c (\mathcal{X}_i - \hat{x}^-)(\mathcal{Z}_i - \hat{z})^T$ ([L192-L197](../../../controller/src/robot_vision/src/rv/tracking/UnscentedKalmanFilter.cpp#L192-L197)) |
+| `setStateAndCovariance()`      | Parameters shadowed members, no effect                                                        | Renamed parameters, members assigned ([hpp L120-L124](../../../controller/src/robot_vision/include/rv/tracking/UnscentedKalmanFilter.hpp#L120-L124))                               |
+| `setProcessNoiseCov()`         | –                                                                                             | New, allows a time-varying $Q$ ([hpp L126-L129](../../../controller/src/robot_vision/include/rv/tracking/UnscentedKalmanFilter.hpp#L126-L129))                                     |
 | Sigma-point parameters         | $\alpha = 1$, $\beta = 2$, $\kappa = 3 - n$                                                   | Unchanged (negative center weight remains)                                                                                                                                        |
 
 Verification (same test as B-10, linear CV model, where a correct UKF must equal the exact Kalman filter):
@@ -178,8 +178,8 @@ the same tiny number for every state, every frame, regardless of time gap. Now i
 applied to velocity (position uncertainty then grows naturally from velocity uncertainty), and is much larger along the
 direction of motion than sideways – people and vehicles speed up or slow down far more often than they jump sideways.
 
-Implementation: [kinematicProcessNoiseCov](../../controller/src/robot_vision/src/rv/tracking/MultiModelKalmanEstimator.cpp#L116-L150),
-applied before every predict by [updateProcessNoiseForPredict](../../controller/src/robot_vision/src/rv/tracking/MultiModelKalmanEstimator.cpp#L152-L159)
+Implementation: [kinematicProcessNoiseCov](../../../controller/src/robot_vision/src/rv/tracking/MultiModelKalmanEstimator.cpp#L116-L150),
+applied before every predict by [updateProcessNoiseForPredict](../../../controller/src/robot_vision/src/rv/tracking/MultiModelKalmanEstimator.cpp#L152-L159)
 using the current combined velocity, and pushed into **all** model filters.
 
 With speed $s = \lVert v \rVert$, direction $u = v / s$ (world $x$-axis if $s \le 10^{-3}$), perpendicular $u_\perp$:
@@ -212,7 +212,7 @@ designs usually give each model its own noise level), and zero noise on size and
 
 ### 4.3 Initial covariance $P_0$
 
-[MultiModelKalmanEstimator.cpp L79-L95](../../controller/src/robot_vision/src/rv/tracking/MultiModelKalmanEstimator.cpp#L79-L95).
+[MultiModelKalmanEstimator.cpp L79-L95](../../../controller/src/robot_vision/src/rv/tracking/MultiModelKalmanEstimator.cpp#L79-L95).
 
 | States                     | `main` | Branch (production values)                 |
 | -------------------------- | ------ | ------------------------------------------ |
@@ -255,12 +255,12 @@ flowchart TD
 
 | Step                    | `main`                                         | Branch                                                                                                                                                                                                                  | Classic?                                   |
 | ----------------------- | ---------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------ |
-| Mixing                  | Computed, discarded                            | Applied to each filter before predict ([L238-L245](../../controller/src/robot_vision/src/rv/tracking/MultiModelKalmanEstimator.cpp#L238-L245))                                                                           | **Classic IMM** now                        |
-| Process noise           | Fixed $q\,I$ per model                         | Shared kinematic $Q$ ([L215](../../controller/src/robot_vision/src/rv/tracking/MultiModelKalmanEstimator.cpp#L215))                                                                                                     | Custom                                     |
-| Association covariance  | Mixture $S = \sum_j \mu_j [S_j + (\hat z_j - \hat z)(\cdot)^T]$ | $S_{j^*}$ with $j^* = \arg\max_j \mu_j$; mean stays the mixture $\hat z$ ([L290-L307](../../controller/src/robot_vision/src/rv/tracking/MultiModelKalmanEstimator.cpp#L290-L307)) | **Custom**                                 |
-| Mode probability update | Uses previous $\mu$                            | Unchanged ([L516](../../controller/src/robot_vision/src/rv/tracking/MultiModelKalmanEstimator.cpp#L516))                                                                                                                | Deviation remains                          |
-| Probability clamp       | $[0.025, 0.95]$                                | Unchanged ([L519](../../controller/src/robot_vision/src/rv/tracking/MultiModelKalmanEstimator.cpp#L519))                                                                                                                | Custom                                     |
-| Re-initialization       | Appended extra filters on a second `initialize()` | Clears filters and model states first ([L31-L32](../../controller/src/robot_vision/src/rv/tracking/MultiModelKalmanEstimator.cpp#L31-L32))                                                                           | Bug fix                                    |
+| Mixing                  | Computed, discarded                            | Applied to each filter before predict ([L238-L245](../../../controller/src/robot_vision/src/rv/tracking/MultiModelKalmanEstimator.cpp#L238-L245))                                                                           | **Classic IMM** now                        |
+| Process noise           | Fixed $q\,I$ per model                         | Shared kinematic $Q$ ([L215](../../../controller/src/robot_vision/src/rv/tracking/MultiModelKalmanEstimator.cpp#L215))                                                                                                     | Custom                                     |
+| Association covariance  | Mixture $S = \sum_j \mu_j [S_j + (\hat z_j - \hat z)(\cdot)^T]$ | $S_{j^*}$ with $j^* = \arg\max_j \mu_j$; mean stays the mixture $\hat z$ ([L290-L307](../../../controller/src/robot_vision/src/rv/tracking/MultiModelKalmanEstimator.cpp#L290-L307)) | **Custom**                                 |
+| Mode probability update | Uses previous $\mu$                            | Unchanged ([L516](../../../controller/src/robot_vision/src/rv/tracking/MultiModelKalmanEstimator.cpp#L516))                                                                                                                | Deviation remains                          |
+| Probability clamp       | $[0.025, 0.95]$                                | Unchanged ([L519](../../../controller/src/robot_vision/src/rv/tracking/MultiModelKalmanEstimator.cpp#L519))                                                                                                                | Custom                                     |
+| Re-initialization       | Appended extra filters on a second `initialize()` | Clears filters and model states first ([L31-L32](../../../controller/src/robot_vision/src/rv/tracking/MultiModelKalmanEstimator.cpp#L31-L32))                                                                           | Bug fix                                    |
 
 **In simple terms.** The IMM now works as designed: before each prediction every motion model starts from a blend of
 all models' opinions, weighted by how likely each model is. For the gate, the branch deliberately uses the uncertainty
@@ -322,11 +322,11 @@ flowchart LR
 
 | Element        | Implementation                                                                                                                                                                                                                                                        |
 | -------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Cost           | $d^2 = \nu^T S_{xy}^{-1} \nu$, $\nu = (x, y)_{\text{det}} - (\hat x, \hat y)$, $S_{xy}$ = top-left 2×2 of the stored $S$ ([L105-L119](../../controller/src/robot_vision/src/rv/tracking/ObjectMatching.cpp#L105-L119))                                                   |
-| Performance    | 2×2 inverse computed once per track, cost matrix filled in parallel ([L162-L180](../../controller/src/robot_vision/src/rv/tracking/ObjectMatching.cpp#L162-L180), [L84-L103](../../controller/src/robot_vision/src/rv/tracking/ObjectMatching.cpp#L84-L103))            |
-| Gate           | Matcher threshold = $\chi^2_2(p) = -2\ln(1-p)$; $p = 0.99 \Rightarrow 9.21$ ([Utils.hpp L63-L76](../../controller/src/robot_vision/include/rv/Utils.hpp#L63-L76))                                                                                                        |
-| Safety ceiling | Euclidean offset above `max_radius_m` → bound value; also applied to `Euclidean` ([L196-L204](../../controller/src/robot_vision/src/rv/tracking/ObjectMatching.cpp#L196-L204))                                                                                            |
-| Unused helper  | `calculatePositionMahalanobisSquaredDistance` ([L47-L69](../../controller/src/robot_vision/src/rv/tracking/ObjectMatching.cpp#L47-L69)) is defined but never called                                                                                                     |
+| Cost           | $d^2 = \nu^T S_{xy}^{-1} \nu$, $\nu = (x, y)_{\text{det}} - (\hat x, \hat y)$, $S_{xy}$ = top-left 2×2 of the stored $S$ ([L105-L119](../../../controller/src/robot_vision/src/rv/tracking/ObjectMatching.cpp#L105-L119))                                                   |
+| Performance    | 2×2 inverse computed once per track, cost matrix filled in parallel ([L162-L180](../../../controller/src/robot_vision/src/rv/tracking/ObjectMatching.cpp#L162-L180), [L84-L103](../../../controller/src/robot_vision/src/rv/tracking/ObjectMatching.cpp#L84-L103))            |
+| Gate           | Matcher threshold = $\chi^2_2(p) = -2\ln(1-p)$; $p = 0.99 \Rightarrow 9.21$ ([Utils.hpp L63-L76](../../../controller/src/robot_vision/include/rv/Utils.hpp#L63-L76))                                                                                                        |
+| Safety ceiling | Euclidean offset above `max_radius_m` → bound value; also applied to `Euclidean` ([L196-L204](../../../controller/src/robot_vision/src/rv/tracking/ObjectMatching.cpp#L196-L204))                                                                                            |
+| Unused helper  | `calculatePositionMahalanobisSquaredDistance` ([L47-L69](../../../controller/src/robot_vision/src/rv/tracking/ObjectMatching.cpp#L47-L69)) is defined but never called                                                                                                     |
 
 **Classic vs customized.** Ellipsoidal gating with a $\chi^2$ threshold and minimizing the sum of squared Mahalanobis
 distances is the **classic** Global Nearest Neighbor (GNN) approach (Bar-Shalom & Fortmann; the same gate idea is used
@@ -341,8 +341,8 @@ type (B-9 item 9). **Custom:** the Euclidean ceiling, and a cost without the $\l
 | Distance type           | `Euclidean`                             | `PositionMahalanobis` (`euclidean` kept as rollback)                                                                                                                                                                                                    |
 | Threshold               | Controller: mean per-class `tracking_radius` (2 m default); Tracker: 2 m | $\chi^2_{0.99} = 9.21$                                                                                                                                                                                                  |
 | Ceiling                 | –                                       | 10 m                                                                                                                                                                                                                                                    |
-| Controller              | –                                       | [association_match_params](../../controller/src/controller/ilabs_tracking.py#L103-L121), config in [tracker-config.json](../../controller/config/tracker-config.json); adds `camera_id` attribute ([L324-L327](../../controller/src/controller/ilabs_tracking.py#L324-L327)) |
-| Tracker service         | –                                       | [AssociationConfig](../../tracker/inc/association_config.hpp), call at [tracking_worker.cpp L313-L314](../../tracker/src/tracking_worker.cpp#L313-L314), config in [tracker.json](../../tracker/config/tracker.json)                                   |
+| Controller              | –                                       | [association_match_params](../../../controller/src/controller/ilabs_tracking.py#L103-L121), config in [tracker-config.json](../../../controller/config/tracker-config.json); adds `camera_id` attribute ([L324-L327](../../../controller/src/controller/ilabs_tracking.py#L324-L327)) |
+| Tracker service         | –                                       | [AssociationConfig](../../../tracker/inc/association_config.hpp), call at [tracking_worker.cpp L313-L314](../../../tracker/src/tracking_worker.cpp#L313-L314), config in [tracker.json](../../../tracker/config/tracker.json)                                   |
 | Class vector            | `[c, 1 - c]` / `[1.0]`                  | Unchanged, so the low-score stage is still inactive                                                                                                                                                                                                     |
 
 The Apollo gated Hungarian matcher and the cascade order (B-6.2, B-6.3) are unchanged; they now receive $d^2$ costs.
@@ -354,8 +354,8 @@ The Apollo gated Hungarian matcher and the cascade order (B-6.2, B-6.3) are unch
 **In simple terms.** When two cameras see the same person, `main` kept only the last camera's position. The branch
 averages all cameras that matched the track: position, height and size by plain mean, yaw by a circular mean.
 
-- [fuseGeometry](../../controller/src/robot_vision/src/rv/tracking/MultipleObjectTracker.cpp#L60-L106), used at
-  [L468-L472](../../controller/src/robot_vision/src/rv/tracking/MultipleObjectTracker.cpp#L468-L472).
+- [fuseGeometry](../../../controller/src/robot_vision/src/rv/tracking/MultipleObjectTracker.cpp#L60-L106), used at
+  [L468-L472](../../../controller/src/robot_vision/src/rv/tracking/MultipleObjectTracker.cpp#L468-L472).
 - **Classic vs customized:** equal-weight averaging is the simplest **classic** measurement-fusion rule (it assumes every
   camera is equally accurate). The fused measurement still uses the single-camera $R$, which is conservative.
   The design doc calls this a stopgap until per-detection $R$ arrives (Phase 2).
@@ -376,10 +376,10 @@ flowchart LR
   P["End of cycle"] --> PR["Prune stale entries and deleted tracks"]
 ```
 
-- [rememberCameraMeasurement](../../controller/src/robot_vision/src/rv/tracking/MultipleObjectTracker.cpp#L253-L263),
-  [fuseStreamingCameraMeasurements](../../controller/src/robot_vision/src/rv/tracking/MultipleObjectTracker.cpp#L265-L300),
-  [pruneCameraMeasurements](../../controller/src/robot_vision/src/rv/tracking/MultipleObjectTracker.cpp#L302-L341),
-  hold time [kStreamingMultiCamHold](../../controller/src/robot_vision/include/rv/tracking/MultipleObjectTracker.hpp#L72).
+- [rememberCameraMeasurement](../../../controller/src/robot_vision/src/rv/tracking/MultipleObjectTracker.cpp#L253-L263),
+  [fuseStreamingCameraMeasurements](../../../controller/src/robot_vision/src/rv/tracking/MultipleObjectTracker.cpp#L265-L300),
+  [pruneCameraMeasurements](../../../controller/src/robot_vision/src/rv/tracking/MultipleObjectTracker.cpp#L302-L341),
+  hold time [kStreamingMultiCamHold](../../../controller/src/robot_vision/include/rv/tracking/MultipleObjectTracker.hpp#L72).
 - Requires a `camera_id` attribute (missing IDs all map to `"unknown"`, which disables the fusion).
 - **Classic vs customized:** **custom**. It is a sliding-window average, not an out-of-sequence or asynchronous
   multi-sensor update: cached detections are neither moved forward in time nor excluded from later reuse.
@@ -388,8 +388,8 @@ flowchart LR
 
 | Aspect          | `main`                                                | Branch                                                                                                                                                              |
 | --------------- | ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Metric          | Same type and threshold as track association          | Always Euclidean, 2 m ([L580-L581](../../controller/src/robot_vision/src/rv/tracking/MultipleObjectTracker.cpp#L580-L581), [hpp L68](../../controller/src/robot_vision/include/rv/tracking/MultipleObjectTracker.hpp#L68)) |
-| Geometry        | Later camera's detection                              | Average of cluster and new camera ([L583-L592](../../controller/src/robot_vision/src/rv/tracking/MultipleObjectTracker.cpp#L583-L592))                              |
+| Metric          | Same type and threshold as track association          | Always Euclidean, 2 m ([L580-L581](../../../controller/src/robot_vision/src/rv/tracking/MultipleObjectTracker.cpp#L580-L581), [hpp L68](../../../controller/src/robot_vision/include/rv/tracking/MultipleObjectTracker.hpp#L68)) |
+| Geometry        | Later camera's detection                              | Average of cluster and new camera ([L583-L592](../../../controller/src/robot_vision/src/rv/tracking/MultipleObjectTracker.cpp#L583-L592))                              |
 
 Reason (from the code comment): raw detections have no predicted covariance, so a Mahalanobis metric between two
 detections is meaningless. Decoupling keeps the 10 m association ceiling from merging nearby people at birth.
@@ -421,7 +421,7 @@ Ordered by expected impact.
    win an ambiguous detection against a well-localized track at the same distance. Likelihood-based GNN adds
    $\ln|S|$ to prevent this.
 6. **Circular-mean yaw ignores the 180° ambiguity** – averaging $\psi$ and $\psi + \pi$ from two cameras cancels to an
-   arbitrary angle ([L105](../../controller/src/robot_vision/src/rv/tracking/MultipleObjectTracker.cpp#L105)), unlike the
+   arbitrary angle ([L105](../../../controller/src/robot_vision/src/rv/tracking/MultipleObjectTracker.cpp#L105)), unlike the
    π-aware unwrapping used in the filter (B-8).
 7. **Unequal weights in birth clustering** – averaging pairwise camera by camera gives weights ¼, ¼, ½ for three
    cameras instead of ⅓ each.
@@ -445,9 +445,9 @@ Ordered by expected impact.
 ## 11. References
 
 - Baseline report: [robot-vision-tracking-algorithms.md](robot-vision-tracking-algorithms.md).
-- [ADR-0017: Probabilistic Tracking Association](../adr/0017-probabilistic-tracking-association.md),
-  [design document](../design/probabilistic-tracking-association.md),
-  [implementation plan](../../.github/plans/plan-probabilistic-tracking.md).
+- [ADR-0017: Probabilistic Tracking Association](../../adr/0017-probabilistic-tracking-association.md),
+  [design document](../../design/probabilistic-tracking-association.md),
+  [implementation plan](../../../.github/plans/plan-probabilistic-tracking.md).
 - Y. Bar-Shalom, T. E. Fortmann, *Tracking and Data Association*, 1988 (validation gates, GNN).
 - Y. Bar-Shalom, X. R. Li, T. Kirubarajan, *Estimation with Applications to Tracking and Navigation*, 2001
   (white-noise acceleration models, IMM).

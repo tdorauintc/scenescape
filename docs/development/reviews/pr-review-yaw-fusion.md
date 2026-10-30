@@ -70,7 +70,7 @@ These are not caused by c2a80ef3, but they affect how its yaw handling behaves.
 - **Fix:** per-model process noise that includes yaw and yaw rate (already planned for PR 3).
 
 ## Where to fix
-PR numbers refer to [prob-tracking-post-review-plan.md](prob-tracking-post-review-plan.md).
+PR numbers refer to [prob-tracking-post-review-plan.md](../plans/prob-tracking-post-review-plan.md).
 
 | Item | Where |
 |---|---|

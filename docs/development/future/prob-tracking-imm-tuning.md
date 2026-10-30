@@ -8,10 +8,10 @@ SPDX-License-Identifier: Apache-2.0
 What can be tuned in the robot-vision IMM-UKF (`MultiModelKalmanEstimator`), how to measure it, and what affects what.
 No values: they change with the code. Filter level only; association and track lifecycle are out of scope.
 
-| Item            | Value                                                                                                                                                              |
-| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Code references | `tdorau/imm-ukf-improvements` @ `2804edf78` (#2056, per-model process noise)                                                                                       |
-| Related         | [test plan](prob-tracking-pr3-rv-tests-plan.md) (F-n, E-n), [post-review plan](prob-tracking-post-review-plan.md), [visualization plan](prob-tracking-viz-plan.md) |
+| Item            | Value                                                                                                                                                                                        |
+| --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Code references | `tdorau/imm-ukf-improvements` @ `2804edf78` (#2056, per-model process noise)                                                                                                                 |
+| Related         | [test plan](../plans/prob-tracking-pr3-rv-tests-plan.md) (F-n, E-n), [post-review plan](../plans/prob-tracking-post-review-plan.md), [visualization plan](../done/prob-tracking-viz-plan.md) |
 
 ## 1. Terms
 
@@ -53,7 +53,7 @@ No values: they change with the code. Filter level only; association and track l
 ## 3. How it is measured
 
 Scenario tests drive one estimator with [`FilterRun`][filterrun] (no association), with truth from [`Trajectory`][trajectory] and a seeded [`Sensor`][sensor], in the production config.
-Run several seeds and sensor noise levels. The recorder and plots of the [visualization plan](prob-tracking-viz-plan.md) show the time series behind each number.
+Run several seeds and sensor noise levels. The recorder and plots of the [visualization plan](../done/prob-tracking-viz-plan.md) show the time series behind each number.
 
 | KPI                | Definition                                                                                                                                            | Test                                                                                                |
 | ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |

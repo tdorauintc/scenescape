@@ -10,7 +10,7 @@ SPDX-License-Identifier: Apache-2.0
 - **Base**: `feature/prob-tracking-extracted-association` @ `1fd627aa2` (includes #2103 and #2050). Originally ported onto `ab0caa89c`.
 - **Size** (vs base @ `1fd627aa2`): 39 files, +1480 / −287.
 
-References: "prob review N" → [pr-review-probabilistic-tracking.md](pr-review-probabilistic-tracking.md), "yaw review N" → [pr-review-yaw-fusion.md](pr-review-yaw-fusion.md), "PR N" → [prob-tracking-post-review-plan.md](prob-tracking-post-review-plan.md).
+References: "prob review N" → [pr-review-probabilistic-tracking.md](pr-review-probabilistic-tracking.md), "yaw review N" → [pr-review-yaw-fusion.md](pr-review-yaw-fusion.md), "PR N" → [prob-tracking-post-review-plan.md](../plans/prob-tracking-post-review-plan.md).
 
 ## 1. Scope of changes
 
