@@ -105,7 +105,7 @@ Open:
 4. Process-noise floor on position, z and size + long-duration test ([F-5](prob-tracking-pr3-rv-tests-plan.md#f-5-process-noise-floor); prob review 2, G9; delta 9.1).
 5. Document `default_process_noise` and `init_state_covariance` semantics in `how-to-configure-tracker.md` (prob review 4).
 6. Explain or revert the velocity tolerance loosening (0.01 → 0.05) in `tracking_test.py` (prob review 5).
-7. Velocity prior cap (0.05): a 10 m/s target reaches 4.98 m/s 1 s after birth; decide whether to raise it (delta 9.2).
+7. Raise the initial velocity uncertainty so that objects entering already moving get a track: drop the 0.05 velocity cap, `init_state_covariance` 1 → 16. Today objects entering at 10 fps faster than about 5 m/s (Euclidean) or 3 m/s (Mahalanobis) never get a reliable track ([F-7](prob-tracking-pr3-rv-tests-plan.md#f-7-initial-velocity-uncertainty); delta 9.2).
 8. Recover from a failed Cholesky factorisation in `getSigmaPoints` + UT ([F-6](prob-tracking-pr3-rv-tests-plan.md#f-6-cholesky-failure-recovery); baseline 9.4).
 9. Sigma-point weights κ = 3 − n vs 0 for CTRV under strong nonlinearity: keep and document, or change + UT ([E-1](prob-tracking-pr3-rv-tests-plan.md#e-1-sigma-point-weights); baseline 9.4, delta 9.10).
 10. Controller Immediate-mode jitter: find what in the filter gives the reduction streaming fusion gave, without double smoothing. After F-1 (Unity): Immediate rms_jerk +6 %, acceleration_variance +16 % (noise); time-chunking +39 % / +79 %; Tracker Service −15 % / −22 %.
@@ -124,7 +124,7 @@ Done:
 
 Open:
 
-1. Un-skip the entering-target tests once PR 3 raises the initial velocity uncertainty (velocity prior cap), and add a car entering faster than the Euclidean gate as a differentiating scenario. For `CarPullingAwayKeepsOneTrack` decide between more velocity noise for standing tracks (PR 3) and a gate floor at the Euclidean radius.
+1. Un-skip the entering-target tests once PR 3 raises the initial velocity uncertainty ([F-7](prob-tracking-pr3-rv-tests-plan.md#f-7-initial-velocity-uncertainty)), and add a car entering faster than the Euclidean gate as a differentiating scenario. For `CarPullingAwayKeepsOneTrack` decide between more velocity noise for standing tracks (PR 3) and a gate floor at the Euclidean radius.
 2. Coverage: `max_radius_m` ceiling, degenerate covariance, gate costs from the implementation, Controller forwarding to `track()`, C++ `buildAssociationWindow`, Euclidean vs Mahalanobis benchmark (prob review G4, G6, G7, G12, G13, G15). Fix `PositionMahalanobisPrefersAlongTrackAxis` (C++ and Python) to predict → setMeasurement → correct.
 3. Evaluate impact on Unity and Wildtrack (`position_mahalanobis` vs `euclidean`); replace the stale Phase 1 notes in `.github/plans/plan-probabilistic-tracking.md` (prob review 25). Baseline for PR 5 and noise changes ([tuning guide](../future/prob-tracking-imm-tuning.md) §5 item 10).
 4. Evaluate the mixture covariance vs the best model's covariance for matching.

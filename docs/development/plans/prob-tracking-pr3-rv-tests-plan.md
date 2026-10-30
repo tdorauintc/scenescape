@@ -40,8 +40,9 @@ SPDX-License-Identifier: Apache-2.0
 
 ## Tasks In progress
 
-1. [Velocity tolerance and prior cap](#velocity-tolerance-and-prior-cap) (order 9): C-8 and C-9 pin current values; investigation open.
-2. [E-2](#e-2-constant-offset-in-sustained-turns) (order 10): constant offset in sustained turns analysed; decision waits for per-sensor noise.
+1. [F-7](#f-7-initial-velocity-uncertainty) (order 9): initial velocity uncertainty; sweep done, proposal 16 m²/s² without the cap.
+2. [Velocity tolerance](#velocity-tolerance) (order 10): C-8 pins the loosened tolerance; investigation open.
+3. [E-2](#e-2-constant-offset-in-sustained-turns) (order 11): constant offset in sustained turns analysed; decision waits for per-sensor noise.
 
 ## Tasks Not started
 
@@ -88,7 +89,7 @@ Production config with all three models unless noted; bounds relational where po
 | C-6  | `MultiModelKalmanEstimatorTests` / `ProcessNoisePerModelShape`                    | Q shape per model (prob review G8); F-1, F-5                              |
 | C-7  | `MotionScenarioTests` / `TracksMotionCases`                                       | Eight motion cases, one table row each                                    |
 | C-8  | `MotionScenarioTests` / `ConstantVelocityConvergence`                             | Velocity tolerance (prob review 5)                                        |
-| C-9  | `MotionScenarioTests` / `TargetBornMovingAcquiresSpeed`                           | Velocity prior cap (delta 9.2)                                            |
+| C-9  | `MotionScenarioTests` / `TargetBornMovingAcquiresSpeed`                           | Velocity at birth (delta 9.2); [F-7](#f-7-initial-velocity-uncertainty)   |
 | C-10 | `MotionScenarioTests` / `SteadyMotionHasNoConstantTrailingOffset`                 | Straight-line offset                                                      |
 | C-11 | `MotionScenarioTests` / `DetectionLatencyLeavesConstantTrailingOffset`            | Latency offset = speed × lag (mechanism)                                  |
 | C-12 | `MotionScenarioTests` / `SteadyCircleHasNoConstantOffset`                         | Offset in turns; skipped ([E-2](#e-2-constant-offset-in-sustained-turns)) |
@@ -106,14 +107,28 @@ Production config with all three models unless noted; bounds relational where po
 
 ### Tasks In progress
 
-#### Velocity tolerance and prior cap
+#### F-7: initial velocity uncertainty
 
-- Order 9 (prob review 5, delta 9.2). C-8 pins the 0.05 m/s tolerance (0.01 before `254afe920`), measured 0.008 / 0.003 m/s on one seed; C-9 pins ≥ 4.5 m/s 1 s after a 10 m/s birth, measured 4.98 m/s.
-- Next: check several seeds, then restore 0.01 or document the reason; tighten C-9 only if the 0.05 velocity prior cap changes.
+- Order 9 (delta 9.2): drop the 0.05 velocity cap so that `init_state_covariance` sets the initial velocity variance, and raise the production value 1 → 16 m²/s² (σ 4 m/s); acceleration, yaw and yaw rate keep their caps.
+- Problem: with the cap (σ 0.22 m/s) a new track starts at rest and the correction moves its position instead of its velocity; after 3–4 frames the object is out of the gate and the track restarts, again and again. At 10 fps objects entering faster than about 5 m/s (Euclidean) or 3 m/s (Mahalanobis, whose new-track gate is about 1.6 m) never get a reliable track: PR 4 `RunnerEnteringGetsOneTrack` and `CarEnteringAtSpeedGetsOneTrack`, skipped as known issues.
+- Sweep of the initial velocity variance 0.05 / 1 / 4 / 16 / 64 m²/s² (PR 4 association scenarios, `bf8aee1d4` with a temporary override, 10 seeds):
+  - fastest entry kept at 10 fps with Mahalanobis 3 / 6 / 10 / 15 / 25 m/s; Euclidean stops at 15 m/s, its fixed 2 m gate limits the first frame;
+  - from 16 Mahalanobis also keeps 10 m/s at 2 fps;
+  - C-9: speed 1 s after a 10 m/s entry 4.98 / 9.06 / 9.78 / 9.94 / 9.98 m/s;
+  - side-by-side, standing-pair and crossing scenarios unchanged; at 4 and 16 all other robot-vision tests pass except C-5 and PR 4's `PositionMahalanobisPrefersAlongTrackAxis`.
+- Cost: a young track's coast gate is rounder (along / across 2.7 → 1.5 from 4 up; 2.6 → 2.0 for an established track), which is what the cap was for.
+- Tests: tighten C-9 to ≥ 9.5 m/s (fails before the fix); C-5 pins the velocity variance to `init_state_covariance`; PR 4 un-skips the two entering scenarios.
+- Evaluate on Unity and Wildtrack: at 2 fps a new track's first gate is about 6 m.
+- Not fixed by it: `CarPullingAwayKeepsOneTrack` still restarts once, because a standing track's velocity barely responds to a start (PR 4 decision).
+
+#### Velocity tolerance
+
+- Order 10 (prob review 5). C-8 pins the 0.05 m/s tolerance (0.01 before `254afe920`), measured 0.008 / 0.003 m/s on one seed.
+- Next: after F-7, check several seeds, then restore 0.01 or document the reason.
 
 #### E-2: constant offset in sustained turns
 
-- Order 10; verification: un-skip C-12 (mean along / cross ≤ 0.15 m). Measured (`d673ef83a`, Release, 5 seeds): car circle −0.13 / −0.23, person circle −0.18 / −0.25, steady turn (3 m/s, 0.5 rad/s) −0.18 / −0.29 m.
+- Order 11; verification: un-skip C-12 (mean along / cross ≤ 0.15 m). Measured (`d673ef83a`, Release, 5 seeds): car circle −0.13 / −0.23, person circle −0.18 / −0.25, steady turn (3 m/s, 0.5 rad/s) −0.18 / −0.29 m.
 - Mechanism: under r = 0.2 CTRV holds about half of μ (car circle CV / CA / CTRV .25 / .27 / .48), and mixing with CV and CA dilutes its turn rate (0.30 for 0.5 rad/s). CTRV alone has no offset (≤ 0.07 m); before F-1 the steady turn was at −0.37 / −0.37 m.
 - The steady-turn window is dominated by the turn onset: CTRV leads from about 1.4 s into the turn, cross-track peaks at −0.44 m.
 - Sensor noise (0–0.45 m, 20 seeds) does not move it; only r does: r = 0.05 gives −0.09 / −0.18, r = 0.0025 −0.02 / −0.04 m, but CA then wins every turn (μ .75).
@@ -160,10 +175,10 @@ Bounds calibrated at `8f1c0d9ef` (Release, fixed seed); C-7 re-calibrated after 
 | Test                                               | Bound (measured)                                                                                                                                                                                                                                                                                                              | After    |
 | -------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- |
 | C-7 `TracksMotionCases`, max error / final speed   | constant velocity 0.15 / 0.03 (0.10 / 0.016), acceleration 0.45 / 0.01 (0.34 / 0.004), turn 0.65 / 0.05 (0.53 / 0.015), sudden stop 0.9 / 0.05 (0.69 / 0.037), manoeuvre 0.6 / 0.25 (0.49 / 0.175), car circle 0.65 / 0.2 (0.53 / 0.130), pedestrian turn 0.5 / 0.1 (0.43 / 0.059), rectangular path 0.8 / 0.2 (0.66 / 0.143) | F-5, E-2 |
-| C-8 `ConstantVelocityConvergence`                  | 0.05 m/s (CV 0.008 / 0.003, three models 0.008 / 0.002; one seed)                                                                                                                                                                                                                                                             | Order 9  |
-| C-9 `TargetBornMovingAcquiresSpeed`                | ≥ 4.5 m/s (4.98; 4.99 before F-1, 4.79 before F-3)                                                                                                                                                                                                                                                                            | Order 9  |
+| C-8 `ConstantVelocityConvergence`                  | 0.05 m/s (CV 0.008 / 0.003, three models 0.008 / 0.002; one seed)                                                                                                                                                                                                                                                             | Order 10 |
+| C-9 `TargetBornMovingAcquiresSpeed`                | ≥ 4.5 m/s (4.98; 4.99 before F-1, 4.79 before F-3)                                                                                                                                                                                                                                                                            | F-7      |
 | C-6 `ProcessNoisePerModelShape`                    | Pinned formula; zero position, z and size noise                                                                                                                                                                                                                                                                               | F-5      |
-| C-5 `InitialCovarianceUsesMeasurementNoiseAndCaps` | Latent caps 0.05 velocity, 0.1 acceleration, 0.05 yaw, 0.01 yaw rate (exact)                                                                                                                                                                                                                                                  | Order 9  |
+| C-5 `InitialCovarianceUsesMeasurementNoiseAndCaps` | Latent caps 0.05 velocity, 0.1 acceleration, 0.05 yaw, 0.01 yaw rate (exact)                                                                                                                                                                                                                                                  | F-7      |
 | C-10 `SteadyMotionHasNoConstantTrailingOffset`     | ≤ 0.15 m (+0.02 / +0.01); the steady turn moves back here once E-2 passes                                                                                                                                                                                                                                                     | E-2      |
 | F-1 `ModelSelection`                               | CV margin ≥ .03 / .05 (.054 / .105); CA μ ≥ .45 (.59 / .62); CTRV μ ≥ .45 / .40 (.57 / .48), margin ≥ .2 / .1 (.35 / .21); turn exit margin ≥ .03 (.071)                                                                                                                                                                      | F-5      |
 | F-1 `TurningTargetLearnsTurnRate`                  | w in [0.3, 0.6] (0.38), [−0.45, −0.15] (−0.22), ±0.05 (−0.005)                                                                                                                                                                                                                                                                | F-5      |
