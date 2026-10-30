@@ -12,7 +12,7 @@ Visualization only: fixes are diagnosed and verified in unit tests.
 - Branch `tdorau/prob-tracking-viz`, stacked on `tdorau/imm-ukf-improvements`; PR into `feature/prob-tracking-extracted` after it.
 - C++ writes JSONL data from the tests; Python turns it into PNG plots and MP4 videos.
 - Status: implemented (`a967511b0`..`d35057263`); workflow in `tools/tracker/evaluation/visualization/README.md`.
-- Tracker-level runs (PR 4, `bf8aee1d4`): `TrackerRun` drives `MultipleObjectTracker` and the recorder writes its detections, reliable tracks and estimator steps, with the association gate in each track's config line; zoom videos draw that gate (χ² ellipse or `max_radius_m` circle).
+- Tracker-level runs (PR 4, `bf8aee1d4`): `TrackerRun` drives `MultipleObjectTracker` and the recorder writes its detections, reliable tracks and estimator steps, with the association gate in each track's config line; zoom videos draw that gate (χ² ellipse or `max_radius_m` circle; not for detections with per-detection R, see §3).
 
 ## 1. Data capture (C++, `controller/src/robot_vision/test/support/`)
 
@@ -70,7 +70,7 @@ Videos (matplotlib animation writers → H.264 MP4 or GIF; real time, at most 30
 - Zoom (opt-in, separate file): follow camera on one object. Shows everything above plus:
   - predicted position (`z_pred`);
   - velocity arrow;
-  - 99% confidence ellipse of the predicted position from `S_xy` (on PR 3 not the association gate, which is a Euclidean radius; with PR 4's `position_mahalanobis` it is the gate, up to the `max_radius_m` ceiling);
+  - 99% confidence ellipse of the predicted position from `S_xy` (on PR 3 not the association gate, which is a Euclidean radius; with PR 4's `position_mahalanobis` it is the gate, up to the `max_radius_m` ceiling). With per-detection R ([post-review plan](prob-tracking-post-review-plan.md) item 7) a detection that carries R is gated with `(H P Hᵀ)_xy + R_xy` instead, so the ellipse is the gate only for detections without R. The recorded `S` holds the default R and `detections.jsonl` has no R, so drawing that gate needs R recorded;
   - window 4× the object's largest dimension, at least 4 m.
 
 ## 4. Steps (one commit each)

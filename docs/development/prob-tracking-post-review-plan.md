@@ -130,7 +130,24 @@ Both branches 1 and 2 are in main; `feature/prob-tracking-extracted` merged main
    - Detection `translation` / `size` / `rotation` and detections without a pixel bounding box; replaces the Tracker Service input changes of `feat/tracking-z-axis`
    - **[DONE]** Follow-up in feature/prob-tracking-extracted-3d: `zMeasured` on the translation path, χ² df split unchanged, `vz` publishing verified end to end with 3D detections (z review Z5, E5)
 
-7. **[TODO]** Dataset and testing. Base branch: feature/prob-tracking-extracted-3d. To be merged finally to main
+7. **[IN-PROGRESS]** Per-detection measurement noise R (`robot_vision` side of Phases 2 and 3 in [ADR-0017](../adr/0017-probabilistic-tracking-association.md)). Branch: feature/prob-tracking-extracted-3d-R. Base branch: feature/prob-tracking-extracted-3d
+   - Carried over from `feat/full-v2-tracking-pipeline-R-aware` (`b1ba13b4a`), ported in `c116858ee`
+     - Optional 7×7 R on `TrackedObject` (`measurementNoiseCov`, Python `measurement_noise_covariance`); detections without R use the tracker default R
+     - `PositionMahalanobis` and `Mahalanobis` gates use S = H P Hᵀ + R per track–detection pair
+     - UKF / IMM update with the detection's R (gain and model likelihood); the birth P of position and size comes from R
+     - `fuseGeometry` weights cameras by inverse covariance when any detection has R; the yaw variance follows the selected orienting detection
+     - Without R every path is unchanged: robot-vision scenario recordings are byte-identical to the base
+     - Not carried over: the Controller observation pipeline Σ and `observation_sigma` → R in `ilabs_tracking.py` (not on this branch); the streaming fusion R fix (streaming fusion removed in #2061)
+   - My proposed additions / fixes:
+     - **[DONE]** A correct without R after a correct with R, before the next predict, reused the earlier R + UT
+     - Nothing sets R yet. Decide who produces it on main: the Tracker `CoordinateTransformer` (2×2 xy from the pixel Jacobian, [design](../design/probabilistic-tracking-association.md) §5.3) or the Controller observation pipeline (7×7 from the frustum Σ, full-v2 branch). Then wire `tracking_worker.cpp` / `ilabs_tracking.py` + UT
+     - Decide how R is switched on: the design plans an opt-in `position_mahalanobis_combined` method, with the default unchanged until sign-off; this branch uses R whenever a detection carries it. Update the design doc (§5.3, §5.4, §8) and ADR-0017 (Phase 2 and 3 status, equal-weight fusion stopgap)
+     - Apply PR 5's z gating (measured z on both sides, χ² df per pair) to the per-pair R gate too (z review Z1, Z2)
+     - Combine with PR 3's reduced yaw update for detections without orientation (yaw review 2): both change the UKF correct
+     - **[DONE]** With R the `S_xy` ellipse is no longer the gate for that detection; noted in the [viz plan](prob-tracking-viz-plan.md)
+     - Evaluate and document impact once a producer sets R (Wildtrack, Unity), against PR 5
+
+8. **[TODO]** Dataset and testing. Base branch: feature/prob-tracking-extracted-3d. To be merged finally to main
    - Final accuracy and performance evaluation
 
 ## Parallel efforts
