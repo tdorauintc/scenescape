@@ -59,19 +59,62 @@ void clearMetadataAttributes(TrackedObject &object)
 }
 
 /**
- * @brief Average world position and size across multi-camera matches into measurement.
+ * @brief Fuse world position and size across multi-camera matches into measurement.
  *
- * Last-camera-wins for x/y biases static objects when cameras disagree on the
- * ground-plane projection. Equal-weight averaging is the Phase-1 fix; per-detection
- * R weighting belongs with Phase 2 measurement covariance. Yaw is not averaged:
- * non-orienting detections carry no yaw (see applyOrientingYaw).
+ * Without any per-detection R this is the legacy equal-weight average. When at least one
+ * match carries R, [x, y, z, length, width, height] are fused in information form
+ * (R_f = (sum R_i^-1)^-1, z_f = R_f * sum R_i^-1 z_i), using the tracker default R for
+ * matches without one, and R_f is attached to the fused measurement for the Kalman update.
+ * Yaw is not averaged: its variance is kept from the seed measurement here and replaced by
+ * the selected orienting detection's variance in applyOrientingYaw.
  */
 void fuseGeometry(const std::vector<std::pair<size_t, size_t>> &matches,
                   const std::vector<std::vector<TrackedObject>> &objectsPerCamera,
-                  TrackedObject &measurement)
+                  TrackedObject &measurement,
+                  double defaultMeasurementNoise)
 {
   if (matches.size() <= 1)
   {
+    return;
+  }
+
+  const bool anyMeasurementNoise = std::any_of(matches.begin(), matches.end(), [&](const auto &match) {
+    return objectsPerCamera[match.first][match.second].hasMeasurementNoise();
+  });
+
+  if (anyMeasurementNoise)
+  {
+    constexpr int kFusedSize = MeasurementIndex::HEIGHT + 1;
+    const cv::Rect fusedBlock(0, 0, kFusedSize, kFusedSize);
+    const cv::Mat defaultNoise = cv::Mat::eye(TrackedObject::MeasurementSize, TrackedObject::MeasurementSize, CV_64F)
+                                 * defaultMeasurementNoise;
+    cv::Mat information = cv::Mat::zeros(kFusedSize, kFusedSize, CV_64F);
+    cv::Mat informationVector = cv::Mat::zeros(kFusedSize, 1, CV_64F);
+
+    for (const auto &[cameraIndex, objectIndex] : matches)
+    {
+      const auto &object = objectsPerCamera[cameraIndex][objectIndex];
+      const cv::Mat &noise = object.hasMeasurementNoise() ? object.measurementNoiseCov : defaultNoise;
+      const cv::Mat noiseInv = noise(fusedBlock).inv(cv::DECOMP_SVD);
+      information += noiseInv;
+      informationVector += noiseInv * object.measurementVector().rowRange(0, kFusedSize);
+    }
+
+    const cv::Mat fusedCov = information.inv(cv::DECOMP_SVD);
+    const cv::Mat fused = fusedCov * informationVector;
+    measurement.x = fused.at<double>(MeasurementIndex::X, 0);
+    measurement.y = fused.at<double>(MeasurementIndex::Y, 0);
+    measurement.z = fused.at<double>(MeasurementIndex::Z, 0);
+    measurement.length = fused.at<double>(MeasurementIndex::LENGTH, 0);
+    measurement.width = fused.at<double>(MeasurementIndex::WIDTH, 0);
+    measurement.height = fused.at<double>(MeasurementIndex::HEIGHT, 0);
+
+    const cv::Mat &seedNoise = measurement.hasMeasurementNoise() ? measurement.measurementNoiseCov : defaultNoise;
+    cv::Mat fusedNoise = cv::Mat::zeros(TrackedObject::MeasurementSize, TrackedObject::MeasurementSize, CV_64F);
+    fusedCov.copyTo(fusedNoise(fusedBlock));
+    fusedNoise.at<double>(MeasurementIndex::YAW, MeasurementIndex::YAW)
+      = seedNoise.at<double>(MeasurementIndex::YAW, MeasurementIndex::YAW);
+    measurement.measurementNoiseCov = fusedNoise;
     return;
   }
 
@@ -187,18 +230,19 @@ void mergeHistoricalMetadata(const TrackedObject &track, TrackedObject &measurem
 
 /**
  * Prefer yaw from an orienting detection among matches. Position and size are
- * averaged separately by fuseGeometry. When several orienting
+ * fused separately by fuseGeometry. When several orienting
  * detections match, pick the highest classification confidence and break ties
- * with later camera order.
+ * with later camera order. When the fused measurement carries R, its yaw variance
+ * follows the selected detection.
  */
 void applyOrientingYaw(const std::vector<std::pair<size_t, size_t>> &matches,
                        const std::vector<std::vector<TrackedObject>> &objectsPerCamera,
-                       TrackedObject &fusedObject)
+                       TrackedObject &fusedObject,
+                       double defaultMeasurementNoise)
 {
-  bool found = false;
+  const TrackedObject *best = nullptr;
   double bestConfidence = -1.0;
   size_t bestCameraIndex = 0;
-  double bestYaw = fusedObject.yaw;
 
   for (const auto &[cameraIndex, objectIndex] : matches)
   {
@@ -208,20 +252,28 @@ void applyOrientingYaw(const std::vector<std::pair<size_t, size_t>> &matches,
       continue;
     }
     const double confidence = object.classification.size() > 0 ? object.classification.maxCoeff() : 0.0;
-    if (!found || confidence > bestConfidence
+    if (best == nullptr || confidence > bestConfidence
         || (confidence == bestConfidence && cameraIndex > bestCameraIndex))
     {
-      found = true;
+      best = &object;
       bestConfidence = confidence;
       bestCameraIndex = cameraIndex;
-      bestYaw = object.yaw;
     }
   }
 
-  if (found)
+  if (best != nullptr)
   {
-    fusedObject.yaw = bestYaw;
+    fusedObject.yaw = best->yaw;
     orientation::setHasOrientation(fusedObject, true);
+    if (fusedObject.hasMeasurementNoise())
+    {
+      // Clone: a single-match fusedObject shares its R buffer with the source detection.
+      cv::Mat noise = fusedObject.measurementNoiseCov.clone();
+      noise.at<double>(MeasurementIndex::YAW, MeasurementIndex::YAW) = best->hasMeasurementNoise()
+        ? best->measurementNoiseCov.at<double>(MeasurementIndex::YAW, MeasurementIndex::YAW)
+        : defaultMeasurementNoise;
+      fusedObject.measurementNoiseCov = noise;
+    }
   }
   else
   {
@@ -336,7 +388,11 @@ TrackedObject MultipleObjectTracker::fuseStreamingCameraMeasurements(
     return measurement;
   }
 
-  fuseGeometry(matches, objectsPerCamera, measurement);
+  // Held samples from other cameras already entered earlier corrections: use them to place
+  // the point, but keep this update's R from the fresh detection to avoid double counting.
+  const cv::Mat freshMeasurementNoise = measurement.measurementNoiseCov;
+  fuseGeometry(matches, objectsPerCamera, measurement, mTrackManager.getConfig().mDefaultMeasurementNoise);
+  measurement.measurementNoiseCov = freshMeasurementNoise;
   return measurement;
 }
 
@@ -510,8 +566,8 @@ MultipleObjectTracker::matchAndAssignMeasurements(const std::vector<tracking::Tr
     // that matched this track (metadata still uses confidence / camera-order policy).
     const auto &lastMatch = matches.back();
     auto fusedObject = objectsPerCamera[lastMatch.first][lastMatch.second];
-    fuseGeometry(matches, objectsPerCamera, fusedObject);
-    applyOrientingYaw(matches, objectsPerCamera, fusedObject);
+    fuseGeometry(matches, objectsPerCamera, fusedObject, mTrackManager.getConfig().mDefaultMeasurementNoise);
+    applyOrientingYaw(matches, objectsPerCamera, fusedObject, mTrackManager.getConfig().mDefaultMeasurementNoise);
     fuseMetadata(matches, objectsPerCamera, fusedObject);
     mergeHistoricalMetadata(tracks[trackIdx], fusedObject);
 
@@ -630,8 +686,8 @@ void MultipleObjectTracker::track(std::vector<std::vector<tracking::TrackedObjec
       const std::vector<std::vector<TrackedObject>> candidates
         = {{newObjects[newObjectIndex]}, {cameraObjects[cameraObjectIndex]}};
       const std::vector<std::pair<size_t, size_t>> matches = {{0, 0}, {1, 0}};
-      fuseGeometry(matches, candidates, fusedObject);
-      applyOrientingYaw(matches, candidates, fusedObject);
+      fuseGeometry(matches, candidates, fusedObject, mTrackManager.getConfig().mDefaultMeasurementNoise);
+      applyOrientingYaw(matches, candidates, fusedObject, mTrackManager.getConfig().mDefaultMeasurementNoise);
       fuseMetadata(matches, candidates, fusedObject);
       newObjects[newObjectIndex] = std::move(fusedObject);
     }

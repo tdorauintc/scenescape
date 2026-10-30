@@ -19,6 +19,31 @@ namespace tracking {
 
 constexpr double kDefaultClassBoundValue = 1000.;
 
+namespace {
+
+/// True when the association gate should use S = H P H^T + R_detection for this pair.
+bool usesMeasurementNoise(const TrackedObject &measurement, const TrackedObject &track)
+{
+  return measurement.hasMeasurementNoise()
+         && track.predictedStateMeasurementCov.rows == TrackedObject::MeasurementSize
+         && track.predictedStateMeasurementCov.cols == TrackedObject::MeasurementSize;
+}
+
+cv::Matx33d positionBlock(const cv::Mat &cov)
+{
+  return cv::Matx33d(cov.at<double>(MeasurementIndex::X, MeasurementIndex::X),
+                     cov.at<double>(MeasurementIndex::X, MeasurementIndex::Y),
+                     cov.at<double>(MeasurementIndex::X, MeasurementIndex::Z),
+                     cov.at<double>(MeasurementIndex::Y, MeasurementIndex::X),
+                     cov.at<double>(MeasurementIndex::Y, MeasurementIndex::Y),
+                     cov.at<double>(MeasurementIndex::Y, MeasurementIndex::Z),
+                     cov.at<double>(MeasurementIndex::Z, MeasurementIndex::X),
+                     cov.at<double>(MeasurementIndex::Z, MeasurementIndex::Y),
+                     cov.at<double>(MeasurementIndex::Z, MeasurementIndex::Z));
+}
+
+} // namespace
+
 double calculateMulticlassScaledDistance(const TrackedObject &measurement, const TrackedObject &track)
 {
   auto conflict = rv::tracking::classification::distance(measurement.classification, track.classification);
@@ -59,47 +84,37 @@ double calculateMahalanobisDistance(const TrackedObject &measurement, const Trac
     innovation.at<double>(MeasurementIndex::YAW, 0) = 0.;
   }
 
-  cv::Mat mahalanobisDistance = innovation.t() * (track.predictedMeasurementCovInv) * innovation;
+  cv::Mat covarianceInv = track.predictedMeasurementCovInv;
+  if (usesMeasurementNoise(measurement, track))
+  {
+    covarianceInv = (track.predictedStateMeasurementCov + measurement.measurementNoiseCov).inv(cv::DECOMP_SVD);
+  }
+
+  cv::Mat mahalanobisDistance = innovation.t() * covarianceInv * innovation;
 
   return 0.5 * std::sqrt(mahalanobisDistance.at<double>(0, 0));
 }
 
+/// Squared position Mahalanobis distance d^2 = v^T S^-1 v (v = detection - predicted xyz).
+/// S is the track's predicted S, or H P H^T + R_detection when the detection carries R.
 double calculatePositionMahalanobisSquaredDistance(const TrackedObject &measurement, const TrackedObject &track)
 {
-  const double pred_x = track.predictedMeasurementMean.at<double>(MeasurementIndex::X, 0);
-  const double pred_y = track.predictedMeasurementMean.at<double>(MeasurementIndex::Y, 0);
-  const double pred_z = track.predictedMeasurementMean.at<double>(MeasurementIndex::Z, 0);
-  const double dx = measurement.x - pred_x;
-  const double dy = measurement.y - pred_y;
-  const double dz = measurement.z - pred_z;
+  const cv::Vec3d innovation(
+    measurement.x - track.predictedMeasurementMean.at<double>(MeasurementIndex::X, 0),
+    measurement.y - track.predictedMeasurementMean.at<double>(MeasurementIndex::Y, 0),
+    measurement.z - track.predictedMeasurementMean.at<double>(MeasurementIndex::Z, 0));
 
-  cv::Mat S = (cv::Mat_<double>(3, 3) <<
-    track.predictedMeasurementCov.at<double>(MeasurementIndex::X, MeasurementIndex::X),
-    track.predictedMeasurementCov.at<double>(MeasurementIndex::X, MeasurementIndex::Y),
-    track.predictedMeasurementCov.at<double>(MeasurementIndex::X, MeasurementIndex::Z),
-    track.predictedMeasurementCov.at<double>(MeasurementIndex::Y, MeasurementIndex::X),
-    track.predictedMeasurementCov.at<double>(MeasurementIndex::Y, MeasurementIndex::Y),
-    track.predictedMeasurementCov.at<double>(MeasurementIndex::Y, MeasurementIndex::Z),
-    track.predictedMeasurementCov.at<double>(MeasurementIndex::Z, MeasurementIndex::X),
-    track.predictedMeasurementCov.at<double>(MeasurementIndex::Z, MeasurementIndex::Y),
-    track.predictedMeasurementCov.at<double>(MeasurementIndex::Z, MeasurementIndex::Z));
+  cv::Matx33d S = usesMeasurementNoise(measurement, track)
+    ? positionBlock(track.predictedStateMeasurementCov) + positionBlock(measurement.measurementNoiseCov)
+    : positionBlock(track.predictedMeasurementCov);
 
-  cv::Mat Sinv;
-  if (cv::invert(S, Sinv, cv::DECOMP_LU) == 0)
+  bool invertible = false;
+  const cv::Matx33d Sinv = S.inv(cv::DECOMP_LU, &invertible);
+  if (!invertible)
   {
     return kDefaultClassBoundValue;
   }
-
-  const double inv00 = Sinv.at<double>(0, 0);
-  const double inv01 = Sinv.at<double>(0, 1);
-  const double inv02 = Sinv.at<double>(0, 2);
-  const double inv11 = Sinv.at<double>(1, 1);
-  const double inv12 = Sinv.at<double>(1, 2);
-  const double inv22 = Sinv.at<double>(2, 2);
-
-  return dx * (inv00 * dx + inv01 * dy + inv02 * dz)
-       + dy * (inv01 * dx + inv11 * dy + inv12 * dz)
-       + dz * (inv02 * dx + inv12 * dy + inv22 * dz);
+  return innovation.dot(Sinv * innovation);
 }
 
 namespace {
@@ -226,6 +241,18 @@ void match(const std::vector<TrackedObject> &tracks,
     {
       for (size_t j = 0; j < measurements.size(); ++j)
       {
+        if (usesMeasurementNoise(measurements[j], tracks[i]))
+        {
+          // Per-pair S = H P H^T + R_j: cannot use the per-track cached S^-1.
+          const auto &cache = track_caches[i];
+          const double dx = measurements[j].x - cache.pred_x;
+          const double dy = measurements[j].y - cache.pred_y;
+          const double dz = measurements[j].z - cache.pred_z;
+          (*costMatrix)(i, j) = (std::sqrt(dx * dx + dy * dy + dz * dz) > max_radius_m)
+            ? kDefaultClassBoundValue
+            : calculatePositionMahalanobisSquaredDistance(measurements[j], tracks[i]);
+          continue;
+        }
         (*costMatrix)(i, j) = positionMahalanobisCostFromCache(
           measurements[j].x, measurements[j].y, measurements[j].z, track_caches[i], max_radius_m);
       }

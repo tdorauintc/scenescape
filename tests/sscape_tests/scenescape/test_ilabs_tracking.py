@@ -231,13 +231,13 @@ def test_measurement_covariance_from_observation_embeds_position_sigma():
 
 
 def test_measurement_covariance_from_observation_rejects_invalid_sigma():
-  for bad in (np.eye(2), np.full((3, 3), np.nan), "not-a-matrix"):
+  for bad in (np.eye(2), np.full((3, 3), np.nan), "not-a-matrix", -np.eye(3)):
     cov = measurement_covariance_from_observation(
       SimpleNamespace(observation_sigma=bad))
     assert np.allclose(cov, np.eye(MEASUREMENT_SIZE) * DEFAULT_MEASUREMENT_NOISE)
 
 
-def test_to_rv_object_passes_observation_sigma_as_measurement_covariance():
+def test_to_rv_object_passes_observation_sigma_as_measurement_noise():
   sigma = np.diag([0.25, 0.36, 1.0]).astype(np.float64)
   detected_object = SimpleNamespace(
     sceneLoc=Point(1.0, 2.0, 3.0),
@@ -254,11 +254,43 @@ def test_to_rv_object_passes_observation_sigma_as_measurement_covariance():
   tracker = IntelLabsTracking.__new__(IntelLabsTracking)
 
   rv_object = tracker.to_rv_object(detected_object)
-  cov = np.array(rv_object.measurement_covariance, dtype=float)
+  cov = np.array(rv_object.measurement_noise_covariance, dtype=float)
 
   assert cov.shape == (MEASUREMENT_SIZE, MEASUREMENT_SIZE)
   assert np.allclose(cov[0:3, 0:3], sigma)
   assert cov[3, 3] == pytest.approx(DEFAULT_MEASUREMENT_NOISE)
+
+
+def test_to_rv_object_leaves_measurement_noise_unset_without_observation_sigma():
+  detected_object = SimpleNamespace(
+    sceneLoc=Point(1.0, 2.0, 0.0),
+    size=[0.5, 0.5, 1.7],
+    rotation=[0.0, 0.0, 0.0, 1.0],
+    confidence=0.9,
+    info={},
+    frameCount=1,
+    metadata={},
+    has_detection_rotation=False,
+    has_measured_z=False,
+  )
+  tracker = IntelLabsTracking.__new__(IntelLabsTracking)
+
+  rv_object = tracker.to_rv_object(detected_object)
+
+  assert rv_object.measurement_noise_covariance is None
+
+
+def test_measurement_noise_covariance_rejects_invalid_matrices():
+  rv_object = rv.tracking.TrackedObject()
+  with pytest.raises(ValueError, match='finite'):
+    rv_object.measurement_noise_covariance = np.full((MEASUREMENT_SIZE, MEASUREMENT_SIZE), np.nan)
+  with pytest.raises(ValueError, match='positive definite'):
+    rv_object.measurement_noise_covariance = -np.eye(MEASUREMENT_SIZE)
+  with pytest.raises(ValueError, match='7x7'):
+    rv_object.measurement_noise_covariance = np.eye(3)
+  rv_object.measurement_noise_covariance = np.eye(MEASUREMENT_SIZE)
+  rv_object.measurement_noise_covariance = None
+  assert rv_object.measurement_noise_covariance is None
 
 
 def test_apply_measurement_covariance_rejects_wrong_shape():

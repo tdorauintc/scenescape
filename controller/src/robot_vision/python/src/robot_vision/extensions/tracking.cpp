@@ -121,6 +121,47 @@ py::class_<rv::tracking::Classification>(tracking, "Classification", "Classifica
       },
       "Measurement covariance matrix (7x7). Assign a numpy array; "
       "convert to numpy with np.array(tracked_object.measurement_covariance).")
+    .def_property(
+      "measurement_noise_covariance",
+      [](const rv::tracking::TrackedObject &self) -> py::object {
+        if (!self.hasMeasurementNoise())
+        {
+          return py::none();
+        }
+        const cv::Mat cov = self.measurementNoiseCov.clone();
+        return py::array_t<double>({cov.rows, cov.cols}, cov.ptr<double>());
+      },
+      [](rv::tracking::TrackedObject &self, py::object value) {
+        if (value.is_none())
+        {
+          self.measurementNoiseCov = cv::Mat();
+          return;
+        }
+        const int n = rv::tracking::TrackedObject::MeasurementSize;
+        auto array = py::array_t<double, py::array::c_style | py::array::forcecast>::ensure(value);
+        if (!array || array.ndim() != 2 || array.shape(0) != n || array.shape(1) != n)
+        {
+          throw std::invalid_argument("measurement_noise_covariance must be a 7x7 float64 matrix or None");
+        }
+        const cv::Mat cov(n, n, CV_64F, const_cast<double *>(array.data()));
+        if (!cv::checkRange(cov))
+        {
+          throw std::invalid_argument("measurement_noise_covariance must be finite");
+        }
+        const cv::Mat symmetric = 0.5 * (cov + cov.t());
+        cv::Mat eigenvalues;
+        cv::eigen(symmetric, eigenvalues);
+        double minEigenvalue = 0.0;
+        cv::minMaxLoc(eigenvalues, &minEigenvalue);
+        if (!(minEigenvalue > 0.0))
+        {
+          throw std::invalid_argument("measurement_noise_covariance must be positive definite");
+        }
+        self.measurementNoiseCov = symmetric;
+      },
+      "Per-detection measurement noise R (7x7, [x, y, z, length, width, height, yaw]); None uses the "
+      "tracker default R. Drives multi-camera fusion weights, the association gate (S = H P H^T + R) "
+      "and the Kalman update.")
     .def_readwrite("error_covariance", &rv::tracking::TrackedObject::errorCovariance, "Error covariance matrix, convert to numpy using np.array(tracked_object.error_covariance).")
     .def("__repr__", &rv::tracking::TrackedObject::toString, "String representation.");
 

@@ -68,32 +68,25 @@ def measurement_covariance_from_observation(
     return cov
   # Symmetrize for numerical stability (outer-product Σ can be slightly asymmetric).
   pos = 0.5 * (pos + pos.T)
+  # R must be positive definite (fusion, gate and UKF invert it); otherwise keep the default.
+  if np.linalg.eigvalsh(pos).min() <= 0.0:
+    return cov
   cov[0:3, 0:3] = pos
   return cov
 
 
 def apply_measurement_covariance(rv_object, covariance):
-  """Write 7×7 covariance onto a TrackedObject.measurement_covariance.
+  """Write a 7×7 per-detection measurement noise R onto a TrackedObject.
 
-  Prefers direct assignment (numpy-aware binding). Falls back to in-place
-  buffer copy for older robot_vision builds that only expose Mat readwrite.
+  robot_vision consumes ``measurement_noise_covariance`` for information-weighted
+  multi-camera fusion, the association gate (S = H P Hᵀ + R) and the UKF update.
   """
   cov = np.asarray(covariance, dtype=np.float64)
   if cov.shape != (MEASUREMENT_SIZE, MEASUREMENT_SIZE):
     raise ValueError(
       f"measurement_covariance must be {MEASUREMENT_SIZE}x{MEASUREMENT_SIZE}, "
       f"got {cov.shape}")
-  try:
-    rv_object.measurement_covariance = cov
-    return
-  except (TypeError, ValueError, AttributeError):
-    pass
-  dest = np.asarray(rv_object.measurement_covariance)
-  if dest.shape != cov.shape:
-    raise ValueError(
-      f"TrackedObject measurement_covariance shape {dest.shape} "
-      f"does not match {cov.shape}")
-  np.copyto(dest, cov)
+  rv_object.measurement_noise_covariance = cov
 
 
 def normalize_association_config(association_config=None):
@@ -397,10 +390,11 @@ class IntelLabsTracking(Tracking):
     rv_object.length = size[0]
     rv_object.width = size[1]
     rv_object.height = size[2]
-    # Frustum / observation Σ → measurement_covariance (7×7). Association Phase 2
-    # and UKF correct Phase 3 consume this; do not drop it here.
-    apply_measurement_covariance(
-      rv_object, measurement_covariance_from_observation(sscape_object))
+    # Observation-pipeline Σ → per-detection R. Detections without Σ leave R unset so
+    # robot_vision keeps the legacy default-R fusion, gate and Kalman update.
+    if getattr(sscape_object, 'observation_sigma', None) is not None:
+      apply_measurement_covariance(
+        rv_object, measurement_covariance_from_observation(sscape_object))
     # Only pass detector yaw when the sensor provided an orientation. Camera
     # detections leave yaw unset so Kalman correct can neutralize that axis.
     attributes = {'info': sscape_object.uuid}

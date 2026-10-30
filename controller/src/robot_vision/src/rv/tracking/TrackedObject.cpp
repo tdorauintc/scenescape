@@ -36,6 +36,12 @@ bool TrackedObject::isDynamic() const
   return (vx * vx + vy * vy + vz * vz) > 1.0;
 }
 
+bool TrackedObject::hasMeasurementNoise() const
+{
+  return !measurementNoiseCov.empty() && measurementNoiseCov.rows == MeasurementSize
+         && measurementNoiseCov.cols == MeasurementSize && measurementNoiseCov.type() == CV_64F;
+}
+
 Eigen::VectorXf TrackedObject::getVectorXf() const
 {
   Eigen::VectorXf vector(StateSize);

@@ -130,8 +130,8 @@ cd tracker && make test-unit-coverage
 
 | Task | Location | Notes |
 |------|----------|-------|
-| `correct(measurement, R_optional)` | `MultiModelKalmanEstimator.*` | |
-| Thread R onto `TrackedObject` before correct | `tracking_worker.cpp`, `ilabs_tracking.py` | **Partial:** Stairs observation path sets `observation_sigma`; `ilabs_tracking.measurement_covariance_from_observation` embeds it in the 7×7 `measurement_covariance` (x,y,z). See Phase 1 plan follow-on `1dc10f13`. |
+| `correct(measurement, R_optional)` | `MultiModelKalmanEstimator.*`, `UnscentedKalmanFilter.*` | **Done (robot_vision):** `TrackedObject.measurementNoiseCov` (R); UKF rebuilds Syy = H P Hᵀ + R per update; P seeded from R at birth; gate uses S = H P Hᵀ + R_det; `fuseGeometry` information-weighted when R present. |
+| Thread R onto `TrackedObject` before correct | `tracking_worker.cpp`, `ilabs_tracking.py` | **Partial:** Stairs observation path sets `observation_sigma`; `ilabs_tracking` writes it as R to `measurement_noise_covariance` (x,y,z block). `tracking_worker.cpp` not done. |
 | Global filter noise knobs in config | schema, loader | |
 | Deprecate `tracking_radius` in manager + user guide | `manager/`, `docs/user-guide/` | |
 | (Later) multi-cam class/confidence fusion | `fuseMetadata` | |

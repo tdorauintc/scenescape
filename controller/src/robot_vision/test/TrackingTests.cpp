@@ -1339,3 +1339,230 @@ TEST(TrackedObjectTest, IsDynamicIncludesVerticalVelocity)
   obj.vz = 0.5; // 0.25 + 0.25 = 0.5
   EXPECT_FALSE(obj.isDynamic());
 }
+
+namespace {
+
+rv::tracking::TrackManagerConfig measurementNoiseTestConfig()
+{
+  rv::tracking::TrackManagerConfig trackerConfig;
+  trackerConfig.mMotionModels = {rv::tracking::MotionModel::CV};
+  trackerConfig.mDefaultProcessNoise = 1e-4;
+  trackerConfig.mDefaultMeasurementNoise = 0.2;
+  trackerConfig.mInitStateCovariance = 1.0;
+  trackerConfig.mMaxUnreliableTime = 0.0;
+  trackerConfig.mNonMeasurementTimeDynamic = 1.0;
+  trackerConfig.mNonMeasurementTimeStatic = 1.6;
+  return trackerConfig;
+}
+
+cv::Mat diagonalMeasurementNoise(double varX, double varY, double varZ, double varRest = 0.2)
+{
+  cv::Mat noise = cv::Mat::eye(rv::tracking::TrackedObject::MeasurementSize,
+                               rv::tracking::TrackedObject::MeasurementSize, CV_64F) * varRest;
+  noise.at<double>(rv::tracking::MeasurementIndex::X, rv::tracking::MeasurementIndex::X) = varX;
+  noise.at<double>(rv::tracking::MeasurementIndex::Y, rv::tracking::MeasurementIndex::Y) = varY;
+  noise.at<double>(rv::tracking::MeasurementIndex::Z, rv::tracking::MeasurementIndex::Z) = varZ;
+  return noise;
+}
+
+double correctedXWithNoise(const cv::Mat &measurementNoise,
+                           const std::vector<rv::tracking::MotionModel> &motionModels = {rv::tracking::MotionModel::CV})
+{
+  rv::tracking::TrackedObject object;
+  object.length = object.width = object.height = 1.0;
+
+  rv::tracking::MultiModelKalmanEstimator estimator;
+  estimator.initialize(object, std::chrono::system_clock::time_point{}, 1e-4, 2e-1, 1.0, motionModels);
+  estimator.predict(0.1);
+
+  rv::tracking::TrackedObject measurement = object;
+  measurement.x = 1.0;
+  measurement.measurementNoiseCov = measurementNoise;
+  estimator.correct(measurement);
+  return estimator.currentState().x;
+}
+
+} // namespace
+
+TEST(MultipleObjectTrackerTest, BirthFusionWeightsByMeasurementNoise)
+{
+  // cam0 is sharp along x / blurry along y, cam1 the opposite: fused point takes x from cam0, y from cam1.
+  auto trackerConfig = measurementNoiseTestConfig();
+  rv::tracking::MultipleObjectTracker objectTracker(trackerConfig, rv::tracking::DistanceType::Euclidean, 2.0);
+  objectTracker.updateTrackerParams(10);
+
+  rv::tracking::TrackedObject cam0;
+  cam0.x = 7.11;
+  cam0.y = 7.67;
+  cam0.width = cam0.length = cam0.height = 0.5;
+  cam0.measurementNoiseCov = diagonalMeasurementNoise(0.01, 4.0, 0.2);
+
+  rv::tracking::TrackedObject cam1 = cam0;
+  cam1.x = 7.91;
+  cam1.y = 6.69;
+  cam1.measurementNoiseCov = diagonalMeasurementNoise(4.0, 0.01, 0.2);
+
+  auto timestamp = std::chrono::system_clock::now();
+  objectTracker.track(std::vector<std::vector<rv::tracking::TrackedObject>>{{cam0}, {cam1}},
+                      timestamp, rv::tracking::DistanceType::Euclidean, 2.0, 0.5);
+
+  const double expectedX = (cam0.x / 0.01 + cam1.x / 4.0) / (1.0 / 0.01 + 1.0 / 4.0);
+  const double expectedY = (cam0.y / 4.0 + cam1.y / 0.01) / (1.0 / 4.0 + 1.0 / 0.01);
+
+  auto tracks = objectTracker.getTracks();
+  ASSERT_EQ(tracks.size(), 1U);
+  EXPECT_NEAR(tracks[0].x, expectedX, 1e-6);
+  EXPECT_NEAR(tracks[0].y, expectedY, 1e-6);
+  EXPECT_TRUE(tracks[0].measurementNoiseCov.empty()) << "tracks must not carry a detection R";
+}
+
+TEST(MultiModelKalmanEstimatorTest, CorrectUsesPerMeasurementNoise)
+{
+  const double xDefault = correctedXWithNoise(cv::Mat());
+  const double xExplicitDefault = correctedXWithNoise(diagonalMeasurementNoise(0.2, 0.2, 0.2));
+  const double xSharp = correctedXWithNoise(diagonalMeasurementNoise(1e-4, 0.2, 0.2));
+  const double xBlurry = correctedXWithNoise(diagonalMeasurementNoise(100.0, 0.2, 0.2));
+
+  EXPECT_NEAR(xDefault, xExplicitDefault, 1e-9) << "explicit default R must match the legacy update";
+  EXPECT_GT(xSharp, 0.95);
+  EXPECT_LT(xBlurry, 0.05);
+  EXPECT_GT(xSharp, xDefault);
+  EXPECT_LT(xBlurry, xDefault);
+}
+
+TEST(MultiModelKalmanEstimatorTest, MultiModelCorrectUsesPerMeasurementNoise)
+{
+  const std::vector<rv::tracking::MotionModel> models = {
+    rv::tracking::MotionModel::CV, rv::tracking::MotionModel::CA, rv::tracking::MotionModel::CTRV};
+  const double xDefault = correctedXWithNoise(cv::Mat(), models);
+  const double xExplicitDefault = correctedXWithNoise(diagonalMeasurementNoise(0.2, 0.2, 0.2), models);
+  const double xSharp = correctedXWithNoise(diagonalMeasurementNoise(1e-4, 0.2, 0.2), models);
+  const double xBlurry = correctedXWithNoise(diagonalMeasurementNoise(100.0, 0.2, 0.2), models);
+
+  EXPECT_NEAR(xDefault, xExplicitDefault, 1e-9);
+  EXPECT_GT(xSharp, 0.95);
+  EXPECT_LT(xBlurry, 0.05);
+}
+
+TEST(MultiModelKalmanEstimatorTest, InitializeSeedsErrorCovarianceFromMeasurementNoise)
+{
+  rv::tracking::TrackedObject object;
+  object.length = object.width = object.height = 1.0;
+  object.measurementNoiseCov = diagonalMeasurementNoise(4.0, 0.5, 0.3);
+  object.measurementNoiseCov.at<double>(rv::tracking::MeasurementIndex::X, rv::tracking::MeasurementIndex::Y) = 1.0;
+  object.measurementNoiseCov.at<double>(rv::tracking::MeasurementIndex::Y, rv::tracking::MeasurementIndex::X) = 1.0;
+
+  rv::tracking::MultiModelKalmanEstimator estimator;
+  estimator.initialize(object, std::chrono::system_clock::time_point{}, 1e-4, 2e-1, 1.0,
+                       {rv::tracking::MotionModel::CV});
+
+  const cv::Mat P = estimator.getKalmanFilterErrorCovariance(0);
+  EXPECT_DOUBLE_EQ(P.at<double>(rv::tracking::StateIndex::X, rv::tracking::StateIndex::X), 4.0);
+  EXPECT_DOUBLE_EQ(P.at<double>(rv::tracking::StateIndex::Y, rv::tracking::StateIndex::Y), 0.5);
+  EXPECT_DOUBLE_EQ(P.at<double>(rv::tracking::StateIndex::Z, rv::tracking::StateIndex::Z), 0.3);
+  EXPECT_DOUBLE_EQ(P.at<double>(rv::tracking::StateIndex::X, rv::tracking::StateIndex::Y), 1.0);
+  EXPECT_TRUE(estimator.currentState().measurementNoiseCov.empty());
+}
+
+TEST(ObjectMatchingTest, PositionMahalanobisGateUsesMeasurementNoise)
+{
+  rv::tracking::TrackManager trackManager(measurementNoiseTestConfig());
+
+  rv::tracking::TrackedObject seed;
+  seed.length = seed.width = seed.height = 0.5;
+
+  auto timestamp = std::chrono::system_clock::now();
+  auto trackId = trackManager.createTrack(seed, timestamp);
+  for (int i = 0; i < 5; ++i)
+  {
+    timestamp += std::chrono::milliseconds(100);
+    trackManager.setMeasurement(trackId, seed);
+    trackManager.predict(timestamp);
+    trackManager.correct();
+  }
+  timestamp += std::chrono::milliseconds(100);
+  trackManager.predict(timestamp);
+  const auto track = trackManager.getTrack(trackId);
+  ASSERT_EQ(track.predictedStateMeasurementCov.rows, rv::tracking::TrackedObject::MeasurementSize);
+
+  // 3 m off along x: outside the default-R gate, inside when the detection's own R is wide along x.
+  rv::tracking::TrackedObject defaultR = seed;
+  defaultR.x = 3.0;
+  rv::tracking::TrackedObject wideAlongX = defaultR;
+  wideAlongX.measurementNoiseCov = diagonalMeasurementNoise(25.0, 0.2, 0.2);
+  rv::tracking::TrackedObject wideAlongY = defaultR;
+  wideAlongY.measurementNoiseCov = diagonalMeasurementNoise(0.2, 25.0, 0.2);
+
+  const double chi2_gate = rv::chi2Threshold(0.99, 3);
+  auto isMatched = [&](const rv::tracking::TrackedObject &detection) {
+    std::vector<std::pair<size_t, size_t>> assignments;
+    std::vector<size_t> unassignedTracks;
+    std::vector<size_t> unassignedMeasurements;
+    rv::tracking::match({track}, {detection}, assignments, unassignedTracks, unassignedMeasurements,
+                        rv::tracking::DistanceType::PositionMahalanobis, chi2_gate, 10.0);
+    return assignments.size() == 1U;
+  };
+
+  EXPECT_FALSE(isMatched(defaultR));
+  EXPECT_TRUE(isMatched(wideAlongX));
+  EXPECT_FALSE(isMatched(wideAlongY)) << "R must act along its own axes, not inflate the gate isotropically";
+}
+
+TEST(MultipleObjectTrackerTest, StreamingFusionKeepsFreshMeasurementNoise)
+{
+  // Held per-camera samples already entered earlier corrections, so the streaming fused
+  // measurement places the point with them but must not shrink this update's R.
+  rv::tracking::MultipleObjectTracker objectTracker(measurementNoiseTestConfig());
+  const auto timestamp = std::chrono::system_clock::now();
+
+  rv::tracking::TrackedObject held;
+  held.x = 0.0;
+  held.width = held.length = held.height = 0.5;
+  held.attributes["camera_id"] = "cam0";
+  held.measurementNoiseCov = diagonalMeasurementNoise(0.01, 0.2, 0.2);
+  objectTracker.rememberCameraMeasurement(1, held, timestamp);
+
+  rv::tracking::TrackedObject fresh = held;
+  fresh.x = 1.0;
+  fresh.attributes["camera_id"] = "cam1";
+  fresh.measurementNoiseCov = diagonalMeasurementNoise(1.0, 0.2, 0.2);
+  objectTracker.rememberCameraMeasurement(1, fresh, timestamp);
+
+  const auto fused = objectTracker.fuseStreamingCameraMeasurements(1, fresh, timestamp);
+
+  EXPECT_NEAR(fused.x, (0.0 / 0.01 + 1.0 / 1.0) / (1.0 / 0.01 + 1.0 / 1.0), 1e-9);
+  ASSERT_TRUE(fused.hasMeasurementNoise());
+  EXPECT_DOUBLE_EQ(cv::norm(fused.measurementNoiseCov, fresh.measurementNoiseCov, cv::NORM_INF), 0.0);
+}
+
+TEST(MultipleObjectTrackerTest, FusedYawVarianceFollowsSelectedOrientingDetection)
+{
+  auto trackerConfig = measurementNoiseTestConfig();
+  rv::tracking::MultipleObjectTracker objectTracker(trackerConfig, rv::tracking::DistanceType::Euclidean, 5.0);
+  objectTracker.updateTrackerParams(10);
+
+  rv::tracking::TrackedObject orienting;
+  orienting.x = 1.0;
+  orienting.width = orienting.length = orienting.height = 0.5;
+  orienting.measurementNoiseCov = diagonalMeasurementNoise(0.2, 0.2, 0.2);
+  orienting.measurementNoiseCov.at<double>(rv::tracking::MeasurementIndex::YAW,
+                                           rv::tracking::MeasurementIndex::YAW) = 0.01;
+  rv::tracking::orientation::setHasOrientation(orienting, true);
+
+  rv::tracking::TrackedObject cameraOnly = orienting;
+  cameraOnly.x = 1.2;
+  cameraOnly.measurementNoiseCov = diagonalMeasurementNoise(0.2, 0.2, 0.2, 5.0);
+  rv::tracking::orientation::setHasOrientation(cameraOnly, false);
+
+  auto timestamp = std::chrono::system_clock::now();
+  const std::vector<std::vector<rv::tracking::TrackedObject>> frame{{orienting}, {cameraOnly}};
+  objectTracker.track(frame, timestamp, rv::tracking::DistanceType::Euclidean, 5.0, 0.5, 10.0);
+  timestamp += std::chrono::milliseconds(100);
+  objectTracker.track(frame, timestamp, rv::tracking::DistanceType::Euclidean, 5.0, 0.5, 10.0);
+
+  ASSERT_EQ(objectTracker.mTrackManager.mMeasurementMap.size(), 1U);
+  const auto &fused = objectTracker.mTrackManager.mMeasurementMap.begin()->second;
+  ASSERT_TRUE(fused.hasMeasurementNoise());
+  EXPECT_DOUBLE_EQ(fused.measurementNoiseCov.at<double>(rv::tracking::MeasurementIndex::YAW,
+                                                        rv::tracking::MeasurementIndex::YAW), 0.01);
+}

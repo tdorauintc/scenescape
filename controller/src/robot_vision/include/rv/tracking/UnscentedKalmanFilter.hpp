@@ -111,11 +111,17 @@ public:
   // measurement - current measurement vector, MP x 1
   Mat correct(InputArray measurement) override;
 
+  // perform correction step with a per-measurement noise R (MP x MP). Syy is rebuilt as
+  // Pyy + R for this update only; an empty R falls back to the default measurementNoiseCov.
+  Mat correct(InputArray measurement, const Mat &measurementNoise);
+
   //  Get system parameters
   Mat getProcessNoiseCov() const override;
   Mat getMeasurementNoiseCov() const override;
   Mat getErrorCov() const override;
   Mat getMeasurementCov() const;
+  // Pyy = H P H^T from the last predict (predicted measurement covariance without R)
+  Mat getPredictedMeasurementCovWithoutNoise() const;
 
   void setStateAndCovariance(const cv::Mat &newState, const cv::Mat &newErrorCov)
   {

@@ -92,11 +92,19 @@ public:
 
   std::string toString() const;
 
-  // tracked object parameters
+  // tracked object parameters (track outputs, written by the estimator on predict/correct)
   cv::Mat predictedMeasurementMean;
-  cv::Mat predictedMeasurementCov;
+  cv::Mat predictedMeasurementCov;    ///< S = H P H^T + R_default (association / UI window)
   cv::Mat predictedMeasurementCovInv;
-  cv::Mat errorCovariance;
+  cv::Mat predictedStateMeasurementCov; ///< H P H^T: track uncertainty in measurement space, without R
+  cv::Mat errorCovariance;              ///< P: state covariance (StateSize x StateSize)
+
+  /// Per-detection measurement noise R (MeasurementSize x MeasurementSize, CV_64F).
+  /// Empty means "use the tracker default R". When set, it drives information-weighted
+  /// multi-camera fusion, the association gate (S = H P H^T + R) and the Kalman update.
+  cv::Mat measurementNoiseCov;
+
+  bool hasMeasurementNoise() const;
 
   Classification classification;
 

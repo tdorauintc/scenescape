@@ -51,6 +51,8 @@ _MODE_FILE = "/tmp/observation_pipeline_mode"
 _DEBUG_FILE = "/tmp/observation_pipeline_debug"
 _RAY_BUFFER_MAX = 64
 _RAY_BUFFER_MAX_AGE_S = 0.25
+# Floor for the conditioned along-ray variance passed to the tracker as R (1 cm sigma).
+_MIN_DEPTH_VAR_M2 = 1e-4
 
 
 def _pipeline_debug_enabled() -> bool:
@@ -437,6 +439,27 @@ class ObservationPipeline:
     up = up / (np.linalg.norm(up) + 1e-12)
     return np.asarray(foot_xyz, dtype=np.float64) + up * float(half_height_m)
 
+  @staticmethod
+  def _conditioned_sigma(sigma: np.ndarray, ray: np.ndarray, depth_var: float,
+                         triangulated: bool) -> np.ndarray:
+    """World Σ consistent with the conditioned point (used by the tracker as R).
+
+    Keeps the frustum's lateral covariance (Σ projected onto the plane orthogonal to
+    the ray) and replaces the along-ray variance with the conditioned one. Projecting
+    instead of subtracting the frustum depth term avoids float32 cancellation turning R
+    indefinite. Triangulated points carry an isotropic variance. The along-ray
+    variance is floored so R (and the P it seeds at track birth) stays positive definite.
+    """
+    depth_var = max(float(depth_var), _MIN_DEPTH_VAR_M2)
+    if triangulated:
+      return np.eye(3, dtype=np.float64) * depth_var
+    r = np.asarray(ray, dtype=np.float64).reshape(3)
+    r = r / (np.linalg.norm(r) + 1e-12)
+    lateral_proj = np.eye(3) - np.outer(r, r)
+    lateral = lateral_proj @ np.asarray(sigma, dtype=np.float64) @ lateral_proj
+    conditioned = lateral + depth_var * np.outer(r, r)
+    return 0.5 * (conditioned + conditioned.T)
+
   def apply(self, objects: list, camera, when) -> list:
     """Overwrite world locations using frustum + amodal; on failure leave legacy."""
     from scene_common.geometry import Point
@@ -628,7 +651,8 @@ class ObservationPipeline:
         mobj.location = [Chronoloc(world_pt, when, mobj.boundingBox)]
         mobj.vectors = [Vector(camera, world_pt, when)]
         mobj.observation_depth_var = float(updated_var[i])
-        mobj.observation_sigma = world_obs["Sigma"][i]
+        mobj.observation_sigma = self._conditioned_sigma(
+          world_obs["Sigma"][i], gaus_rays["ray"][i], updated_var[i], used_tri)
         mobj.observation_triangulated = bool(used_tri)
 
       log.debug("ObservationPipeline: conditioned", len(usable),

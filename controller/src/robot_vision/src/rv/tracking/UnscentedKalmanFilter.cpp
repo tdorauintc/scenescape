@@ -211,6 +211,24 @@ Mat UnscentedKalmanFilterMod::correct(InputArray _measurement)
   return state.clone();
 }
 
+Mat UnscentedKalmanFilterMod::correct(InputArray _measurement, const Mat &measurementNoise)
+{
+  if (!measurementNoise.empty())
+  {
+    CV_Assert(measurementNoise.rows == MP && measurementNoise.cols == MP);
+    Mat noise;
+    measurementNoise.convertTo(noise, dataType);
+    // Syy was built in predict() with the default R; use this measurement's R instead.
+    yyCov = getPredictedMeasurementCovWithoutNoise() + noise;
+  }
+  return correct(_measurement);
+}
+
+Mat UnscentedKalmanFilterMod::getPredictedMeasurementCovWithoutNoise() const
+{
+  return measurementSPFuncValsCenter * Wc * measurementSPFuncValsCenter.t();
+}
+
 Mat UnscentedKalmanFilterMod::getProcessNoiseCov() const
 {
   return processNoiseCov.clone();

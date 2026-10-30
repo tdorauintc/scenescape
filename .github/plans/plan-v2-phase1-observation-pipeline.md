@@ -52,7 +52,7 @@ flowchart LR
   tri -->|no| set
   stereo --> set
   set --> track
-  track --> r["measurement_covariance from Σ"]
+  track --> r["measurement_noise_covariance (R) from Σ"]
   r --> mqtt[scenescape/data/scene/.../person]
 ```
 
@@ -148,16 +148,16 @@ Wired: Manager model/API/UI → `Tracking` → `MovingObject` → `ObservationPi
 6. Centroid: `mu + ray * updated_depth`
 7. If `project_to_map`: replace with depth-map **foot** hit + half-height CoM lift (MQTT stays CoM; UI unchanged)
 8. Write `orig_point`, `location`, `vectors`; `has_measured_z = True`
-9. Attach `observation_depth_var` and `observation_sigma` (3×3 world Σ)
+9. Attach `observation_depth_var` and `observation_sigma` (3×3 world Σ with the along-ray variance replaced by the conditioned amodal / mesh-foot / triangulated variance)
 
 Fallback: any exception or missing reasoner/mesh → log and keep legacy projection for that frame.
 
 ### Probabilistic tracking
 
-- No information-form multi-camera fuser (arch Phase 3a) in this slice
+- Multi-camera geometry fusion is information-weighted (`fuseGeometry`, R_f = (Σ R_i⁻¹)⁻¹) when any match carries R; equal-weight mean otherwise
 - Consumer remains `TimeChunkedIntelLabsTracking` / `IntelLabsTracking` + ADR-0017 Mahalanobis
 - Stairs deployment requires `use_tracker: true`
-- **Σ → R:** `ilabs_tracking.measurement_covariance_from_observation` embeds `observation_sigma` in the 7×7 `measurement_covariance` (x,y,z block) for UKF / association (ADR Phase 3 path started; see [plan-probabilistic-tracking.md](./plan-probabilistic-tracking.md))
+- **Σ → R:** `ilabs_tracking.measurement_covariance_from_observation` embeds `observation_sigma` in a 7×7 R written to `TrackedObject.measurement_noise_covariance` (only when Σ exists). robot_vision consumes it in fusion, the association gate (S = H P Hᵀ + R) and the UKF update; it also seeds P at track birth (see [plan-probabilistic-tracking.md](./plan-probabilistic-tracking.md))
 
 ---
 
@@ -187,8 +187,7 @@ Checked:
 ## 5. Out of scope (next phases)
 
 - General scene config flag / UI toggle for enabling observation conditioning (still Stairs hard-gate)
-- Information-form multi-camera fuser (arch Phase 3a)
-- Completing ADR Phase 3 default flip / full eval of per-measurement R (Σ is now written into `measurement_covariance`; see probabilistic-tracking plan)
+- Completing ADR Phase 3 default flip / full eval of per-measurement R (Σ is now consumed via `measurement_noise_covariance`; see probabilistic-tracking plan)
 - Building the frustum C++ extension in the Docker image (numpy path is production for Phase 1; C++ sources keep `axis_aware` in sync)
 - Tracker-service C++ port of frustum/amodal
 - Dynamic-mesh OCE (amodal Phase 2)
@@ -206,7 +205,7 @@ Checked:
 | [`controller/Dockerfile`](../../controller/Dockerfile) | COPY both packages into runtime image |
 | [`controller/src/controller/observation_pipeline.py`](../../controller/src/controller/observation_pipeline.py) | Gate, mesh→world, frustum/amodal, optional `project_to_map` foot→CoM |
 | [`controller/src/controller/scene.py`](../../controller/src/controller/scene.py) | Stairs hook + invalidate |
-| [`controller/src/controller/ilabs_tracking.py`](../../controller/src/controller/ilabs_tracking.py) | `observation_sigma` → 7×7 `measurement_covariance` |
+| [`controller/src/controller/ilabs_tracking.py`](../../controller/src/controller/ilabs_tracking.py) | `observation_sigma` → 7×7 `measurement_noise_covariance` (R) |
 | [`manager/.../Asset3D`](../../manager/src/manager/models.py) | `project_to_map`, `axis_aware_sizing` |
 | [`tests/sscape_tests/frustum_gaussian/`](../../tests/sscape_tests/frustum_gaussian/), [`tests/sscape_tests/observation_pipeline/`](../../tests/sscape_tests/observation_pipeline/) | Smoke / gate / mesh / axis-aware tests |
 
