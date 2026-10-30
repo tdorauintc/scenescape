@@ -12,6 +12,7 @@ Visualization only: fixes are diagnosed and verified in unit tests.
 - Branch `tdorau/prob-tracking-viz`, stacked on `tdorau/imm-ukf-improvements`; PR into `feature/prob-tracking-extracted` after it.
 - C++ writes JSONL data from the tests; Python turns it into PNG plots and MP4 videos.
 - Status: implemented (`a967511b0`..`d35057263`); workflow in `tools/tracker/evaluation/visualization/README.md`.
+- Tracker-level runs (PR 4, `bf8aee1d4`): `TrackerRun` drives `MultipleObjectTracker` and the recorder writes its detections, reliable tracks and estimator steps, with the association gate in each track's config line; zoom videos draw that gate (χ² ellipse or `max_radius_m` circle).
 
 ## 1. Data capture (C++, `controller/src/robot_vision/test/support/`)
 
@@ -87,6 +88,5 @@ Verification: `make -C tracker test-robot-vision` and `tools/tracker/evaluation/
 ## 5. Out of scope
 
 - Filter diagnostics (prior vs posterior, per-model states, NEES / NIS, run comparison); covered by unit tests.
-- Tracker-level runs (`MultipleObjectTracker`, lifecycle, association).
 - A scene configuration with identity-pose sensors for replaying through the Tracker service.
 - Merging `ITEP-97104_tracker_3d_detections` (merged as #2050; the schema copy was replaced by `tracker/schema/camera-data.schema.json` in `5ccd64279`).
