@@ -38,7 +38,7 @@ References like "z review Z1" or "z review I2" point to findings in [pr-review-t
          - added on top of original `feature/prob-tracking` benchmark:
            - separate overlap / non-overlap mode
            - separate immediate / time-chunking tracker scenarios
-           - People who keep walking from frame to frame, and detections without Kalman matrices. PR 4 still drew new random people every frame.
+           - People who keep walking from frame to frame, and detections without Kalman matrices. Ported to PR 4 in `e1292f438`.
            - parameter `--distance-threshold` (Euclidean only), replacing `--association-config`.
    - Streaming (Controller Immediate mode) fusion removed after review ([discussion](https://github.com/open-edge-platform/scenescape/pull/2028#discussion_r4232521428)). #2061 (branch tdorau/remove-streaming-fusion), merged into multi-camera-geometry-fusion before #2028
      - Removed: the 250 ms per-camera measurement cache (`kStreamingMultiCamHold`) and the Controller `camera_id` attribute that keyed it. Immediate mode is identical to main again
@@ -76,7 +76,7 @@ Both branches 1 and 2 are in main; `feature/prob-tracking-extracted` merged main
      - Constant offset in sustained turns (known issue, `SteadyCircleHasNoConstantOffset` skipped): CTRV holds about half of the probability under r = 0.2 and mixing with CV and CA dilutes its turn rate, so a 3 m/s car runs 0.13 m behind and 0.23 m outside a 6 m radius circle. Independent of the sensor noise; only a smaller r reduces it. Decide with the detection noise measured per sensor ([tuning guide](prob-tracking-imm-tuning.md) §5, test plan E-2)
      - **[DONE]** Build robot-vision as strict C++20 everywhere + CI (`tracker-service.yml`) building the Controller image when `controller/src/robot_vision/**` changes
 
-4. **[TODO]** Mahalanobis association. Branch: feature/prob-tracking-extracted-association. Base branch: feature/prob-tracking-extracted
+4. **[IN-PROGRESS]** Mahalanobis association. #2037 (ITEP-97067). Branch: feature/prob-tracking-extracted-association. Base branch: feature/prob-tracking-extracted
    - Carried over from feature/prob-tracking
      - New association implementation (ObjectMatching.cpp + any other changes required to support it)
      - Required supporting changes in Controller and Tracker Service to pass down association config and produce association window
@@ -86,14 +86,22 @@ Both branches 1 and 2 are in main; `feature/prob-tracking-extracted` merged main
      - Robot-vision benchmark fix & update
      - Apply fixed radius in birth clustering
    - My proposed additions / fixes:
-     - Extend the tests coverage
+     - Extend the tests coverage: production IMM in gate tests, the `max_radius_m` ceiling rejecting a pair, degenerate covariance, gate costs from the implementation instead of the tautological check, competing tracks, Controller forwarding to `track()`, C++ `buildAssociationWindow`, a Euclidean vs Mahalanobis benchmark comparison (prob review G2, G4, G6, G7, G10, G12, G13, G15), and the yaw-wrap test (yaw review 3)
+     - Evaluate and document impact (Unity, Wildtrack; `position_mahalanobis` vs `euclidean` on the current base), and replace the Phase 1 validation notes in `.github/plans/plan-probabilistic-tracking.md`: they were measured on `feature/prob-tracking` before the streaming fusion removal and #2056, with artifacts under `/tmp` (prob review 25). Also the baseline for PR 5's evaluation and for re-checking the gate after noise changes ([tuning guide](prob-tracking-imm-tuning.md) item 10)
      - Evaluate using mixed convariance for matching instead of picking best model, then decide
      - Evaluate / mitigate performance impact of numpy.linalg.eigh / cv::eigen on association window publishing
      - Make the fixed radius in birth clustering (kDefaultBirthClusterRadiusM) configurable
      - Wrap the yaw difference in the legacy `Mahalanobis` cost (`-rv::deltaTheta(measurement.yaw, predictedYaw)`) and apply the same speed gate as `prepareYawMeasurement` + UT including the ±π wrap (yaw review 3)
      - **[DONE]** Update with `feature/prob-tracking-extracted`: streaming fusion removal, C++20, tests split by component (#2103: `ab0caa89c`, `e61fb828c`; z review E3)
      - Fix the session-scoped `controller.ilabs_tracking.rv` mock in `scene_pytest/conftest.py`: 5 association tests fail in full-suite pytest runs (z review E4)
-     - Prepare for #2056: `cv::Matx` covariance access in `ObjectMatching.cpp` and `association_window.hpp`, removed `TrackManager::getTrack()` in the C++ and Python tests, Kalman matrices in the benchmark harness (z review I1)
+     - **[DONE]** Prepare for #2056: `cv::Matx` covariance access in `ObjectMatching.cpp` and `association_window.hpp`, removed `TrackManager::getTrack()` in the C++ and Python tests, Kalman matrices in the benchmark harness (`e1292f438`, `671601473`; z review I1)
+     - **[DONE]** Benchmark scenarios from `tdorau/tmp-rv-benchmark-multicamera` (`e1292f438`): split and overlapping camera layouts, `BM_TimeChunking` and `BM_Immediate`, people who keep walking. Keeps `--association-config` instead of `--distance-threshold`. Fixes prob review 21
+     - Fix the failing Cognitive Complexity check on #2037: the `association_window` passthrough raises `serialize_for_event` (analytics, 49 > 48) and `prepareObjDict` (scene_common, 93 > 92) above the baseline, which may only shrink. Extract a helper for the optional fields
+     - Remove `kTrackingDistanceThreshold` from `tracking_worker.cpp`: `3792d25d5` removed it, merge `1fd627aa2` brought it back unused. Update `tracker/test/load/README.md`, which still calls it the matching threshold
+     - Update the visualization wording (`render_video.py` docstring, `visualization/README.md`, [viz plan](prob-tracking-viz-plan.md)): with `position_mahalanobis` the 99 % confidence ellipse of `S_xy` is the association gate, up to the `max_radius_m` ceiling, not a Euclidean radius
+     - `{"method": "euclidean"}` without `max_radius_m` gives a 10 m Euclidean gate in both services: the defaults are merged before the per-method fallback, and the Tracker default is 10 m. Use a per-method default, or document `max_radius_m` as required for rollback
+     - Benchmark without `--association-config` runs the tracker default (`MultiClassEuclidean`, 5 m), which matches neither production setting. Default to a preset or document it; drop the stale "copies would alias the tracker's buffers" comment (no longer true after #2056)
+     - Assign or defer the open prob review findings in PR 4 scope: 7 (window drawn at the track position, not the predicted mean), 9 (`how-to-configure-tracker.md` says the Controller raises on an invalid method; it falls back), 12, 13 (config normalized and warning logged per object per frame), 15 (`mMaxRadiusM` never set), 16 (dead code), 19, 20, 22, 23, 26 (`association_window` missing from the ADR and design doc); benchmark hygiene 10, 17, 18, 24
 
 5. **[IN-PROGRESS]** Non-planar Z / `vz` tracking. Branch: feature/prob-tracking-extracted-3d (work branch `tdorau/prob-tracking-extracted-3d` until the feature branch exists). Base branch: feature/prob-tracking-extracted-association
    - Carried over from `feat/tracking-z-axis` (based on an older association branch)

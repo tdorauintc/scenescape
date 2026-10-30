@@ -143,7 +143,7 @@ The Tracker 3D input was then removed (Z5):
 
 Simulated with throwaway merges, first with #2056 @ `a4e2d33fb` and then with its new head `2804edf78`, which adds per-model process noise.
 
-**I1. Association + #2056.** Only one trivial text conflict (benchmark SPDX line), but it does not compile:
+**I1 (fixed in `e1292f438`, `671601473`). Association + #2056.** Only one trivial text conflict (benchmark SPDX line), but it does not compile:
 
 - `.at<double>()` is called on members that become `cv::Matx`, in the `ObjectMatching.cpp` PositionMahalanobis cache and in `tracker/inc/association_window.hpp`.
 - `ObjectMatchingTests.cpp` and `tracking_test.py::test_position_mahalanobis_prefers_motion_axis` use the removed `TrackManager::getTrack()` / `get_track`.
@@ -187,5 +187,5 @@ The fixes are mechanical and belong to PR 4.
 | 5   | Conditional z gating + per-pair df, window df that matches matching (Z1-Z3) + tests | Plan step 5                                                                           |
 | 6   | Separate `vz` noise / planar categories (Z4)                                        | Plan step 5, with PR 3 per-model process noise                                        |
 | 7   | Wildtrack + Unity evaluation vs association branch (Z2)                             | Plan step 5                                                                           |
-| 8   | Fix the session-scoped `rv` mock leak (E4); prepare PR 4 for #2056 (I1)             | Plan step 4                                                                           |
+| 8   | Fix the session-scoped `rv` mock leak (E4); prepare PR 4 for #2056 (I1)             | I1 done (`e1292f438`, `671601473`); E4: plan step 4                                   |
 | 9   | Tracker 3D detection input, then `zMeasured` on its translation path (Z5)           | Done: #2050 + `9b2879806` (E5)                                                        |

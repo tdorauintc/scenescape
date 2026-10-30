@@ -472,7 +472,7 @@ Groups B and C change the output of *every* track in *every* scene, including de
 **2. Zero process noise on position and size will drive `P` toward singularity.**
 [`kinematicProcessNoiseCov`](../../controller/src/robot_vision/src/rv/tracking/MultiModelKalmanEstimator.cpp#L116-L150) writes nothing into `Q(0,0)`, `Q(1,1)` or the size block `(6..9)`. For the size/`z` states there is no transition coupling to inject uncertainty either, so `P_size` decreases monotonically forever: `P ← P − K·S_xyᵀ` with no re-inflation. Long-lived tracks will (a) stop responding to size measurements as the gain collapses, and (b) risk a non-positive-definite `errorCov`, which `getSigmaPoints()` feeds to a Cholesky factorisation. No test covers a multi-hour track. Add a small floor on the size/position diagonal, or re-introduce a minimal `Q` there.
 
-**3. Unguarded `cv::Mat::at<>()` on a possibly-empty covariance in the Tracker service.**
+**3. Unguarded `cv::Mat::at<>()` on a possibly-empty covariance in the Tracker service.** *Resolved by #2056: `predictedMeasurementCov` is a fixed-size `cv::Matx`. A track born in the same chunk still has a zero `S_pred`, so it publishes a zero-size ellipse.*
 [`buildAssociationWindow`](../../tracker/inc/association_window.hpp#L44-L52) reads `track.predictedMeasurementCov.at<double>(0,0)` with no emptiness check, and is called for every reliable track in [`convert_tracks`](../../tracker/src/tracking_worker.cpp#L298). A track created by `TrackManager::createTrack` inherits `predictedMeasurementCov` from the raw detection — i.e. an **empty** `cv::Mat` — and is never predicted before `getReliableTracks()` returns it in the same chunk. With `max_unreliable_time_s`/`max_number_of_unreliable_frames` at 0 this is reachable, and with `-DNDEBUG` `at<>()` performs no bounds check → out-of-bounds read / crash. Note the Python equivalent [`build_association_window`](../../controller/src/controller/ilabs_tracking.py#L124-L180) *is* defensive (`cov.ndim != 2 or cov.shape[0] < 2`); the C++ path is not. Same latent hazard in [`buildPositionMahalanobisTrackCache`](../../controller/src/robot_vision/src/rv/tracking/ObjectMatching.cpp#L84) if `match(..., PositionMahalanobis)` is ever called from Python with raw detections.
 
 **4. Silent, undocumented redefinition of two existing config parameters.**
@@ -535,7 +535,7 @@ On an invalid `method`, [the handler](../../controller/src/controller/scene_cont
 
 ### P4 — Low / cosmetic
 
-**21. Benchmark `peak_fps` counter is misleading for multi-camera runs.** `BM_Track` splits a fixed people count round-robin across cameras, so `--cameras 2` halves detections per camera rather than simulating overlapping views. "2 cameras" here means "same scene, fewer detections each" — the opposite of the real multi-camera cost the fusion code addresses.
+**21. Benchmark `peak_fps` counter is misleading for multi-camera runs.** *Resolved by the `overlap:1` layout (`e1292f438`).* `BM_Track` splits a fixed people count round-robin across cameras, so `--cameras 2` halves detections per camera rather than simulating overlapping views. "2 cameras" here means "same scene, fewer detections each" — the opposite of the real multi-camera cost the fusion code addresses.
 
 **22. 3D gate colour is hard-coded.** `assetmanager.js` uses a single `0x33cc66` material for all categories, while the 2D CSS defines per-category colours (`.person`, `.vehicle`, `.apriltag`). Visually inconsistent between views.
 
