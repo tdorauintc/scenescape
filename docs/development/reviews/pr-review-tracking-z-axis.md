@@ -135,7 +135,7 @@ The Tracker 3D input was then removed (Z5):
 **E4. Failures that already exist on the association branch (not regressions).**
 
 - `SingleJumpingDetectionTracking`.
-- In full-suite pytest runs, 5 PR 4 tests (`test_ilabs_tracking` ×3, `test_scene_controller` ×2) fail because the session-scoped autouse fixture `mock_ilabs_rv` in `scene_pytest/conftest.py` leaves `controller.ilabs_tracking.rv` mocked. They pass in isolation. `make run_unit_tests` would hit this.
+- In full-suite pytest runs, 5 PR 4 tests (`test_ilabs_tracking` ×3, `test_scene_controller` ×2) fail because the session-scoped autouse fixture `mock_ilabs_rv` in `scene_pytest/conftest.py` leaves `controller.ilabs_tracking.rv` mocked. They pass in isolation. `make run_unit_tests` would hit this. Fixed in `0a443c757`: the `scene_pytest` mocks are module-scoped.
 - 3 failures are environment-only (`node`, compose `.env`).
 - `TimeChunkSchedulerTest.Dispatch_AppliesRotationFromVelocityPerCategory` failed once under load because of its 1 s wall-clock wait, then passed 5 of 5 runs.
 
@@ -187,5 +187,5 @@ The fixes are mechanical and belong to PR 4.
 | 5   | Conditional z gating + per-pair df, window df that matches matching (Z1-Z3) + tests | Plan step 5                                                                           |
 | 6   | Separate `vz` noise / planar categories (Z4)                                        | Plan step 5, with PR 3 per-model process noise                                        |
 | 7   | Wildtrack + Unity evaluation vs association branch (Z2)                             | Plan step 5                                                                           |
-| 8   | Fix the session-scoped `rv` mock leak (E4); prepare PR 4 for #2056 (I1)             | I1 done (`e1292f438`, `671601473`); E4: plan step 4                                   |
+| 8   | Fix the session-scoped `rv` mock leak (E4); prepare PR 4 for #2056 (I1)             | Done: I1 `e1292f438`, `671601473`; E4 `0a443c757`                                     |
 | 9   | Tracker 3D detection input, then `zMeasured` on its translation path (Z5)           | Done: #2050 + `9b2879806` (E5)                                                        |

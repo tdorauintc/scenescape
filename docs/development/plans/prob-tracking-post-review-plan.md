@@ -121,6 +121,7 @@ Done:
 - Updated with PR 3: streaming fusion removal, C++20, test split (#2103; z review E3) and #2056 (`cv::Matx` access, `getTrack()` removal, benchmark Kalman matrices: `e1292f438`, `671601473`; z review I1).
 - Multi-camera benchmark scenarios (`e1292f438`; prob review 21), keeping `--association-config`.
 - Visualization wording: with `position_mahalanobis` the 99 % `S_xy` ellipse is the gate up to `max_radius_m`; zoom videos draw the recorded method's gate.
+- `scene_pytest` robot_vision mocks scoped to each module (`0a443c757`; z review E4): the 5 association tests pass in full-suite runs.
 
 Open:
 
@@ -131,12 +132,11 @@ Open:
 5. Evaluate and mitigate the cost of `numpy.linalg.eigh` / `cv::eigen` in association window publishing.
 6. Make the birth-clustering radius `kDefaultBirthClusterRadiusM` configurable.
 7. Wrap the yaw difference in the legacy `Mahalanobis` cost and apply the `prepareYawMeasurement` speed gate + ±π wrap UT (yaw review 3).
-8. Fix the session-scoped `controller.ilabs_tracking.rv` mock in `scene_pytest/conftest.py` that fails 5 association tests in full-suite runs (z review E4).
-9. Fix the Cognitive Complexity check: extract a helper for the optional `association_window` fields in `serialize_for_event` and `prepareObjDict`.
-10. Remove the unused `kTrackingDistanceThreshold` from `tracking_worker.cpp` (re-added by merge `1fd627aa2`); update `tracker/test/load/README.md`.
-11. `{"method": "euclidean"}` without `max_radius_m` gives a 10 m gate in both services: use a per-method default or document `max_radius_m` as required.
-12. The benchmark default without `--association-config` (`MultiClassEuclidean`, 5 m) matches no production setting: default to a preset or document it; drop the stale buffer-aliasing comment.
-13. Assign or defer the open [prob review issues](../reviews/pr-review-probabilistic-tracking.md#6-issues--highest-priority-first) 7, 9, 12, 13, 15, 16, 19, 20, 22, 23, 26 and benchmark hygiene 10, 17, 18, 24.
+8. Fix the Cognitive Complexity check: extract a helper for the optional `association_window` fields in `serialize_for_event` and `prepareObjDict`.
+9. Remove the unused `kTrackingDistanceThreshold` from `tracking_worker.cpp` (re-added by merge `1fd627aa2`); update `tracker/test/load/README.md`.
+10. `{"method": "euclidean"}` without `max_radius_m` gives a 10 m gate in both services: use a per-method default or document `max_radius_m` as required.
+11. The benchmark default without `--association-config` (`MultiClassEuclidean`, 5 m) matches no production setting: default to a preset or document it; drop the stale buffer-aliasing comment.
+12. Assign or defer the open [prob review issues](../reviews/pr-review-probabilistic-tracking.md#6-issues--highest-priority-first) 7, 9, 12, 13, 15, 16, 19, 20, 22, 23, 26 and benchmark hygiene 10, 17, 18, 24.
 
 #### PR 5: Non-planar Z tracking
 
