@@ -125,6 +125,7 @@ Done:
 - Cognitive Complexity check fixed (`3b4b0555f`): `add_association_window` in `scene_common.association` copies the optional `association_window` for `serialize_for_event` and `prepareObjDict`, back at their baseline; passthrough tests in both.
 - Unused `kTrackingDistanceThreshold` removed from `tracking_worker.cpp` (`67a14e020`); the load test README and `simulate-detections.js` refer to `tracking.association` instead.
 - Per-method `max_radius_m` default (`aa4e6905e`): without it `euclidean` uses the legacy 2 m gate and `position_mahalanobis` the 10 m ceiling, in both services; the Tracker resolves it after the env overrides, using the formerly unused `kDefaultAssociationMaxRadiusM` (prob review 16); how-to and config schema updated.
+- Benchmark default association (`7d41f3a99`): without `--association-config` the production association (`position_mahalanobis`, 0.99, 10 m) instead of the tracker's built-in `MultiClassEuclidean` 5 m path; config files get the service defaults for missing keys; stale buffer-aliasing comment dropped.
 
 Open:
 
@@ -135,8 +136,7 @@ Open:
 5. Evaluate and mitigate the cost of `numpy.linalg.eigh` / `cv::eigen` in association window publishing.
 6. Make the birth-clustering radius `kDefaultBirthClusterRadiusM` configurable.
 7. Wrap the yaw difference in the legacy `Mahalanobis` cost and apply the `prepareYawMeasurement` speed gate + ±π wrap UT (yaw review 3).
-8. The benchmark default without `--association-config` (`MultiClassEuclidean`, 5 m) matches no production setting: default to a preset or document it; drop the stale buffer-aliasing comment.
-9. Assign or defer the open [prob review issues](../reviews/pr-review-probabilistic-tracking.md#6-issues--highest-priority-first) 7, 9, 12, 13, 15, 16, 19, 20, 22, 23, 26 and benchmark hygiene 10, 17, 18, 24.
+8. Assign or defer the open [prob review issues](../reviews/pr-review-probabilistic-tracking.md#6-issues--highest-priority-first) 7, 9, 12, 13, 15, 16, 19, 20, 22, 23, 26 and benchmark hygiene 10, 17, 18, 24.
 
 #### PR 5: Non-planar Z tracking
 
