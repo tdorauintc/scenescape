@@ -126,6 +126,7 @@ Done:
 - Unused `kTrackingDistanceThreshold` removed from `tracking_worker.cpp` (`67a14e020`); the load test README and `simulate-detections.js` refer to `tracking.association` instead.
 - Per-method `max_radius_m` default (`aa4e6905e`): without it `euclidean` uses the legacy 2 m gate and `position_mahalanobis` the 10 m ceiling, in both services; the Tracker resolves it after the env overrides, using the formerly unused `kDefaultAssociationMaxRadiusM` (prob review 16); how-to and config schema updated.
 - Benchmark default association (`7d41f3a99`): without `--association-config` the production association (`position_mahalanobis`, 0.99, 10 m) instead of the tracker's built-in `MultiClassEuclidean` 5 m path; config files get the service defaults for missing keys; stale buffer-aliasing comment dropped.
+- Benchmark tracks with the production filter and lifecycle settings (`37be27721`): with the former default config (r = 0.01) the Mahalanobis gate fragmented tracks in the overlapping 2-camera layouts, 1.3–1.7 births per frame instead of 0.5; now 0.5 everywhere.
 
 Open:
 
