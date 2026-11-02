@@ -166,6 +166,7 @@ Done:
 
 - A correct without R after one with R, before the next predict, no longer reuses the earlier R + UT.
 - [Visualization plan](../done/prob-tracking-viz-plan.md): with R the `S_xy` ellipse is not the gate for that detection.
+- Scenario test support (`d2039588f`): `Sensor::positionCovariance` draws the error from a covariance (`groundPlaneCamera`, `depthCamera`, `fixedCovariance`) and reports it as R; the recorder writes R per detection and `HPHt` per step.
 
 Open:
 
@@ -174,6 +175,9 @@ Open:
 3. Apply PR 5's z gating (measured z on both sides, χ² df per pair) to the per-pair R gate (z review Z1, Z2).
 4. Combine with PR 3's reduced yaw update for detections without orientation (yaw review 2): both change the UKF correct.
 5. Evaluate impact on Wildtrack and Unity against PR 5 once a producer sets R.
+6. Scenario tests with R, as paired runs with and without R: one camera, two cameras at 90°, mixed with and without R, wrong `reportedScale`. In a trial with two ground-plane cameras, R lowered the position error on 19 of 20 seeds.
+7. Investigate the track restarts in that trial: at 0.005 rad with R and `position_mahalanobis`, tracks restarted through the whole run (about 2-3 per run); without R or with `euclidean`, extra tracks started only in the first 3 s. Check how the tests generate R and whether it is too small for the gate (0.06 m across the ray at 12 m).
+8. Optional: draw the per-detection gate `HPHt + R` in the visualization tools.
 
 ### Tasks Not started
 
