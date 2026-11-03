@@ -7,9 +7,9 @@ SPDX-License-Identifier: Apache-2.0
 
 ## High level details
 
-- Branch: `tdorau/prob-tracking-extracted-rv-tests` (steps 1–3) and `tdorau/imm-ukf-improvements` (step 4), both into `feature/prob-tracking-extracted` @ `736c28e13`.
+- Branch: `tdorau/prob-tracking-extracted-rv-tests` (steps 1–3) and `tdorau/imm-ukf-improvements` (step 4), both into `feature/prob-tracking-extracted` @ `736c28e13`; F-2 committed directly to `feature/prob-tracking-extracted` (`6277c8cf5`).
 - PRs: #2048 (`robot_vision` tests: split by component, add scenario tools and UKF/IMM coverage), #2056 (IMM-UKF improvements & fixes, merged as `5abb80adb`).
-- Commit: values last measured at `d673ef83a`.
+- Commit: values last measured at `6277c8cf5`.
 - Tests and test-first fixes in `controller/src/robot_vision/test` for [PR 3](prob-tracking-post-review-plan.md#pr-3-imm-ukf) of the post-review plan.
 
 ### Context
@@ -19,7 +19,7 @@ SPDX-License-Identifier: Apache-2.0
 - Test-first: the failing test lands first, then the fix with before / after values in its commit message; tests waiting on a decision pin current behaviour.
 - Fixes are ordered so that each one is calibrated on top of the previous ones ("order N" below).
 - Verification: `make -C tracker test-robot-vision`; `RobotVisionTests --gtest_filter=...` while iterating; `RV_SCENARIO_DIR` to record scenarios.
-- Out of scope: changes outside `controller/src/robot_vision` (Controller yaw publish switch, yaw review 4), Python `tracking_test.py` tolerances, ADR and `how-to-configure-tracker.md` wording (prob review 4), best-model vs mixture covariance (PR 4), rewriting the legacy tracker tests.
+- Out of scope: changes outside `controller/src/robot_vision` (Controller and Tracker yaw publish switch, yaw review 4: PR 4), Python `tracking_test.py` tolerances, ADR and `how-to-configure-tracker.md` wording (prob review 4), best-model vs mixture covariance (PR 4), rewriting the legacy tracker tests.
 
 ### Related documents
 
@@ -34,25 +34,25 @@ SPDX-License-Identifier: Apache-2.0
 
 1. [Step 1](#step-1-split-trackingtestscpp): split `TrackingTests.cpp` by component (#2048).
 2. [Step 2](#step-2-test-tools): header-only scenario tools in `test/support/` (#2048).
-3. [Step 3](#step-3-coverage-tests): coverage tests C-1 to C-12 (#2048, #2086); C-12 skipped as a known issue.
+3. [Step 3](#step-3-coverage-tests): coverage tests C-1 to C-13 (#2048, #2086, `6277c8cf5`); C-12 skipped as a known issue.
 4. [F-3](#f-3-per-model-predicted-measurements) (order 1): per-model predicted measurements (#2056).
 5. [F-1](#f-1-per-model-process-noise) (order 2): per-model process noise (#2056).
+6. [SingleJumpingDetectionTracking](#singlejumpingdetectiontracking) (order 3): mechanism found; known-issue skip since F-2.
+7. [F-2](#f-2-no-yaw-update-without-orientation) (order 4): no yaw update for detections without orientation (`6277c8cf5`).
+8. [F-4](#f-4-rank-orienting-yaw-by-class-probability) (order 6): won't fix.
 
 ## Tasks In progress
 
 1. [F-7](#f-7-initial-velocity-uncertainty) (order 9): initial velocity uncertainty; sweep done, proposal 16 m²/s² without the cap.
 2. [Velocity tolerance](#velocity-tolerance) (order 10): C-8 pins the loosened tolerance; investigation open.
-3. [E-2](#e-2-constant-offset-in-sustained-turns) (order 11): constant offset in sustained turns analysed; decision waits for per-sensor noise.
+3. [E-2](#e-2-constant-offset-in-sustained-turns) (order 11): constant offset in sustained turns analysed, halved by F-2; decision waits for per-sensor noise.
 
 ## Tasks Not started
 
-1. [SingleJumpingDetectionTracking](#singlejumpingdetectiontracking) (order 3): passes since F-1; find the mechanism.
-2. [F-2](#f-2-no-yaw-update-without-orientation) (order 4): no yaw update for detections without orientation.
-3. [F-5](#f-5-process-noise-floor) (order 5): process-noise floor on position, z and size.
-4. [F-4](#f-4-rank-orienting-yaw-by-class-probability) (order 6): rank orienting yaw by detected-class probability.
-5. [F-6](#f-6-cholesky-failure-recovery) (order 7): recover from a failed Cholesky factorisation.
-6. [E-1](#e-1-sigma-point-weights) (order 8): evaluate the sigma-point weights (κ).
-7. [Re-measure pinned values](#re-measure-pinned-values): tighten the calibrated bounds as fixes land.
+1. [F-5](#f-5-process-noise-floor) (order 5): process-noise floor on position, z and size.
+2. [F-6](#f-6-cholesky-failure-recovery) (order 7): recover from a failed Cholesky factorisation.
+3. [E-1](#e-1-sigma-point-weights) (order 8): evaluate the sigma-point weights (κ).
+4. [Re-measure pinned values](#re-measure-pinned-values): tighten the calibrated bounds as fixes land.
 
 ## Details
 
@@ -93,6 +93,7 @@ Production config with all three models unless noted; bounds relational where po
 | C-10 | `MotionScenarioTests` / `SteadyMotionHasNoConstantTrailingOffset`                 | Straight-line offset                                                      |
 | C-11 | `MotionScenarioTests` / `DetectionLatencyLeavesConstantTrailingOffset`            | Latency offset = speed × lag (mechanism)                                  |
 | C-12 | `MotionScenarioTests` / `SteadyCircleHasNoConstantOffset`                         | Offset in turns; skipped ([E-2](#e-2-constant-offset-in-sustained-turns)) |
+| C-13 | `YawEstimationTests` / `CameraOnlyTurningYawStaysBounded`                         | Camera-only yaw bounded ([F-2](#f-2-no-yaw-update-without-orientation))   |
 
 #### F-3: per-model predicted measurements
 
@@ -104,6 +105,23 @@ Production config with all three models unless noted; bounds relational where po
 - Fix (`2804edf78`; yaw review E3, delta 9.8): each model's Q follows its own mixed velocity; CA acceleration noise, CTRV turn-rate noise 0.1 (rad/s)²/s, 1e-6/s floor on reset states.
 - Tests: `ModelSelection`, `TurningTargetLearnsTurnRate`, `CoastingAfterTurn`, `OrientingSensorFollowsTurningHeading`, `OrientingSensorFollowsRotationInPlace`, `CovarianceStaysPositiveDefinite`, guard `StraightLineMatchesConstantVelocityFilter`, `ProcessNoisePerModelShape`, `PredictAppliesPerModelProcessNoise`.
 - Before → after: CTRV in a 5 m/s car turn .18 → .57, turn rate 0 → 0.38 rad/s, coast after a turn 2.07 → 1.43 m, orienting yaw after a 58 s circle 1.82 → 0.07 rad. The five bug tests also fail on `main` (`5d80db465`).
+
+#### SingleJumpingDetectionTracking
+
+- Order 3: the legacy `MultipleObjectTrackerTests` test (15 → 200 m/s jump, r = 1e-4, 10 ms frames) passed from F-1 on only because camera frames corrected yaw with a fake measurement, which at r = 1e-4 held CTRV's turn rate at 0. It had failed since `254afe920`.
+- Without it (F-2) the UKF puts the 2 m-per-frame jump, a 200-sigma innovation, into CTRV's turn rate: the velocity flips to −160 m/s and the detection starts a new track at 1360 ms. With r = 0.2 the track splits with and without F-2.
+- Known-issue skip since `6277c8cf5`: one track required before the jump, skipped when the track splits after it. Holding the track would need an outlier-robust update.
+
+#### F-2: no yaw update without orientation
+
+- Fix (`6277c8cf5`; yaw review 2): `UnscentedKalmanFilterMod::correct(measurement, observedRows)` restricts the cross-covariance, S and the innovation to the observed rows. The estimator leaves the yaw row out of the update and the model likelihood when the prepared detection has no usable orientation (none, or dropped by the speed gate); orienting detections keep the full update. ADR 0017 wording fixed.
+- Tests: `YawEstimationTests` / `CameraOnlyUpdateLeavesYawUntouched` (per-model yaw and `P_yaw` unchanged by a camera update; before, each frame cut `P_yaw` by 3 % with CV and 14–19 % with three models and moved the model yaws by 0.015 rad) and `CameraOnlyPeriodKeepsLidarResponsive` (1 s of LiDAR after 10 s of camera reaches 0.33 → 0.49 rad of a 0.5 rad step, 0.37 right after birth). `CameraOnlyTurningYawStaysBounded` passes before and after: C-13.
+- Before → after (camera-only, 10 seeds): position RMS in the turn 0.27 → 0.18, manoeuvre 0.24 → 0.20, car circle 0.24 → 0.18, person turn 0.30 → 0.16, rectangular path 0.33 → 0.24 m; CTRV turn rate 0.38 → 0.42 rad/s in the 0.5 rad/s car circle, 0.03 → 0.24 rad/s in the 0.4 rad/s person turn; final speed after a turn +0.03 to +0.09 m/s; straight cases within ±4 %. C-12 car and person circles within 0.15 m. F-1 had already removed most of the slow LiDAR response measured in the yaw review (0.05 rad after 1 s).
+- Follow-up: the unobserved yaw variance of camera-only tracks keeps growing (standing car 41 rad² after 10 min); [tuning required] in the post-review plan, PR 8.
+
+#### F-4: rank orienting yaw by class probability
+
+- Won't fix (yaw review 6): the Tracker service never sets `classification`, so `applyOrientingYaw` ranks by camera order there. Only the Controller (to be deprecated) builds `[c, 1−c]`, which misranks only when two orienting detections of one track arrive in one chunk and one has c < 0.5. `OrientingYawRanksByDetectedClassConfidence` not added.
 
 ### Tasks In progress
 
@@ -133,30 +151,15 @@ Production config with all three models unless noted; bounds relational where po
 - The steady-turn window is dominated by the turn onset: CTRV leads from about 1.4 s into the turn, cross-track peaks at −0.44 m.
 - Sensor noise (0–0.45 m, 20 seeds) does not move it; only r does: r = 0.05 gives −0.09 / −0.18, r = 0.0025 −0.02 / −0.04 m, but CA then wins every turn (μ .75).
 - Not levers (cross-track still ≥ 0.1 m): Markov-predicted μ, no [min, max] rescale (CA wins, μ ≈ .9), CTRV keeping its own w in mixing, model sets {CV, CTRV} or {CA, CTRV}.
+- After F-2 (`6277c8cf5`, seed 1): car circle −0.06 / −0.10, person circle −0.11 / −0.08, steady turn −0.09 / −0.17 m. The fake yaw measurement of camera frames penalised CTRV in turns and held its turn rate back; C-12 stays skipped for the steady turn.
 - Decision: with the detection noise measured per sensor ([tuning guide](../future/prob-tracking-imm-tuning.md) §5).
 
 ### Tasks Not started
-
-#### SingleJumpingDetectionTracking
-
-- Order 3: the existing `MultipleObjectTrackerTests` test (15 → 200 m/s jump) passes since F-1, after failing since `254afe920`. Find the mechanism, then fix the cause or update the expectations, with the reason in the commit message.
-
-#### F-2: no yaw update without orientation
-
-- Order 4 (yaw review 2): reduced update without yaw for non-orienting detections; fix the ADR "predict" wording.
-- `YawEstimationTests` / `CameraOnlyUpdateLeavesYawUntouched`: `P_yaw` after correct equals after predict (CV only); each model keeps its own predicted yaw (three models).
-- `YawEstimationTests` / `CameraOnlyPeriodKeepsLidarResponsive`: 1 s of LiDAR at 0.5 rad after 10 s of camera moves yaw at least as much as right after birth.
-- `YawEstimationTests` / `CameraOnlyTurningYawStaysBounded`: 60 s camera-only circle keeps covariances PD and yaw variance and model yaw spread bounded; moves to step 3 if it already passes.
 
 #### F-5: process-noise floor
 
 - Order 5 (prob review 2, G9; delta 9.1): floor on position, z and size process noise; updates C-6.
 - `MotionScenarioTests` / `LongLivedTrackFollowsSizeChange`: 5 min stationary at 10 fps, then height +0.3 m; at least 50 % of the step within 2 s, every model covariance PD (today the gain is ~1/N).
-
-#### F-4: rank orienting yaw by class probability
-
-- Order 6 (yaw review 6): `applyOrientingYaw` ranks by the detected-class probability instead of `maxCoeff()`.
-- `OrientationFusionTests` / `OrientingYawRanksByDetectedClassConfidence`: `[0.3, 0.7]` vs `[0.6, 0.4]`; today the 0.3 detection wins.
 
 #### F-6: Cholesky failure recovery
 
@@ -170,19 +173,20 @@ Production config with all three models unless noted; bounds relational where po
 
 #### Re-measure pinned values
 
-Bounds calibrated at `8f1c0d9ef` (Release, fixed seed); C-7 re-calibrated after F-1 (`838f28653`), C-7 and C-9 re-measured after F-3 (`c3c8c3f96`) and F-1 (`2804edf78`), C-7 and C-10 to C-12 at `d673ef83a`. Format: bound (measured).
+Bounds calibrated at `8f1c0d9ef` (Release, fixed seed); C-7 re-calibrated after F-1 (`838f28653`), C-7 and C-9 re-measured after F-3 (`c3c8c3f96`) and F-1 (`2804edf78`), C-7 and C-10 to C-12 at `d673ef83a`; all re-measured after F-2 (`6277c8cf5`). Format: bound (measured).
 
 | Test                                               | Bound (measured)                                                                                                                                                                                                                                                                                                              | After    |
 | -------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- |
-| C-7 `TracksMotionCases`, max error / final speed   | constant velocity 0.15 / 0.03 (0.10 / 0.016), acceleration 0.45 / 0.01 (0.34 / 0.004), turn 0.65 / 0.05 (0.53 / 0.015), sudden stop 0.9 / 0.05 (0.69 / 0.037), manoeuvre 0.6 / 0.25 (0.49 / 0.175), car circle 0.65 / 0.2 (0.53 / 0.130), pedestrian turn 0.5 / 0.1 (0.43 / 0.059), rectangular path 0.8 / 0.2 (0.66 / 0.143) | F-5, E-2 |
+| C-7 `TracksMotionCases`, max error / final speed   | constant velocity 0.15 / 0.03 (0.10 / 0.011), acceleration 0.45 / 0.01 (0.35 / 0.006), turn 0.55 / 0.05 (0.42 / 0.019), sudden stop 0.9 / 0.05 (0.69 / 0.037), manoeuvre 0.45 / 0.2 (0.37 / 0.152), car circle 0.60 / 0.25 (0.49 / 0.172), person turn 0.35 / 0.12 (0.26 / 0.090), rectangular path 0.65 / 0.3 (0.49 / 0.229) | F-5, E-2 |
 | C-8 `ConstantVelocityConvergence`                  | 0.05 m/s (CV 0.008 / 0.003, three models 0.008 / 0.002; one seed)                                                                                                                                                                                                                                                             | Order 10 |
 | C-9 `TargetBornMovingAcquiresSpeed`                | ≥ 4.5 m/s (4.98; 4.99 before F-1, 4.79 before F-3)                                                                                                                                                                                                                                                                            | F-7      |
 | C-6 `ProcessNoisePerModelShape`                    | Pinned formula; zero position, z and size noise                                                                                                                                                                                                                                                                               | F-5      |
 | C-5 `InitialCovarianceUsesMeasurementNoiseAndCaps` | Latent caps 0.05 velocity, 0.1 acceleration, 0.05 yaw, 0.01 yaw rate (exact)                                                                                                                                                                                                                                                  | F-7      |
 | C-10 `SteadyMotionHasNoConstantTrailingOffset`     | ≤ 0.15 m (+0.02 / +0.01); the steady turn moves back here once E-2 passes                                                                                                                                                                                                                                                     | E-2      |
-| F-1 `ModelSelection`                               | CV margin ≥ .03 / .05 (.054 / .105); CA μ ≥ .45 (.59 / .62); CTRV μ ≥ .45 / .40 (.57 / .48), margin ≥ .2 / .1 (.35 / .21); turn exit margin ≥ .03 (.071)                                                                                                                                                                      | F-5      |
-| F-1 `TurningTargetLearnsTurnRate`                  | w in [0.3, 0.6] (0.38), [−0.45, −0.15] (−0.22), ±0.05 (−0.005)                                                                                                                                                                                                                                                                | F-5      |
-| F-1 `CoastingAfterTurn`                            | ≤ 1.8 m (1.43)                                                                                                                                                                                                                                                                                                                | E-1, F-5 |
-| F-1 `OrientingSensorFollowsTurningHeading`         | ≤ 0.2 rad (0.07), model yaw spread ≤ 0.3 (0.15)                                                                                                                                                                                                                                                                               | F-2, F-5 |
-| F-1 `OrientingSensorFollowsRotationInPlace`        | ≥ 0.35 / 0.45 rad (0.42 / 0.50)                                                                                                                                                                                                                                                                                               | F-2, F-5 |
-| F-1 `StraightLineMatchesConstantVelocityFilter`    | ratio ≤ 1.1 (1.01 / 0.83 / 1.04; a single seed varies by about 0.2)                                                                                                                                                                                                                                                           | F-5      |
+| F-1 `ModelSelection`                               | CV margin ≥ .03 / .05 (.043 / .103); CA μ ≥ .45 (.58 / .62); CTRV μ ≥ .45 / .40 (.56 / .48), margin ≥ .2 / .1 (.34 / .21); turn exit margin ≥ .03 (.066)                                                                                                                                                                      | F-5      |
+| F-1 `TurningTargetLearnsTurnRate`                  | w in [0.3, 0.6] (0.41), [−0.45, −0.15] (−0.24), ±0.05 (−0.003)                                                                                                                                                                                                                                                                | F-5      |
+| F-1 `CoastingAfterTurn`                            | ≤ 1.8 m (1.17)                                                                                                                                                                                                                                                                                                                | E-1, F-5 |
+| F-1 `OrientingSensorFollowsTurningHeading`         | ≤ 0.2 rad (0.07), model yaw spread ≤ 0.3 (0.15)                                                                                                                                                                                                                                                                               | F-5      |
+| F-1 `OrientingSensorFollowsRotationInPlace`        | ≥ 0.35 / 0.45 rad (0.42 / 0.50)                                                                                                                                                                                                                                                                                               | F-5      |
+| F-1 `StraightLineMatchesConstantVelocityFilter`    | ratio ≤ 1.1 (1.02 / 0.84 / 1.03; a single seed varies by about 0.2)                                                                                                                                                                                                                                                           | F-5      |
+| C-13 `CameraOnlyTurningYawStaysBounded`            | yaw variance ≤ 0.2 rad² (0.13), model yaw spread ≤ 0.3 rad (0.18)                                                                                                                                                                                                                                                             | PR 8     |
