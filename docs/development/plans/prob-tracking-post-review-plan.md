@@ -37,7 +37,7 @@ SPDX-License-Identifier: Apache-2.0
 
 ## Tasks In progress
 
-1. [PR 3](#pr-3-imm-ukf): IMM-UKF fixes; per-model noise and predictions (#2056) and reduced yaw update done, noise floor and UKF robustness open.
+1. [PR 3](#pr-3-imm-ukf): IMM-UKF fixes; per-model noise and predictions (#2056), reduced yaw update, initial velocity variance and UKF robustness done; jitter and turn offset open.
 2. [PR 4](#pr-4-mahalanobis-association): Mahalanobis association (#2037); scenario tests done, coverage, evaluation and config fixes open.
 3. [PR 5](#pr-5-non-planar-z-tracking): Non-planar Z / `vz` tracking (#2109); port done, conditional z gating, `vz` noise and evaluation open.
 4. [PR 7](#pr-7-per-detection-measurement-noise-r): Per-detection measurement noise R (#2129); consumption done, producer and opt-in switch open.
@@ -98,21 +98,20 @@ Done:
 - Strict C++20 build; CI builds the Controller image when `controller/src/robot_vision/**` changes.
 - Kalman filter settings documented (`4ac31c2f7`; prob review 4): process noise, measurement noise and initial covariance in the robot_vision README ("Kalman filter settings") and the Python docstrings; made-up tracker config example in `controller/Agents.md` replaced with the real keys. Not in `how-to-configure-tracker.md`: neither service reads them from its config; the how-to follows when robot_vision settings are exposed.
 - Reduced yaw update for detections without orientation (F-2, `6277c8cf5`; yaw review 2): the yaw row is left out of the UKF update and the model likelihood, instead of a fake measurement at the predicted yaw; ADR 0017 wording fixed. Camera-only turns (10 seeds): position RMS −25 to −47 %, CTRV turn rate 0.38 → 0.42 rad/s in a 0.5 rad/s car circle and 0.03 → 0.24 rad/s in a 0.4 rad/s person turn, final speed after a turn +0.03 to +0.09 m/s; C-12 car and person circles within 0.15 m. LiDAR 1 s after 10 s of camera: 0.33 → 0.49 rad of a 0.5 rad step. `SingleJumpingDetectionTracking` had passed only through the fake yaw; now a known-issue skip.
+- Velocity tolerance explained (`1161e771f`; prob review 5): on constant-velocity targets the velocity error is 3–6× main's (300 seeds), because the velocity noise, about 300× main's, makes the filter follow the detections for manoeuvre response. `VELOCITY_TOLERANCE` = 0.05 m/s documented in `tracking_test.py`; the tests are seeded (unseeded they exceeded 0.05 about once in 2000–3000 runs). Restoring 0.01 needs less velocity noise: PR 8.
+- Initial velocity variance (F-7, `68f5d696d`; delta 9.2): the 0.05 cap dropped, the velocity starts at `init_state_covariance` (1, as on main). The cap was a regression against main: with the services' 2 m Euclidean gate at 10 fps a car entering at 8 or 10 m/s made 11 or 14 tracks and never became reliable; now one track at 8 m/s, 3.8 at 10 m/s. Position RMS −2 to −19 % at 10 fps, −9 to −55 % at 2 fps. Raising 1 → 16: PR 8.
+- Cholesky failure recovery (F-6, `c4393854f`; baseline 9.4): a failed factorisation left a half-factorised matrix with inverted diagonal entries (a variance of 4 became 0.25); a finite covariance is now symmetrized, its eigenvalues raised to a floor, with one warning. Never reached in 2 h standing, 1 h circles at 10 and 1 fps, coasts or the jump runs.
+- Sigma-point weights kept at κ = 3 − n (E-1, `a222bd748`; baseline 9.4, delta 9.10): no measurable effect at 10 fps (≤ 0.001 m) or 2 fps (≤ 0.01 m); one CTRV step with a turn-rate uncertainty of 1 rad gives a mean speed of 1.84 m/s against the exact 1.82 (κ = 0: 2.51); baseline's 7.2 m/s no longer reproduces. Documented in code and README; a UT pins it.
 
 Won't fix:
 
 - Rank orienting yaw by the detected-class probability ([F-4](prob-tracking-pr3-rv-tests-plan.md#f-4-rank-orienting-yaw-by-class-probability); yaw review 6): the Tracker service never sets `classification`, so `applyOrientingYaw` ranks by camera order there. Only the Controller (to be deprecated) builds `[c, 1−c]`, which misranks only when two orienting detections of one track arrive in one chunk and one has c < 0.5.
+- Velocity noise direction for standing tracks (delta 9.9; [review comment](https://github.com/open-edge-platform/scenescape/pull/2036#discussion_r4248893254)): a standing car's gate is 0.495 × 0.485 m (ratio 1.02, 1.06 after a 1 s coast), the world-x fallback below 1 mm/s is not reached (the noisy speed stays near 0.03 m/s) and PR 3 associates with a Euclidean gate. Matters only with more standing-track velocity noise: see [PR 4](#pr-4-mahalanobis-association) open item 1.
 
 Open:
 
-1. Process-noise floor on position, z and size + long-duration test; update the robot_vision README ([F-5](prob-tracking-pr3-rv-tests-plan.md#f-5-process-noise-floor); prob review 2, G9; delta 9.1).
-2. Explain or revert the velocity tolerance loosening (0.01 → 0.05) in `tracking_test.py` (prob review 5).
-3. Raise the initial velocity uncertainty so that objects entering already moving get a track: drop the 0.05 velocity cap, `init_state_covariance` 1 → 16; update the caps in the robot_vision README. Today objects entering at 10 fps faster than about 5 m/s (Euclidean) or 3 m/s (Mahalanobis) never get a reliable track ([F-7](prob-tracking-pr3-rv-tests-plan.md#f-7-initial-velocity-uncertainty); delta 9.2).
-4. Recover from a failed Cholesky factorisation in `getSigmaPoints` + UT ([F-6](prob-tracking-pr3-rv-tests-plan.md#f-6-cholesky-failure-recovery); baseline 9.4).
-5. Sigma-point weights κ = 3 − n vs 0 for CTRV under strong nonlinearity: keep and document, or change + UT ([E-1](prob-tracking-pr3-rv-tests-plan.md#e-1-sigma-point-weights); baseline 9.4, delta 9.10).
-6. Controller Immediate-mode jitter: find what in the filter gives the reduction streaming fusion gave, without double smoothing. After F-1 (Unity): Immediate rms_jerk +6 %, acceleration_variance +16 % (noise); time-chunking +39 % / +79 %; Tracker Service −15 % / −22 %.
-7. Constant offset in sustained turns (known issue): F-2 halved it, the car and person circles are within 0.15 m (a 3 m/s car on a 6 m circle 0.06 m behind, 0.10 m outside); the steady-turn window, dominated by the turn onset, is still 0.09 m behind and 0.17 m outside. Decide with the per-sensor detection noise ([E-2](prob-tracking-pr3-rv-tests-plan.md#e-2-constant-offset-in-sustained-turns); [tuning guide](../future/prob-tracking-imm-tuning.md) §5).
-8. Velocity noise direction for standing tracks: below 1 mm/s the along-track axis falls back to world x, so Q is 100× larger along x than along y; above that it follows the noisy velocity. Make the velocity noise isotropic at low speed + UT (updates C-6 and the robot_vision README), together with the velocity noise for standing tracks in [PR 4](#pr-4-mahalanobis-association) open item 1. Measured effect small: 1.50 × 1.48 m ellipse (delta 9.9; [review comment](https://github.com/open-edge-platform/scenescape/pull/2036#discussion_r4248893254)).
+1. Controller Immediate-mode jitter: find what in the filter gives the reduction streaming fusion gave, without double smoothing. After F-1 (Unity): Immediate rms_jerk +6 %, acceleration_variance +16 % (noise); time-chunking +39 % / +79 %; Tracker Service −15 % / −22 %.
+2. Constant offset in sustained turns (known issue): F-2 halved it, the car and person circles are within 0.15 m (a 3 m/s car on a 6 m circle 0.06 m behind, 0.10 m outside); the steady-turn window, dominated by the turn onset, is still 0.09 m behind and 0.15 m outside. Decide with the per-sensor detection noise ([E-2](prob-tracking-pr3-rv-tests-plan.md#e-2-constant-offset-in-sustained-turns); [tuning guide](../future/prob-tracking-imm-tuning.md) §5).
 
 #### PR 4: Mahalanobis association
 
@@ -133,7 +132,7 @@ Done:
 
 Open:
 
-1. Un-skip the entering-target tests once PR 3 raises the initial velocity uncertainty ([F-7](prob-tracking-pr3-rv-tests-plan.md#f-7-initial-velocity-uncertainty)), and add a car entering faster than the Euclidean gate as a differentiating scenario. For `CarPullingAwayKeepsOneTrack` decide between more velocity noise for standing tracks (PR 3) and a gate floor at the Euclidean radius.
+1. Check the entering-target tests with the velocity cap dropped (`68f5d696d`, velocity variance 1); un-skip them, or keep them for the 1 → 16 step in PR 8 ([F-7](prob-tracking-pr3-rv-tests-plan.md#f-7-initial-velocity-uncertainty)). Add a car entering faster than the Euclidean gate as a differentiating scenario. For `CarPullingAwayKeepsOneTrack` decide between more velocity noise for standing tracks (PR 3) and a gate floor at the Euclidean radius; with more standing-track velocity noise, make it isotropic at low speed, since the along-track shape (100:1) would otherwise point along world x or a noisy direction (delta 9.9).
 2. Coverage: `max_radius_m` ceiling, degenerate covariance, gate costs from the implementation, Controller forwarding to `track()`, C++ `buildAssociationWindow`, Euclidean vs Mahalanobis benchmark (prob review G4, G6, G7, G12, G13, G15). Fix `PositionMahalanobisPrefersAlongTrackAxis` (C++ and Python) to predict → setMeasurement → correct.
 3. Evaluate impact on Unity and Wildtrack (`position_mahalanobis` vs `euclidean`); replace the stale Phase 1 notes in `.github/plans/plan-probabilistic-tracking.md` (prob review 25). Baseline for PR 5 and noise changes ([tuning guide](../future/prob-tracking-imm-tuning.md) §5 item 10).
 4. Evaluate the mixture covariance vs the best model's covariance for matching.
@@ -188,7 +187,10 @@ Open:
 #### PR 8: Dataset and testing
 
 - Base `feature/prob-tracking-extracted-3d`: final accuracy and performance evaluation, then merge to `main`.
-- [tuning required] Unobserved yaw variance of camera-only tracks keeps growing since F-2 (`6277c8cf5`): a standing car reaches 4 rad² after 1 min and 41 rad² after 10 min (straight driving 0.17, a circle 0.55 rad² after 10 min), driven by CTRV's turn-rate noise. Covariances stay positive definite and the yaw is not published for such tracks. Cap the yaw variance or lower the turn-rate noise of standing tracks (with PR 3 open item 8).
+- [tuning required] Unobserved yaw variance of camera-only tracks keeps growing since F-2 (`6277c8cf5`): a standing car reaches 4 rad² after 1 min and 41 rad² after 10 min (straight driving 0.17, a circle 0.55 rad² after 10 min), driven by CTRV's turn-rate noise. Covariances stay positive definite and the yaw is not published for such tracks. Cap the yaw variance or lower the turn-rate noise of standing tracks.
+- [tuning required] Initial velocity variance 1 → 16 m²/s² (rest of [F-7](prob-tracking-pr3-rv-tests-plan.md#f-7-initial-velocity-uncertainty)): entries up to 15 m/s keep one track through the 2 m gate at 10 fps (now up to 10 m/s); a young track's Mahalanobis coast gate gets rounder (along / across 2.7 → 1.5). Evaluate on Unity and Wildtrack with PR 4's entering-target scenarios.
+- [tuning required] Process-noise floor on size ([F-5](prob-tracking-pr3-rv-tests-plan.md#f-5-process-noise-floor); prob review 2, G9; delta 9.1): after 5 min standing a +0.3 m height step reaches 0.7 % in 2 s and 3.2 % in 10 s (main 36 % / 89 %), and the Tracker publishes the filtered size. Covariances stay positive definite (2 h runs); z gets vz noise in PR 5 (z review Z4). Choose the noise, maybe per class, + `LongLivedTrackFollowsSizeChange`; update the robot_vision README.
+- [tuning required] Velocity smoothing on constant-velocity targets: 3–6× main's velocity error, the price of the velocity noise for manoeuvres; restoring the 0.01 m/s test tolerance needs less velocity noise ([tuning guide](../future/prob-tracking-imm-tuning.md) §5 item 2).
 
 #### Parallel 1: Dataset with diverse motion
 
