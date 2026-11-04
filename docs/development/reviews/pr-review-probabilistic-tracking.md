@@ -530,8 +530,8 @@ Declared at [MultipleObjectTracker.hpp#L176](../../../controller/src/robot_visio
 **19. `SceneController` error path keeps invalid numeric fields.**
 On an invalid `method`, [the handler](../../../controller/src/controller/scene_controller.py#L172-L182) pops only `method` and re-normalises, retaining whatever `gate_probability` / `max_radius_m` came from the bad config. Its own test asserts `max_radius_m == 7.0` survives a `method: 'bogus'` config. A malformed block is more likely malformed throughout; falling back to the full default set would be safer.
 
-**20. Env-override validation inconsistent with schema.**
-`TRACKER_ASSOCIATION_MAX_RADIUS_M` uses `parse_positive_double` (rejects 0), while [config.schema.json](../../../tracker/schema/config.schema.json#L279) declares `"minimum": 0`. `gate_probability` is range-checked in the env path but only schema-checked in the file path — if schema validation is ever bypassed, `GetDouble()` on the raw value is unguarded.
+**20. Env-override validation weaker than the schema.**
+_Corrected: `parse_positive_double` rejects only negative values (also at `188c40e79`), so `TRACKER_ASSOCIATION_MAX_RADIUS_M=0` is accepted, as [config.schema.json](../../../tracker/schema/config.schema.json#L279) (`"minimum": 0`) allows; the earlier "rejects 0" was wrong._ The overrides accept non-finite values: `std::stod` parses `nan` and `inf`, so `TRACKER_ASSOCIATION_GATE_PROBABILITY=nan` passes the (0, 1] check and `rv::chi2Threshold` clamps it to a χ² gate of about 2e-9, and `TRACKER_ASSOCIATION_MAX_RADIUS_M=nan` or `inf` drops the ceiling. The Controller's `max_radius_m` has the same gap (`float()` of `"nan"` / `"inf"`, JSON `NaN` / `Infinity`). `gate_probability` is range-checked in the env path but only schema-checked in the file path — if schema validation is ever bypassed, `GetDouble()` on the raw value is unguarded.
 
 ### P4 — Low / cosmetic
 

@@ -38,7 +38,7 @@ SPDX-License-Identifier: Apache-2.0
 ## Tasks In progress
 
 1. [PR 3](#pr-3-imm-ukf): IMM-UKF fixes; per-model noise and predictions (#2056), reduced yaw update, initial velocity variance and UKF robustness done; jitter and turn offset open.
-2. [PR 4](#pr-4-mahalanobis-association): Mahalanobis association (#2037); scenario tests done, coverage, evaluation and config fixes open.
+2. [PR 4](#pr-4-mahalanobis-association): Mahalanobis association (#2037); scenario tests done; a test broken by the PR 3 merge (blocking), coverage, evaluation and config fixes open.
 3. [PR 5](#pr-5-non-planar-z-tracking): Non-planar Z / `vz` tracking (#2109); port done, conditional z gating, `vz` noise and evaluation open.
 4. [PR 7](#pr-7-per-detection-measurement-noise-r): Per-detection measurement noise R (#2129); consumption done, producer and opt-in switch open.
 
@@ -106,7 +106,7 @@ Done:
 Won't fix:
 
 - Rank orienting yaw by the detected-class probability ([F-4](prob-tracking-pr3-rv-tests-plan.md#f-4-rank-orienting-yaw-by-class-probability); yaw review 6): the Tracker service never sets `classification`, so `applyOrientingYaw` ranks by camera order there. Only the Controller (to be deprecated) builds `[c, 1−c]`, which misranks only when two orienting detections of one track arrive in one chunk and one has c < 0.5.
-- Velocity noise direction for standing tracks (delta 9.9; [review comment](https://github.com/open-edge-platform/scenescape/pull/2036#discussion_r4248893254)): a standing car's gate is 0.495 × 0.485 m (ratio 1.02, 1.06 after a 1 s coast), the world-x fallback below 1 mm/s is not reached (the noisy speed stays near 0.03 m/s) and PR 3 associates with a Euclidean gate. Matters only with more standing-track velocity noise: see [PR 4](#pr-4-mahalanobis-association) open item 1.
+- Velocity noise direction for standing tracks (delta 9.9; [review comment](https://github.com/open-edge-platform/scenescape/pull/2036#discussion_r4248893254)): a standing car's gate is 0.495 × 0.485 m (ratio 1.02, 1.06 after a 1 s coast), the world-x fallback below 1 mm/s is not reached (the noisy speed stays near 0.03 m/s) and PR 3 associates with a Euclidean gate. Matters only with more standing-track velocity noise: see [PR 4](#pr-4-mahalanobis-association) open item 2.
 
 Open: None
 
@@ -116,7 +116,9 @@ Carried over: Mahalanobis association (`ObjectMatching.cpp`), association config
 
 Done:
 
-- Tracker-level association scenarios (`bf8aee1d4`): `TrackerRun` drives `MultipleObjectTracker`, each scenario runs and records both methods. Only Mahalanobis keeps a car braking while occluded and a person appearing 1.8 m beside an occluded one; exact crossings swap identities with both. Known issues (skipped): `RunnerEnteringGetsOneTrack`, `CarEnteringAtSpeedGetsOneTrack`, `CarPullingAwayKeepsOneTrack`.
+- Tracker-level association scenarios (`bf8aee1d4`): `TrackerRun` drives `MultipleObjectTracker`, each scenario runs and records both methods. Only Mahalanobis keeps a car braking while occluded and a person appearing 1.8 m beside an occluded one; exact crossings swap identities with both. Known issues (skipped): `CarEnteringAtSpeedGetsOneTrack`, `CarPullingAwayKeepsOneTrack`; `RunnerEnteringGetsOneTrack` passes since the PR 3 merge `cbd0ca6d9` (`68f5d696d`).
+- Car passing a walking person (`70ed421d9`): both methods keep both tracks. A sweep of car + person scenarios (overtaking, oncoming, crossing at 90° and 45°; 5–15 m/s; 1.0–2.5 m apart; either object occluded) found no other case that separates the methods.
+- Tracker Evaluation forwards the association config to the Tracker Service (`c7ca00d84`) + harness test.
 - Updated with PR 3: streaming fusion removal, C++20, test split (#2103; z review E3) and #2056 (`cv::Matx` access, `getTrack()` removal, benchmark Kalman matrices: `e1292f438`, `671601473`; z review I1).
 - Multi-camera benchmark scenarios (`e1292f438`; prob review 21), keeping `--association-config`.
 - Visualization wording: with `position_mahalanobis` the 99 % `S_xy` ellipse is the gate up to `max_radius_m`; zoom videos draw the recorded method's gate.
@@ -129,15 +131,22 @@ Done:
 
 Open:
 
-1. Check the entering-target tests with the velocity cap dropped (`68f5d696d`, velocity variance 1); un-skip them, or keep them for the 1 → 16 step in PR 8 ([F-7](prob-tracking-pr3-rv-tests-plan.md#f-7-initial-velocity-uncertainty)). Add a car entering faster than the Euclidean gate as a differentiating scenario. For `CarPullingAwayKeepsOneTrack` decide between more velocity noise for standing tracks (PR 3) and a gate floor at the Euclidean radius; with more standing-track velocity noise, make it isotropic at low speed, since the along-track shape (100:1) would otherwise point along world x or a noisy direction (delta 9.9).
-2. Coverage: `max_radius_m` ceiling, degenerate covariance, gate costs from the implementation, Controller forwarding to `track()`, C++ `buildAssociationWindow`, Euclidean vs Mahalanobis benchmark (prob review G4, G6, G7, G12, G13, G15). Fix `PositionMahalanobisPrefersAlongTrackAxis` (C++ and Python) to predict → setMeasurement → correct.
-3. Evaluate impact on Unity and Wildtrack (`position_mahalanobis` vs `euclidean`); replace the stale Phase 1 notes in `.github/plans/plan-probabilistic-tracking.md` (prob review 25). Baseline for PR 5 and noise changes ([tuning guide](../future/prob-tracking-imm-tuning.md) §5 item 10).
-4. Evaluate the mixture covariance vs the best model's covariance for matching.
-5. Evaluate and mitigate the cost of `numpy.linalg.eigh` / `cv::eigen` in association window publishing.
-6. Make the birth-clustering radius `kDefaultBirthClusterRadiusM` configurable.
-7. Wrap the yaw difference in the legacy `Mahalanobis` cost and apply the `prepareYawMeasurement` speed gate + ±π wrap UT (yaw review 3).
-8. Assign or defer the open [prob review issues](../reviews/pr-review-probabilistic-tracking.md#6-issues--highest-priority-first) 7, 9, 12, 13, 15, 16, 19, 20, 22, 23, 26 and benchmark hygiene 10, 17, 18, 24.
-9. Hysteresis on the yaw publish switch + UT in both services: the Controller's `_kalman_yaw_disagrees_with_velocity` and the Tracker's `select_track_rotation` use single cutoffs (1 m/s, 0.6 rad), so the published rotation can jump by 0.6 rad or more near either. Reuse `SPEED_THRESHOLD_ON` / `OFF` (1.0 / 0.5 m/s) and add an angle off-threshold, chosen now that F-2 changed how far Kalman yaw lags the heading (yaw review 4; moved from PR 3, where it was "yaw thresholding when unreliable").
+1. Blocking: `PositionMahalanobisPrefersAlongTrackAxis` fails since the PR 3 merge `cbd0ca6d9` (`68f5d696d`, velocity variance 1): the along-track variance is no longer 1.5× the cross-track one, so CI `make -C tracker test-robot-vision` fails. Reorder the C++ and Python tests to predict → setMeasurement → correct; the reordered C++ test passes.
+2. Entering-target tests with the velocity cap dropped (`68f5d696d`, velocity variance 1): `RunnerEnteringGetsOneTrack` passes; move it to the regression scenarios and update its comment. `CarEnteringAtSpeedGetsOneTrack` still fails with both methods; un-skip it, or keep it for the 1 → 16 step in PR 8 ([F-7](prob-tracking-pr3-rv-tests-plan.md#f-7-initial-velocity-uncertainty)). Add a car entering faster than the Euclidean gate as a differentiating scenario. For `CarPullingAwayKeepsOneTrack` decide between more velocity noise for standing tracks (PR 3) and a gate floor at the Euclidean radius; with more standing-track velocity noise, make it isotropic at low speed, since the along-track shape (100:1) would otherwise point along world x or a noisy direction (delta 9.9).
+3. Coverage: `max_radius_m` ceiling, degenerate covariance, gate costs from the implementation, Controller forwarding to `track()`, C++ `buildAssociationWindow`, Euclidean vs Mahalanobis benchmark (prob review G4, G6, G7, G12, G13, G15).
+4. Evaluate impact on Unity and Wildtrack (`position_mahalanobis` vs `euclidean`); replace the stale Phase 1 notes in `.github/plans/plan-probabilistic-tracking.md` (prob review 25). Baseline for PR 5 and noise changes ([tuning guide](../future/prob-tracking-imm-tuning.md) §5 item 10).
+5. Evaluate the mixture covariance vs the best model's covariance for matching.
+6. Evaluate and mitigate the cost of `numpy.linalg.eigh` / `cv::eigen` in association window publishing.
+7. Make the birth-clustering radius `kDefaultBirthClusterRadiusM` configurable.
+8. Wrap the yaw difference in the legacy `Mahalanobis` cost and apply the `prepareYawMeasurement` speed gate + ±π wrap UT (yaw review 3).
+9. Assign or defer the open [prob review issues](../reviews/pr-review-probabilistic-tracking.md#6-issues--highest-priority-first) 7, 9, 12, 13, 15, 16, 19, 20, 22, 23, 26 and benchmark hygiene 10, 17, 18, 24. Decided, or raised again by the Copilot review of #2037:
+   - 7: document that `association_window` is drawn at the published (corrected) position, not the predicted one the gate uses: exact for a track without a detection in that frame, off by the Kalman correction otherwise (`data_formats.md`, design doc).
+   - 20: reject non-finite values. Controller `max_radius_m` (`float()` of `"nan"` / `"inf"`, JSON `NaN` / `Infinity`) falls back to the method default; Tracker `TRACKER_ASSOCIATION_GATE_PROBABILITY` / `_MAX_RADIUS_M` fail startup (`std::stod` parses `nan` / `inf`: a NaN gate probability gives χ² ≈ 2e-9, a NaN or infinite radius drops the ceiling) + UT in both services.
+   - 22: a default `.association-window` stroke, since windows of custom Object Library categories are invisible in the 2D view; per-category colours in the 3D view.
+   - 18: drop the `ObjectMatching.hpp` grep, the `RV_HAS_*` guards and the README "tree without `PositionMahalanobis`" note. The guards are incomplete (the default `AssociationParams::distance_type` is `PositionMahalanobis`), and the benchmark needs PR 3's `kProduction*` constants anyway.
+   - 10, 24: pin google/benchmark by commit in `FetchContent` and in the `compare_benchmarks.sh` clone; hash-pin or document the `compare.py` dependencies (Scorecard Pinned-Dependencies alert on `pip3 install -r`); copyright year of `compare_benchmarks.sh`.
+10. Hysteresis on the yaw publish switch + UT in both services: the Controller's `_kalman_yaw_disagrees_with_velocity` and the Tracker's `select_track_rotation` use single cutoffs (1 m/s, 0.6 rad), so the published rotation can jump by 0.6 rad or more near either. Reuse `SPEED_THRESHOLD_ON` / `OFF` (1.0 / 0.5 m/s) and add an angle off-threshold, chosen now that F-2 changed how far Kalman yaw lags the heading (yaw review 4; moved from PR 3, where it was "yaw thresholding when unreliable").
+11. `render_video.py`: clamp `gate_probability` to [1e-9, 1 − 1e-9] as `rv::chi2Threshold` does; 1.0 is valid in both services but raises in `math.log` and aborts the zoom video + UT.
 
 #### PR 5: Non-planar Z tracking
 
