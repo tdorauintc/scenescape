@@ -7,10 +7,10 @@ SPDX-License-Identifier: Apache-2.0
 
 ## High level details
 
-- Branch: `tdorau/prob-tracking-extracted-rv-tests` (steps 1–3) and `tdorau/imm-ukf-improvements` (step 4), both into `feature/prob-tracking-extracted` @ `736c28e13`; F-2, F-7, F-6 and E-1 committed directly to `feature/prob-tracking-extracted` (`6277c8cf5`, `68f5d696d`, `c4393854f`, `a222bd748`).
+- Branch: `tdorau/prob-tracking-extracted-rv-tests` (steps 1–3) and `tdorau/imm-ukf-improvements` (step 4), both into `feature/prob-tracking-extracted` @ `736c28e13`; F-2, F-7, F-6, E-1, F-8 and F-9 committed directly to `feature/prob-tracking-extracted` (`6277c8cf5`, `68f5d696d`, `c4393854f`, `a222bd748`, `bd70d616d`, `5fb7b1878`).
 - PRs: #2048 (`robot_vision` tests: split by component, add scenario tools and UKF/IMM coverage), #2056 (IMM-UKF improvements & fixes, merged as `5abb80adb`).
-- Commit: values last measured at `68f5d696d`.
-- Tests and test-first fixes in `controller/src/robot_vision/test` for [PR 3](prob-tracking-post-review-plan.md#pr-3-imm-ukf) of the post-review plan.
+- Commit: values last measured at `68f5d696d`; F-8 and F-9 leave the scenario recordings bit-identical.
+- Tests and test-first fixes in `controller/src/robot_vision/test` for [PR 3](prob-tracking-post-review-plan.md#pr-3-imm-ukf) of the post-review plan. All done; E-2 and F-5 are _[tuning required]_ and postponed to [PR 8](prob-tracking-post-review-plan.md#pr-8-dataset-and-testing).
 
 ### Context
 
@@ -18,7 +18,7 @@ SPDX-License-Identifier: Apache-2.0
 - Steps: 1 split `TrackingTests.cpp`, 2 test tools in `support/`, 3 coverage tests passing on current code, 4 one test + fix pair per fix.
 - Test-first: the failing test lands first, then the fix with before / after values in its commit message; tests waiting on a decision pin current behaviour.
 - Fixes are ordered so that each one is calibrated on top of the previous ones ("order N" below).
-- Verification: `make -C tracker test-robot-vision`; `RobotVisionTests --gtest_filter=...` while iterating; `RV_SCENARIO_DIR` to record scenarios.
+- Verification: `make -C tracker test-robot-vision`; `RobotVisionTests --gtest_filter=...` while iterating; `RV_SCENARIO_DIR` to record scenarios. Build from a clean build directory: one configured from `main` keeps `RV_CXX_STANDARD=17` in its cache, and the tests fail on C++20 features ([review comment](https://github.com/open-edge-platform/scenescape/pull/2036#discussion_r4466650304)).
 - Out of scope: changes outside `controller/src/robot_vision` (Controller and Tracker yaw publish switch, yaw review 4: PR 4), ADR and `how-to-configure-tracker.md` wording (prob review 4), best-model vs mixture covariance (PR 4), rewriting the legacy tracker tests.
 
 ### Related documents
@@ -40,19 +40,22 @@ SPDX-License-Identifier: Apache-2.0
 6. [SingleJumpingDetectionTracking](#singlejumpingdetectiontracking) (order 3): mechanism found; known-issue skip since F-2.
 7. [F-2](#f-2-no-yaw-update-without-orientation) (order 4): no yaw update for detections without orientation (`6277c8cf5`).
 8. [F-4](#f-4-rank-orienting-yaw-by-class-probability) (order 6): won't fix.
-9. [F-7](#f-7-initial-velocity-uncertainty) (order 9): velocity cap dropped (`68f5d696d`); 1 → 16 [tuning required] in PR 8.
+9. [F-7](#f-7-initial-velocity-uncertainty) (order 9): velocity cap dropped (`68f5d696d`); 1 → 16 _[tuning required]_ in PR 8.
 10. [Velocity tolerance](#velocity-tolerance) (order 10): explained and seeded (`1161e771f`).
 11. [F-6](#f-6-cholesky-failure-recovery) (order 7): Cholesky failure recovery (`c4393854f`).
 12. [E-1](#e-1-sigma-point-weights) (order 8): κ = 3 − n kept and documented (`a222bd748`).
+13. [F-8](#f-8-contiguous-measurement-rows-without-copying): contiguous measurement rows without copying (`bd70d616d`).
+14. [F-9](#f-9-double-precision-only): unscented filter restricted to double precision (`5fb7b1878`).
 
 ## Tasks In progress
 
-1. [E-2](#e-2-constant-offset-in-sustained-turns) (order 11): constant offset in sustained turns analysed, halved by F-2; decision waits for per-sensor noise.
+None.
 
 ## Tasks Not started
 
-1. [F-5](#f-5-process-noise-floor) (order 5): process-noise floor on size and z; [tuning required], postponed to PR 8.
-2. [Re-measure pinned values](#re-measure-pinned-values): tighten the calibrated bounds as fixes land.
+1. [F-5](#f-5-process-noise-floor) (order 5): process-noise floor on size and z; _[tuning required]_, postponed to PR 8.
+2. [E-2](#e-2-constant-offset-in-sustained-turns) (order 11): constant offset in sustained turns, analysed and halved by F-2; _[tuning required]_, postponed to PR 8.
+3. [Re-measure pinned values](#re-measure-pinned-values): re-measure and tighten the calibrated bounds with each PR 8 tuning change.
 
 ## Details
 
@@ -117,7 +120,7 @@ Production config with all three models unless noted; bounds relational where po
 - Fix (`6277c8cf5`; yaw review 2): `UnscentedKalmanFilterMod::correct(measurement, observedRows)` restricts the cross-covariance, S and the innovation to the observed rows. The estimator leaves the yaw row out of the update and the model likelihood when the prepared detection has no usable orientation (none, or dropped by the speed gate); orienting detections keep the full update. ADR 0017 wording fixed.
 - Tests: `YawEstimationTests` / `CameraOnlyUpdateLeavesYawUntouched` (per-model yaw and `P_yaw` unchanged by a camera update; before, each frame cut `P_yaw` by 3 % with CV and 14–19 % with three models and moved the model yaws by 0.015 rad) and `CameraOnlyPeriodKeepsLidarResponsive` (1 s of LiDAR after 10 s of camera reaches 0.33 → 0.49 rad of a 0.5 rad step, 0.37 right after birth). `CameraOnlyTurningYawStaysBounded` passes before and after: C-13.
 - Before → after (camera-only, 10 seeds): position RMS in the turn 0.27 → 0.18, manoeuvre 0.24 → 0.20, car circle 0.24 → 0.18, person turn 0.30 → 0.16, rectangular path 0.33 → 0.24 m; CTRV turn rate 0.38 → 0.42 rad/s in the 0.5 rad/s car circle, 0.03 → 0.24 rad/s in the 0.4 rad/s person turn; final speed after a turn +0.03 to +0.09 m/s; straight cases within ±4 %. C-12 car and person circles within 0.15 m. F-1 had already removed most of the slow LiDAR response measured in the yaw review (0.05 rad after 1 s).
-- Follow-up: the unobserved yaw variance of camera-only tracks keeps growing (standing car 41 rad² after 10 min); [tuning required] in the post-review plan, PR 8.
+- Follow-up: the unobserved yaw variance of camera-only tracks keeps growing (standing car 41 rad² after 10 min); _[tuning required]_ in the post-review plan, PR 8.
 
 #### F-4: rank orienting yaw by class probability
 
@@ -129,7 +132,7 @@ Production config with all three models unless noted; bounds relational where po
 - Problem: with the cap (σ 0.22 m/s) a new track starts at rest and the correction moves its position instead of its velocity; after 3–4 frames the object is out of the gate and the track restarts, again and again. A regression against main: with the services' 2 m Euclidean gate at 10 fps a car entering at 8 or 10 m/s made 11 or 14 tracks and never became reliable (main: one track).
 - After (5 seeds): one track at 8 m/s, 3.8 at 10 m/s; position RMS −2 to −19 % at 10 fps and −9 to −55 % at 2 fps; coasts and the standing gate unchanged.
 - Tests: `MultipleObjectTrackerTests` / `CarEnteringAtSpeedGetsOneReliableTrack` (8 m/s through the 2 m gate; 11 tracks before), C-9 tightened to ≥ 8.5 m/s (4.98 → 9.06), C-5 pins the velocity variance to `init_state_covariance`, C-7 position bounds tightened.
-- Rest: 1 → 16 m²/s² (σ 4 m/s) [tuning required], post-review plan PR 8; PR 4 checks its entering scenarios with 1.
+- Rest: 1 → 16 m²/s² (σ 4 m/s) _[tuning required]_, post-review plan PR 8; PR 4 checks its entering scenarios with 1.
 - Sweep of the initial velocity variance 0.05 / 1 / 4 / 16 / 64 m²/s² (PR 4 association scenarios, `bf8aee1d4` with a temporary override, 10 seeds):
   - fastest entry kept at 10 fps with Mahalanobis 3 / 6 / 10 / 15 / 25 m/s; Euclidean stops at 15 m/s, its fixed 2 m gate limits the first frame;
   - from 16 Mahalanobis also keeps 10 m/s at 2 fps;
@@ -142,7 +145,7 @@ Production config with all three models unless noted; bounds relational where po
 #### Velocity tolerance
 
 - Order 10 (prob review 5): explained, not reverted (`1161e771f`). Over 300 seeds the velocity error of the four loosened `tracking_test.py` tests is 3–6× main's (median 0.005–0.012 against 0.001–0.003 m/s): the velocity noise, about 300× main's, makes the filter follow the detections for manoeuvre response. With the old tolerances (0.01, `places=2`) they would fail 15–75 % of the runs; unseeded at 0.05 about once in 2000–3000.
-- `VELOCITY_TOLERANCE` documents it, the tests use seed 1 (worst 0.018 m/s), C-8 refers to it. Restoring 0.01 needs less velocity noise: [tuning required], post-review plan PR 8.
+- `VELOCITY_TOLERANCE` documents it, the tests use seed 1 (worst 0.018 m/s), C-8 refers to it. Restoring 0.01 needs less velocity noise: _[tuning required]_, post-review plan PR 8.
 
 #### F-6: Cholesky failure recovery
 
@@ -156,11 +159,30 @@ Production config with all three models unless noted; bounds relational where po
 - κ = 3 − n vs 0 (`6277c8cf5`, 10 seeds): seven motion cases ≤ 0.001 m apart at 10 fps and ≤ 0.01 m at 2 fps, coasts identical. One CTRV step with a turn-rate uncertainty of 1 rad: mean speed 1.84 against the exact 1.82 m/s, κ = 0 2.51. Baseline 9.4's 7.2 m/s (30 × 1 s coast) no longer reproduces; both stay below 3 m/s.
 - Documented in `MultiModelKalmanEstimator` and the robot_vision README; `MultiModelKalmanEstimatorTests` / `CtrvPredictionKeepsGaussianMeanUnderTurnRateUncertainty` pins it (fails with κ = 0). `CoastingKeepsPredictedSpeedWithinSamples` not added.
 
+#### F-8: contiguous measurement rows without copying
+
+- Performance follow-up of F-2 (`bd70d616d`): the reduced update copied rows and blocks of small matrices for every model and detection. Contiguous rows (all but yaw) are now views; `track()` −4.5 % single-threaded, −4.2 % with 4 threads (robot_vision benchmark, against `247aebb43`). Scenario recordings bit-identical.
+- `UnscentedKalmanFilterTests` / `SelectRowsAndBlockShareContiguousData`: contiguous selections share the matrix data, gapped ones are copied (failed before: both copied).
+
+#### F-9: double precision only
+
+- Follow-up of F-6 (`5fb7b1878`; [review comment](https://github.com/open-edge-platform/scenescape/pull/2036#discussion_r4460501876)): the repair's eigenvalue floor is lost in float32 rounding, and a repaired covariance that still failed to factorise was used half-factorised. robot_vision only creates double-precision filters: single precision is rejected, the float branches dropped, and a repair that cannot be factorised falls back to a diagonal factor. Scenario recordings bit-identical.
+- `UnscentedKalmanFilterTests` / `RejectsSinglePrecision` (failed before: no exception).
+
 ### Tasks In progress
+
+None.
+
+### Tasks Not started
+
+#### F-5: process-noise floor
+
+- Order 5 (prob review 2, G9; delta 9.1): _[tuning required]_, postponed to PR 8 (post-review plan). After 5 min standing a +0.3 m height or z step reaches 0.7 % in 2 s and 3.2 % in 10 s (main 36 % / 89 %); LiDAR yaw is not stiff any more (97 % of a step in 2 s, F-1 turn-rate noise). Covariances stay PD in 2 h runs. The Tracker publishes the filtered size and z; z gets vz noise in PR 5. Floor on size (maybe per class) and z; updates C-6.
+- `MotionScenarioTests` / `LongLivedTrackFollowsSizeChange`: 5 min stationary at 10 fps, then height +0.3 m; at least 50 % of the step within 2 s, every model covariance PD (today the gain is ~1/N).
 
 #### E-2: constant offset in sustained turns
 
-- Order 11; verification: un-skip C-12 (mean along / cross ≤ 0.15 m). Measured (`d673ef83a`, Release, 5 seeds): car circle −0.13 / −0.23, person circle −0.18 / −0.25, steady turn (3 m/s, 0.5 rad/s) −0.18 / −0.29 m.
+- Order 11; _[tuning required]_, postponed to PR 8 (post-review plan). Verification: un-skip C-12 (mean along / cross ≤ 0.15 m). Measured (`d673ef83a`, Release, 5 seeds): car circle −0.13 / −0.23, person circle −0.18 / −0.25, steady turn (3 m/s, 0.5 rad/s) −0.18 / −0.29 m.
 - Mechanism: under r = 0.2 CTRV holds about half of μ (car circle CV / CA / CTRV .25 / .27 / .48), and mixing with CV and CA dilutes its turn rate (0.30 for 0.5 rad/s). CTRV alone has no offset (≤ 0.07 m); before F-1 the steady turn was at −0.37 / −0.37 m.
 - The steady-turn window is dominated by the turn onset: CTRV leads from about 1.4 s into the turn, cross-track peaks at −0.44 m.
 - Sensor noise (0–0.45 m, 20 seeds) does not move it; only r does: r = 0.05 gives −0.09 / −0.18, r = 0.0025 −0.02 / −0.04 m, but CA then wins every turn (μ .75).
@@ -169,16 +191,9 @@ Production config with all three models unless noted; bounds relational where po
 - After F-7 (`68f5d696d`, seed 1): steady turn −0.09 / −0.15 m; circles unchanged.
 - Decision: with the detection noise measured per sensor ([tuning guide](../future/prob-tracking-imm-tuning.md) §5).
 
-### Tasks Not started
-
-#### F-5: process-noise floor
-
-- Order 5 (prob review 2, G9; delta 9.1): [tuning required], postponed to PR 8 (post-review plan). After 5 min standing a +0.3 m height or z step reaches 0.7 % in 2 s and 3.2 % in 10 s (main 36 % / 89 %); LiDAR yaw is not stiff any more (97 % of a step in 2 s, F-1 turn-rate noise). Covariances stay PD in 2 h runs. The Tracker publishes the filtered size and z; z gets vz noise in PR 5. Floor on size (maybe per class) and z; updates C-6.
-- `MotionScenarioTests` / `LongLivedTrackFollowsSizeChange`: 5 min stationary at 10 fps, then height +0.3 m; at least 50 % of the step within 2 s, every model covariance PD (today the gain is ~1/N).
-
 #### Re-measure pinned values
 
-Bounds calibrated at `8f1c0d9ef` (Release, fixed seed); C-7 re-calibrated after F-1 (`838f28653`), C-7 and C-9 re-measured after F-3 (`c3c8c3f96`) and F-1 (`2804edf78`), C-7 and C-10 to C-12 at `d673ef83a`; all re-measured after F-2 (`6277c8cf5`) and F-7 (`68f5d696d`). Format: bound (measured).
+Bounds calibrated at `8f1c0d9ef` (Release, fixed seed); C-7 re-calibrated after F-1 (`838f28653`), C-7 and C-9 re-measured after F-3 (`c3c8c3f96`) and F-1 (`2804edf78`), C-7 and C-10 to C-12 at `d673ef83a`; all re-measured after F-2 (`6277c8cf5`) and F-7 (`68f5d696d`); unchanged by F-8 and F-9. Re-measure with each PR 8 tuning change. Format: bound (measured).
 
 | Test                                               | Bound (measured)                                                                                                                                                                                                                                                                                                              | After    |
 | -------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- |
@@ -190,7 +205,7 @@ Bounds calibrated at `8f1c0d9ef` (Release, fixed seed); C-7 re-calibrated after 
 | C-10 `SteadyMotionHasNoConstantTrailingOffset`     | ≤ 0.15 m (−0.003 / +0.004); the steady turn moves back here once E-2 passes                                                                                                                                                                                                                                                   | E-2      |
 | F-1 `ModelSelection`                               | CV margin ≥ .03 / .05 (.047 / .090); CA μ ≥ .45 (.56 / .62); CTRV μ ≥ .45 / .40 (.56 / .48), margin ≥ .2 / .1 (.34 / .21); turn exit margin ≥ .03 (.066)                                                                                                                                                                      | F-5      |
 | F-1 `TurningTargetLearnsTurnRate`                  | w in [0.3, 0.6] (0.41), [−0.45, −0.15] (−0.24), ±0.05 (−0.003)                                                                                                                                                                                                                                                                | F-5      |
-| F-1 `CoastingAfterTurn`                            | ≤ 1.8 m (1.17)                                                                                                                                                                                                                                                                                                                | E-1, F-5 |
+| F-1 `CoastingAfterTurn`                            | ≤ 1.8 m (1.17)                                                                                                                                                                                                                                                                                                                | F-5      |
 | F-1 `OrientingSensorFollowsTurningHeading`         | ≤ 0.2 rad (0.07), model yaw spread ≤ 0.3 (0.15)                                                                                                                                                                                                                                                                               | F-5      |
 | F-1 `OrientingSensorFollowsRotationInPlace`        | ≥ 0.35 / 0.45 rad (0.42 / 0.50)                                                                                                                                                                                                                                                                                               | F-5      |
 | F-1 `StraightLineMatchesConstantVelocityFilter`    | ratio ≤ 1.1 (1.05 / 1.07 / 1.03; a single seed varies by about 0.2)                                                                                                                                                                                                                                                           | F-5      |
