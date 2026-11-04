@@ -5,7 +5,7 @@ SPDX-License-Identifier: Apache-2.0
 
 # Robot-vision scenario visualization plan
 
-> **Deprecated** (2026-11-04): kept for back-tracking of the IDs cited in the [post-review plan](../plans/prob-tracking-post-review-plan.md) and the [tuning guide](../future/prob-tracking-imm-tuning.md), which are the single source of truth.
+> **Deprecated** (2026-11-04): kept for back-tracking of the IDs cited in the [post-review plan](../plans/prob-tracking-post-review-plan.md) and the [tuning guide](../plans/prob-tracking-imm-tuning.md), which are the single source of truth.
 
 Plots and short videos of the motion scenarios from the robot-vision tests ([prob-tracking-pr3-rv-tests-plan.md](../deprecated/prob-tracking-pr3-rv-tests-plan.md)),
 to spot filter overshoot, jitter, covariance and model-probability problems.

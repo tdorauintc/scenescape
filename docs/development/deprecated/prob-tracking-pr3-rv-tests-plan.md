@@ -27,7 +27,7 @@ SPDX-License-Identifier: Apache-2.0
 
 - [Post-review plan](../plans/prob-tracking-post-review-plan.md): PR split; PR 3 lists these tests and fixes with their status.
 - [Visualization plan](prob-tracking-viz-plan.md): `ScenarioRecorder`, plots and videos of these scenarios (#2086).
-- [Tuning guide](../future/prob-tracking-imm-tuning.md): IMM-UKF tuning; §5 prerequisites reference F-n and E-n.
+- [Tuning guide](../plans/prob-tracking-imm-tuning.md): IMM-UKF tuning; §5 prerequisites reference F-n and E-n.
 - [prob review](pr-review-probabilistic-tracking.md): issues "N", coverage gaps "GN".
 - [yaw review](pr-review-yaw-fusion.md): findings "N", related issues "EN".
 - [baseline](robot-vision-tracking-algorithms.md) and [delta](robot-vision-tracking-prob-tracking-delta.md): Section 9 items "9.N" of the robot-vision algorithm reports.
@@ -191,7 +191,7 @@ None.
 - Not levers (cross-track still ≥ 0.1 m): Markov-predicted μ, no [min, max] rescale (CA wins, μ ≈ .9), CTRV keeping its own w in mixing, model sets {CV, CTRV} or {CA, CTRV}.
 - After F-2 (`6277c8cf5`, seed 1): car circle −0.06 / −0.10, person circle −0.11 / −0.08, steady turn −0.09 / −0.17 m. The fake yaw measurement of camera frames penalised CTRV in turns and held its turn rate back; C-12 stays skipped for the steady turn.
 - After F-7 (`68f5d696d`, seed 1): steady turn −0.09 / −0.15 m; circles unchanged.
-- Decision: with the detection noise measured per sensor ([tuning guide](../future/prob-tracking-imm-tuning.md) §5).
+- Decision: with the detection noise measured per sensor ([tuning guide](../plans/prob-tracking-imm-tuning.md) §5).
 
 #### Re-measure pinned values
 

@@ -5,7 +5,7 @@ SPDX-License-Identifier: Apache-2.0
 
 # PR Review: non-planar Z / `vz` tracking (`feature/prob-tracking-extracted-3d`)
 
-> **Deprecated** (2026-11-04): kept for back-tracking of the IDs cited in the [post-review plan](../plans/prob-tracking-post-review-plan.md) and the [tuning guide](../future/prob-tracking-imm-tuning.md), which are the single source of truth.
+> **Deprecated** (2026-11-04): kept for back-tracking of the IDs cited in the [post-review plan](../plans/prob-tracking-post-review-plan.md) and the [tuning guide](../plans/prob-tracking-imm-tuning.md), which are the single source of truth.
 
 - **Source**: `feat/tracking-z-axis` (6 commits by Sarat Poluri, `097f5ab81`..`4e29a8407`), based on `feature/prob-tracking-extracted-association` @ `f6c137481` (Oct 7, 66 commits behind).
 - **New branch**: `feature/prob-tracking-extracted-3d` (work branch `tdorau/prob-tracking-extracted-3d`) = the z-axis commits cherry-picked onto the updated association branch, without their own Tracker Service 3D detection input, + 3 commits from this review. Tracker 3D input came later through main (#2050) and was merged with a follow-up fix (E5).
