@@ -25,13 +25,13 @@ SPDX-License-Identifier: Apache-2.0
 Back-tracking only; the tasks below do not depend on them.
 
 - [PR 3 test plan](../deprecated/prob-tracking-pr3-rv-tests-plan.md): C-n, F-n, E-n; mechanisms, before / after values and sweeps of the PR 3 tests and fixes.
-- [Visualization plan](../done/prob-tracking-viz-plan.md): design of the scenario recorder, plots and videos (#2086); workflow in `tools/tracker/evaluation/visualization/README.md`.
+- [Visualization plan](../deprecated/prob-tracking-viz-plan.md): design of the scenario recorder, plots and videos (#2086); workflow in `tools/tracker/evaluation/visualization/README.md`.
 - [Tuning guide](../future/prob-tracking-imm-tuning.md): IMM-UKF tuning knobs, KPIs, trade-offs and prerequisites; single source of truth with this plan.
-- [prob review](../reviews/pr-review-probabilistic-tracking.md): review of `feature/prob-tracking` vs `main`; issues "N", coverage gaps "GN".
-- [yaw review](../reviews/pr-review-yaw-fusion.md): review of the yaw fusion commit (#1958); findings "N", related issues "EN".
-- [z review](../reviews/pr-review-tracking-z-axis.md): review of non-planar Z / `vz` tracking; findings "ZN", "EN", "IN".
-- [baseline](../reviews/robot-vision-tracking-algorithms.md): robot-vision tracking algorithms on `main`; Section 9 items "9.N".
-- [delta](../reviews/robot-vision-tracking-prob-tracking-delta.md): robot-vision changes in `feature/prob-tracking`; Section 9 items "9.N".
+- [prob review](../deprecated/pr-review-probabilistic-tracking.md): review of `feature/prob-tracking` vs `main`; issues "N", coverage gaps "GN".
+- [yaw review](../deprecated/pr-review-yaw-fusion.md): review of the yaw fusion commit (#1958); findings "N", related issues "EN".
+- [z review](../deprecated/pr-review-tracking-z-axis.md): review of non-planar Z / `vz` tracking; findings "ZN", "EN", "IN".
+- [baseline](../deprecated/robot-vision-tracking-algorithms.md): robot-vision tracking algorithms on `main`; Section 9 items "9.N".
+- [delta](../deprecated/robot-vision-tracking-prob-tracking-delta.md): robot-vision changes in `feature/prob-tracking`; Section 9 items "9.N".
 - [ADR-0017](../../adr/0017-probabilistic-tracking-association.md) and [design doc](../../design/probabilistic-tracking-association.md): product docs with the probabilistic association decisions and phases; PR 4, 5 and 7 update them.
 
 ## Tasks Done
@@ -197,7 +197,7 @@ Open:
 Done:
 
 - A correct without R after one with R, before the next predict, no longer reuses the earlier R + UT.
-- [Visualization plan](../done/prob-tracking-viz-plan.md): with R the `S_xy` ellipse is not the gate for that detection.
+- [Visualization plan](../deprecated/prob-tracking-viz-plan.md): with R the `S_xy` ellipse is not the gate for that detection.
 - Scenario test support (`d2039588f`): `Sensor::positionCovariance` draws the error from a covariance (`groundPlaneCamera`, `depthCamera`, `fixedCovariance`) and reports it as R; the recorder writes R per detection and `HPHt` per step.
 
 Open:

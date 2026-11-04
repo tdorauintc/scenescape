@@ -5,6 +5,8 @@ SPDX-License-Identifier: Apache-2.0
 
 # PR Review: `feature/prob-tracking` vs `main`
 
+> **Deprecated** (2026-11-04): kept for back-tracking of the IDs cited in the [post-review plan](../plans/prob-tracking-post-review-plan.md) and the [tuning guide](../future/prob-tracking-imm-tuning.md), which are the single source of truth.
+
 - **Branch**: `feature/prob-tracking`
 - **Merge base**: `d6bccbc0`
 - **Commits**: `e02a23f8` (ITEP-96228 Phase 1 Association, #1790), `b3f8fcda` (benchmark fix, #1969), `5b41040e` (merge from main)

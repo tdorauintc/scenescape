@@ -1,5 +1,7 @@
 # PR 1958 Review (`ITEP-96642: Enable point cloud visualization`)
 
+> **Deprecated** (2026-11-04): kept for back-tracking of the IDs cited in the [post-review plan](../plans/prob-tracking-post-review-plan.md) and the [tuning guide](../future/prob-tracking-imm-tuning.md), which are the single source of truth.
+
 The commit is c2a80ef3, "ITEP-96642: Enable point cloud visualization". It mostly does what ADR 0017 describes, but I found one regression, one place where the code behaves differently from what the ADR says, and a few smaller issues. I reviewed by reading the code, then confirmed findings 1 and 2 with throwaway gtest builds outside the repo. Those runs used `main` at c2a80ef3 and `feature/prob-tracking-extracted` (planned PR 3) merged with `main`, and turned up two more issues (E2, E3).
 
 ## What changed, checked against the ADR

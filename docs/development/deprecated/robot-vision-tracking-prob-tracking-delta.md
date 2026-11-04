@@ -5,6 +5,8 @@ SPDX-License-Identifier: Apache-2.0
 
 # Robot Vision Tracking: `feature/prob-tracking` vs `main`
 
+> **Deprecated** (2026-11-04): kept for back-tracking of the IDs cited in the [post-review plan](../plans/prob-tracking-post-review-plan.md) and the [tuning guide](../future/prob-tracking-imm-tuning.md), which are the single source of truth.
+
 | Item              | Value                                                                                                                                                                  |
 | ----------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Analyzed branch   | `feature/prob-tracking`                                                                                                                                                |

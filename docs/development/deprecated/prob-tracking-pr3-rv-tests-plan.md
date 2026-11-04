@@ -26,11 +26,11 @@ SPDX-License-Identifier: Apache-2.0
 ### Related documents
 
 - [Post-review plan](../plans/prob-tracking-post-review-plan.md): PR split; PR 3 lists these tests and fixes with their status.
-- [Visualization plan](../done/prob-tracking-viz-plan.md): `ScenarioRecorder`, plots and videos of these scenarios (#2086).
+- [Visualization plan](prob-tracking-viz-plan.md): `ScenarioRecorder`, plots and videos of these scenarios (#2086).
 - [Tuning guide](../future/prob-tracking-imm-tuning.md): IMM-UKF tuning; §5 prerequisites reference F-n and E-n.
-- [prob review](../reviews/pr-review-probabilistic-tracking.md): issues "N", coverage gaps "GN".
-- [yaw review](../reviews/pr-review-yaw-fusion.md): findings "N", related issues "EN".
-- [baseline](../reviews/robot-vision-tracking-algorithms.md) and [delta](../reviews/robot-vision-tracking-prob-tracking-delta.md): Section 9 items "9.N" of the robot-vision algorithm reports.
+- [prob review](pr-review-probabilistic-tracking.md): issues "N", coverage gaps "GN".
+- [yaw review](pr-review-yaw-fusion.md): findings "N", related issues "EN".
+- [baseline](robot-vision-tracking-algorithms.md) and [delta](robot-vision-tracking-prob-tracking-delta.md): Section 9 items "9.N" of the robot-vision algorithm reports.
 
 ## Tasks Done
 
