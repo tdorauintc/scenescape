@@ -5,12 +5,14 @@ SPDX-License-Identifier: Apache-2.0
 
 # PR 3 robot-vision test plan
 
+> **Deprecated** (2026-11-04): the [post-review plan](../plans/prob-tracking-post-review-plan.md) is the single source of truth. Open items (F-5, E-2) and the pinned test bounds are tracked in its [PR 8](../plans/prob-tracking-post-review-plan.md#pr-8-dataset-and-testing); this file keeps the test-level history.
+
 ## High level details
 
 - Branch: `tdorau/prob-tracking-extracted-rv-tests` (steps 1–3) and `tdorau/imm-ukf-improvements` (step 4), both into `feature/prob-tracking-extracted` @ `736c28e13`; F-2, F-7, F-6, E-1, F-8 and F-9 committed directly to `feature/prob-tracking-extracted` (`6277c8cf5`, `68f5d696d`, `c4393854f`, `a222bd748`, `bd70d616d`, `5fb7b1878`).
 - PRs: #2048 (`robot_vision` tests: split by component, add scenario tools and UKF/IMM coverage), #2056 (IMM-UKF improvements & fixes, merged as `5abb80adb`).
 - Commit: values last measured at `68f5d696d`; F-8 and F-9 leave the scenario recordings bit-identical.
-- Tests and test-first fixes in `controller/src/robot_vision/test` for [PR 3](prob-tracking-post-review-plan.md#pr-3-imm-ukf) of the post-review plan. All done; E-2 and F-5 are _[tuning required]_ and postponed to [PR 8](prob-tracking-post-review-plan.md#pr-8-dataset-and-testing).
+- Tests and test-first fixes in `controller/src/robot_vision/test` for [PR 3](../plans/prob-tracking-post-review-plan.md#pr-3-imm-ukf) of the post-review plan. All done; E-2 and F-5 are _[tuning required]_ and postponed to [PR 8](../plans/prob-tracking-post-review-plan.md#pr-8-dataset-and-testing).
 
 ### Context
 
@@ -23,7 +25,7 @@ SPDX-License-Identifier: Apache-2.0
 
 ### Related documents
 
-- [Post-review plan](prob-tracking-post-review-plan.md): PR split; PR 3 lists these tests and fixes with their status.
+- [Post-review plan](../plans/prob-tracking-post-review-plan.md): PR split; PR 3 lists these tests and fixes with their status.
 - [Visualization plan](../done/prob-tracking-viz-plan.md): `ScenarioRecorder`, plots and videos of these scenarios (#2086).
 - [Tuning guide](../future/prob-tracking-imm-tuning.md): IMM-UKF tuning; §5 prerequisites reference F-n and E-n.
 - [prob review](../reviews/pr-review-probabilistic-tracking.md): issues "N", coverage gaps "GN".
@@ -193,20 +195,4 @@ None.
 
 #### Re-measure pinned values
 
-Bounds calibrated at `8f1c0d9ef` (Release, fixed seed); C-7 re-calibrated after F-1 (`838f28653`), C-7 and C-9 re-measured after F-3 (`c3c8c3f96`) and F-1 (`2804edf78`), C-7 and C-10 to C-12 at `d673ef83a`; all re-measured after F-2 (`6277c8cf5`) and F-7 (`68f5d696d`); unchanged by F-8 and F-9. Re-measure with each PR 8 tuning change. Format: bound (measured).
-
-| Test                                               | Bound (measured)                                                                                                                                                                                                                                                                                                              | After    |
-| -------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- |
-| C-7 `TracksMotionCases`, max error / final speed   | constant velocity 0.10 / 0.03 (0.06 / 0.011), acceleration 0.35 / 0.01 (0.29 / 0.006), turn 0.45 / 0.05 (0.37 / 0.019), sudden stop 0.9 / 0.05 (0.75 / 0.038), manoeuvre 0.45 / 0.2 (0.37 / 0.152), car circle 0.50 / 0.25 (0.41 / 0.172), person turn 0.35 / 0.12 (0.25 / 0.090), rectangular path 0.65 / 0.3 (0.49 / 0.229) | F-5, E-2 |
-| C-8 `ConstantVelocityConvergence`                  | 0.05 m/s (CV 0.008 / 0.003, three models 0.008 / 0.002; one seed)                                                                                                                                                                                                                                                             | PR 8     |
-| C-9 `TargetBornMovingAcquiresSpeed`                | ≥ 8.5 m/s (9.06; 4.98 before F-7)                                                                                                                                                                                                                                                                                             | PR 8     |
-| C-6 `ProcessNoisePerModelShape`                    | Pinned formula; zero position, z and size noise                                                                                                                                                                                                                                                                               | F-5      |
-| C-5 `InitialCovarianceUsesMeasurementNoiseAndCaps` | Velocity init_state_covariance; caps 0.1 acceleration, 0.05 yaw, 0.01 yaw rate (exact)                                                                                                                                                                                                                                        | PR 8     |
-| C-10 `SteadyMotionHasNoConstantTrailingOffset`     | ≤ 0.15 m (−0.003 / +0.004); the steady turn moves back here once E-2 passes                                                                                                                                                                                                                                                   | E-2      |
-| F-1 `ModelSelection`                               | CV margin ≥ .03 / .05 (.047 / .090); CA μ ≥ .45 (.56 / .62); CTRV μ ≥ .45 / .40 (.56 / .48), margin ≥ .2 / .1 (.34 / .21); turn exit margin ≥ .03 (.066)                                                                                                                                                                      | F-5      |
-| F-1 `TurningTargetLearnsTurnRate`                  | w in [0.3, 0.6] (0.41), [−0.45, −0.15] (−0.24), ±0.05 (−0.003)                                                                                                                                                                                                                                                                | F-5      |
-| F-1 `CoastingAfterTurn`                            | ≤ 1.8 m (1.17)                                                                                                                                                                                                                                                                                                                | F-5      |
-| F-1 `OrientingSensorFollowsTurningHeading`         | ≤ 0.2 rad (0.07), model yaw spread ≤ 0.3 (0.15)                                                                                                                                                                                                                                                                               | F-5      |
-| F-1 `OrientingSensorFollowsRotationInPlace`        | ≥ 0.35 / 0.45 rad (0.42 / 0.50)                                                                                                                                                                                                                                                                                               | F-5      |
-| F-1 `StraightLineMatchesConstantVelocityFilter`    | ratio ≤ 1.1 (1.05 / 1.07 / 1.03; a single seed varies by about 0.2)                                                                                                                                                                                                                                                           | F-5      |
-| C-13 `CameraOnlyTurningYawStaysBounded`            | yaw variance ≤ 0.2 rad² (0.13), model yaw spread ≤ 0.3 rad (0.17)                                                                                                                                                                                                                                                             | PR 8     |
+Moved to the post-review plan: [pinned test bounds](../plans/prob-tracking-post-review-plan.md#pinned-test-bounds) in PR 8.

@@ -8,10 +8,10 @@ SPDX-License-Identifier: Apache-2.0
 What can be tuned in the robot-vision IMM-UKF (`MultiModelKalmanEstimator`), how to measure it, and what affects what.
 No values: they change with the code. Filter level only; association and track lifecycle are out of scope.
 
-| Item            | Value                                                                                                                                                                                        |
-| --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Code references | `tdorau/imm-ukf-improvements` @ `2804edf78` (#2056, per-model process noise)                                                                                                                 |
-| Related         | [test plan](../plans/prob-tracking-pr3-rv-tests-plan.md) (F-n, E-n), [post-review plan](../plans/prob-tracking-post-review-plan.md), [visualization plan](../done/prob-tracking-viz-plan.md) |
+| Item            | Value                                                                                                                                                                                                         |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Code references | `tdorau/imm-ukf-improvements` @ `2804edf78` (#2056, per-model process noise)                                                                                                                                  |
+| Related         | [test plan](../deprecated/prob-tracking-pr3-rv-tests-plan.md) (F-n, E-n; deprecated), [post-review plan](../plans/prob-tracking-post-review-plan.md), [visualization plan](../done/prob-tracking-viz-plan.md) |
 
 ## 1. Terms
 

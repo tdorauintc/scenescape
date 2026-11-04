@@ -5,7 +5,7 @@ SPDX-License-Identifier: Apache-2.0
 
 # Robot-vision scenario visualization plan
 
-Plots and short videos of the motion scenarios from the robot-vision tests ([prob-tracking-pr3-rv-tests-plan.md](../plans/prob-tracking-pr3-rv-tests-plan.md)),
+Plots and short videos of the motion scenarios from the robot-vision tests ([prob-tracking-pr3-rv-tests-plan.md](../deprecated/prob-tracking-pr3-rv-tests-plan.md)),
 to spot filter overshoot, jitter, covariance and model-probability problems.
 Visualization only: fixes are diagnosed and verified in unit tests.
 
