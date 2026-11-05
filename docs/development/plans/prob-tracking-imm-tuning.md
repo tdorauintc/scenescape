@@ -9,7 +9,7 @@ SPDX-License-Identifier: Apache-2.0
 
 - Branch: none yet; tuning changes land in [PR 8](prob-tracking-post-review-plan.md#pr-8-dataset-and-testing) of the post-review plan (base `feature/prob-tracking-extracted-3d`).
 - PR: none yet.
-- Commit: code links point to `tdorau/imm-ukf-improvements` @ `2804edf78` (#2056, per-model process noise); links for definitions changed since (reduced yaw update, initial covariance, published yaw) point to `feature/prob-tracking-extracted` @ `8a315d93c`.
+- Commit: code links point to `tdorau/imm-ukf-improvements` @ `2804edf78` (#2056, per-model process noise); links for definitions changed since (reduced yaw update, initial covariance, published yaw) point to `feature/prob-tracking-extracted` @ `8a315d93c`. PR 3 is on `main` since `3f0814c6f` (#2036); both commits stay reachable through their PRs.
 - What can be tuned in the robot-vision IMM-UKF (`MultiModelKalmanEstimator`), how to measure it, what affects what, and what must be in place before tuning.
 
 ### Context
@@ -30,7 +30,7 @@ SPDX-License-Identifier: Apache-2.0
 
 1. [Reduced yaw update](#reduced-yaw-update) (F-2): detections without orientation give no yaw measurement.
 2. [Per-model process noise](#per-model-process-noise) (F-1): each model's Q follows its own velocity; turn-rate noise for CTRV.
-3. [Cholesky failure recovery](#cholesky-failure-recovery) (F-6, F-9): a covariance that cannot be factorised is repaired, not half-factorised.
+3. [Cholesky failure recovery](#cholesky-failure-recovery) (F-6, F-9, `a1883e810`): a covariance that cannot be factorised, or is non-finite, is repaired, not half-factorised.
 4. [Sigma-point weights](#sigma-point-weights) (E-1): κ = 3 − n kept and documented.
 
 ## Tasks In progress
@@ -150,7 +150,7 @@ What affects what:
 
 #### Cholesky failure recovery
 
-- F-6 (`c4393854f`; baseline 9.4) and F-9 (`5fb7b1878`): a finite covariance that cannot be factorised is symmetrised and its eigenvalues raised to max(1e-9, 1e-12 λmax), with one warning; a repair that still fails falls back to a diagonal factor; double precision only. Never reached so far (2 h standing, 1 h circles, coasts, jumps).
+- F-6 (`c4393854f`; baseline 9.4) and F-9 (`5fb7b1878`): a finite covariance that cannot be factorised is symmetrised and its eigenvalues raised to max(1e-9, 1e-12 λmax), with one warning; a repair that still fails falls back to a diagonal factor; double precision only. Never reached so far (2 h standing, 1 h circles, coasts, jumps). Since `a1883e810` a non-finite P gets a diagonal factor, with non-finite and tiny variances at 1e-9; a non-finite state is not repaired.
 
 #### Sigma-point weights
 

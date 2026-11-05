@@ -8,13 +8,13 @@ SPDX-License-Identifier: Apache-2.0
 ## High level details
 
 - Branch: `feature/prob-tracking` @ `188c40e79`, split into PRs 1–8, so the accuracy and performance impact of each can be evaluated separately.
-- PRs: #1979, #2028, #2050 (merged to `main`); #2056 (merged into `feature/prob-tracking-extracted`); #2037, #2109, #2129 (open). Branch stack: [Details / Context](#context-1).
-- Status: PRs 1, 2 and 6 done; PRs 3, 4, 5 and 7 in progress; PR 8 not started.
+- PRs: #1979, #2028, #2050, #2036 (merged to `main`); #2056 (merged into PR 3 before it); #2037, #2109, #2129 (open). Branch stack: [Details / Context](#context-1).
+- Status: PRs 1, 2, 3 and 6 done; PRs 4, 5 and 7 in progress; PR 8 not started.
 
 ### Context
 
 - "PR N" (also "step N" or "item N" in other documents) is item N of this plan.
-- PRs 1, 2 and 6 go to `main`; PRs 3 → 4 → 5 → 7 are stacked feature branches; PR 8 evaluates the stack and merges it to `main`.
+- PRs 1, 2, 3 and 6 are on `main`; PRs 4 → 5 → 7 are feature branches stacked on `main`; PR 8 evaluates the stack and merges it to `main`.
 - Review findings are cited by the short names in [Related documents](#related-documents), e.g. "prob review G9", "yaw review E2", "z review Z1", "delta 9.1", "baseline 9.4".
 - This plan and the [tuning guide](prob-tracking-imm-tuning.md) are the single source of truth: each task in [Details](#details) carries the context needed to do it. The other documents are kept for back-tracking only; finding IDs point to them, and C-n (coverage test), F-n (fix + verification test) and E-n (evaluation) to the PR 3 test plan, which keeps the test-level history (mechanisms, before / after values, sweeps).
 - robot_vision fixes are test-first: the failing test lands first, then the fix with before / after values in its commit message. Verify with `make -C tracker test-robot-vision`, `RobotVisionTests --gtest_filter=...` while iterating, and `RV_SCENARIO_DIR` to record scenarios. Build from a clean build directory: one configured from `main` keeps `RV_CXX_STANDARD=17` in its cache, and the tests fail on C++20 features.
@@ -40,13 +40,13 @@ Deprecated, for back-tracking only; the tasks below do not depend on them:
 1. [PR 1](#pr-1-tracker-shift-projection): Tracker shift projection and object-class config in Tracker Evaluation, merged to `main` (#1979).
 2. [PR 2](#pr-2-multi-camera-geometry-fusion): Multi-camera geometry fusion with time-chunking only, merged to `main` (#2028).
 3. [PR 6](#pr-6-tracker-service-3d-detection-input): Tracker Service 3D detection input, merged to `main` (#2050) and into all feature branches.
+4. [PR 3](#pr-3-imm-ukf): IMM-UKF fixes, merged to `main` (#2036, `3f0814c6f`) with three follow-ups; tuning items moved to PR 8.
 
 ## Tasks In progress
 
-1. [PR 3](#pr-3-imm-ukf): IMM-UKF fixes; per-model noise and predictions (#2056), reduced yaw update, initial velocity variance and UKF robustness done; jitter, turn offset and the other tuning items moved to PR 8.
-2. [PR 4](#pr-4-mahalanobis-association): Mahalanobis association (#2037); scenario tests done; a test broken by the PR 3 merge (blocking), coverage, evaluation, config fixes and filter settings in the service configs open.
-3. [PR 5](#pr-5-non-planar-z-tracking): Non-planar Z / `vz` tracking (#2109); port done, conditional z gating, `vz` noise and evaluation open.
-4. [PR 7](#pr-7-per-detection-measurement-noise-r): Per-detection measurement noise R (#2129); consumption done, producer and opt-in switch open.
+1. [PR 4](#pr-4-mahalanobis-association): Mahalanobis association (#2037); scenario tests done; a test broken by the PR 3 merge (blocking), coverage, evaluation, config fixes and filter settings in the service configs open.
+2. [PR 5](#pr-5-non-planar-z-tracking): Non-planar Z / `vz` tracking (#2109); port done, conditional z gating, `vz` noise and evaluation open.
+3. [PR 7](#pr-7-per-detection-measurement-noise-r): Per-detection measurement noise R (#2129); consumption done, producer and opt-in switch open.
 
 ## Tasks Not started
 
@@ -57,18 +57,18 @@ Deprecated, for back-tracking only; the tasks below do not depend on them:
 
 ### Context
 
-| PR  | Branch                                        | Base                                          | GitHub               |
-| --- | --------------------------------------------- | --------------------------------------------- | -------------------- |
-| 1   | `tracker-eval-projection-shift`               | `main`                                        | #1979, merged        |
-| 2   | `multi-camera-geometry-fusion`                | `main`                                        | #2028, merged        |
-| 3   | `feature/prob-tracking-extracted`             | `main`                                        | #2056 merged into it |
-| 4   | `feature/prob-tracking-extracted-association` | `feature/prob-tracking-extracted`             | #2037, open          |
-| 5   | `feature/prob-tracking-extracted-3d`          | `feature/prob-tracking-extracted-association` | #2109, open          |
-| 6   | `ITEP-97104_tracker_3d_detections`            | `main`                                        | #2050, merged        |
-| 7   | `feature/prob-tracking-extracted-3d-R`        | `feature/prob-tracking-extracted-3d`          | #2129, open          |
-| 8   | –                                             | `feature/prob-tracking-extracted-3d`          | –                    |
+| PR  | Branch                                        | Base                                          | GitHub        |
+| --- | --------------------------------------------- | --------------------------------------------- | ------------- |
+| 1   | `tracker-eval-projection-shift`               | `main`                                        | #1979, merged |
+| 2   | `multi-camera-geometry-fusion`                | `main`                                        | #2028, merged |
+| 3   | `feature/prob-tracking-extracted` (deleted)   | `main`                                        | #2036, merged |
+| 4   | `feature/prob-tracking-extracted-association` | `main`                                        | #2037, open   |
+| 5   | `feature/prob-tracking-extracted-3d`          | `feature/prob-tracking-extracted-association` | #2109, open   |
+| 6   | `ITEP-97104_tracker_3d_detections`            | `main`                                        | #2050, merged |
+| 7   | `feature/prob-tracking-extracted-3d-R`        | `feature/prob-tracking-extracted-3d`          | #2129, open   |
+| 8   | –                                             | `feature/prob-tracking-extracted-3d`          | –             |
 
-- Each feature branch merges its base after every upstream change; `feature/prob-tracking-extracted` merges `main`.
+- Each feature branch merges its base after every upstream change; PR 4 merges `main`, its base since `feature/prob-tracking-extracted` was deleted after #2036.
 - Streaming (Controller Immediate mode) fusion was removed from PR 2 (#2061): the Controller is to be deprecated and the Tracker Service uses time-chunking only.
 
 ### Tasks Done
@@ -89,11 +89,9 @@ Deprecated, for back-tracking only; the tasks below do not depend on them:
 - #2050 (`be9a92bb7`): detection `translation` / `size` / `rotation` and detections without a pixel bounding box; replaces the Tracker input changes of `feat/tracking-z-axis`.
 - Merged into PR 3 (`d8646063b`), #2056 (`181a851d4`), PR 4 (`1fd627aa2`) and PR 5 (`d20bb3775`); PR 5 follow-up: `zMeasured` on the translation path (z review Z5, E5).
 
-### Tasks In progress
-
 #### PR 3: IMM-UKF
 
-Carried over: IMM `S_pred` and mixing fixes, process-noise and initial-covariance redesign (`MultiModelKalmanEstimator.cpp`), UKF fixes (`UnscentedKalmanFilter.cpp`). Test-level history: [PR 3 test plan](../deprecated/prob-tracking-pr3-rv-tests-plan.md) (deprecated).
+Merged to `main` as `3f0814c6f` (#2036, squash). Carried over: IMM `S_pred` and mixing fixes, process-noise and initial-covariance redesign (`MultiModelKalmanEstimator.cpp`), UKF fixes (`UnscentedKalmanFilter.cpp`). Test-level history: [PR 3 test plan](../deprecated/prob-tracking-pr3-rv-tests-plan.md) (deprecated).
 
 Done:
 
@@ -111,12 +109,19 @@ Done:
 - Contiguous measurement rows without copying (F-8, `bd70d616d`): F-2's reduced update copied rows and blocks for every model and detection; contiguous rows are now views. `track()` −4.5 % single-threaded, −4.2 % with 4 threads; outputs bit-identical.
 - Double precision only (F-9, `5fb7b1878`; [review comment](https://github.com/open-edge-platform/scenescape/pull/2036#discussion_r4460501876)): F-6's eigenvalue floor is lost in float32 rounding; single-precision filters are rejected (robot_vision creates none) and a repair that cannot be factorised falls back to a diagonal factor; outputs bit-identical.
 
+- Follow-ups by the PR author, merged with #2036. Measured on PR 4 @ `f8c55f4ec` merged with the #2036 head, against PR 4 alone (Release): robot_vision 93 of 94 pass (the new test passes; the failure is [PR 4](#pr-4-mahalanobis-association) open item 1), all 216 scenario recordings bit-identical; PR 4 benchmark +0.2 to +0.6 % per frame (time-chunking 4.85 → 4.87 ms, Immediate with 2 cameras 8.42 → 8.47 ms), near the run-to-run noise, likely the finiteness check on every sigma-point draw.
+  - `71da06b5d`: `updateModelProbability` gets the full owning matrices and selects the observed rows itself. A refactor: the commit says F-8's contiguous views dangled, but `rowRange` views share the reference-counted buffer of the `cv::Mat(Matx)` copies, and the previous code runs clean under AddressSanitizer.
+  - `a1883e810`: a non-finite P (NaN or Inf) gets a diagonal Cholesky factor, with non-finite and tiny variances at 1e-9, instead of the half-factorised matrix; extends F-6 / F-9 + UT `PredictRecoversFromNonFiniteCovariance`. It does not repair a non-finite state: a NaN detection starts a track of its own whose P is NaN again after every predict, before and after the change (never reliable, dropped after `max_unreliable_time_s`; the existing track coasts and keeps its id); see PR 8.
+  - `d3f3a520e`: for detections without orientation the legacy `DistanceType::Mahalanobis` cost uses the inverse of S without the yaw row and column (yaw marginalised) instead of zeroing ν_yaw against the full S⁻¹, consistent with the reduced update and the model likelihood (baseline 9.9, in part). Zeroing overstated the distance when S couples yaw and position. Used only by `Mahalanobis` and `MCEMahalanobis`, which neither service selects, but it inverts a 6×6 matrix (SVD) per track–detection pair: `match()` with 50 tracks × 50 detections goes from 0.08 to 4.7 ms; see PR 4 open item 8.
+
 Won't fix:
 
 - Rank orienting yaw by the detected-class probability ([F-4](../deprecated/prob-tracking-pr3-rv-tests-plan.md#f-4-rank-orienting-yaw-by-class-probability); yaw review 6): the Tracker service never sets `classification`, so `applyOrientingYaw` ranks by camera order there. Only the Controller (to be deprecated) builds `[c, 1−c]`, which misranks only when two orienting detections of one track arrive in one chunk and one has c < 0.5.
 - Velocity noise direction for standing tracks (delta 9.9; [review comment](https://github.com/open-edge-platform/scenescape/pull/2036#discussion_r4248893254)): a standing car's gate is 0.495 × 0.485 m (ratio 1.02, 1.06 after a 1 s coast), the world-x fallback below 1 mm/s is not reached (the noisy speed stays near 0.03 m/s) and PR 3 associates with a Euclidean gate. Matters only with more standing-track velocity noise: see [PR 4](#pr-4-mahalanobis-association) open item 2.
 
 Open: None
+
+### Tasks In progress
 
 #### PR 4: Mahalanobis association
 
@@ -159,7 +164,7 @@ Open:
    - Defaults from the robot_vision production constants (`kProduction*`, Python `PRODUCTION_*`), so both services share one default. Validation: finite values only (item 9, issue 20); q, r and P0 > 0, the radius ≥ 0. Per-category q (target dynamics) waits for PR 8; per-detection r comes with PR 7.
    - UT: parsing, env overrides and forwarding into `TrackManagerConfig` / `track()` in both services. Docs: a `how-to-configure-tracker.md` section with the meaning above (closes the how-to part of prob review 4) and a note that every filter change also moves the association gate; design doc §5.5. Add the blocks to the Tracker Evaluation black-box configs, so PR 8 sweeps change configs only.
    - Not exposed: `motion_models` (the IMM transition matrix and probability floor depend on the model count, and model subsets did not fix the turn offset), the process-noise shape factors and the IMM prior (PR 8 redesigns them, [tuning guide](prob-tracking-imm-tuning.md#separate-noise-roles)), UKF α / β / κ (E-1), the initial-covariance caps, numerical guards, the score threshold (the low-score stage never triggers, PR 8) and the yaw gate thresholds (item 10).
-8. Wrap the yaw difference in the legacy `DistanceType::Mahalanobis` cost (`calculateMahalanobisDistance`, `ObjectMatching.cpp`; yaw review 3): the detection yaw is in (−π, π], the predicted yaw is unwrapped and can be off by π after the direction-of-travel flip, so the innovation can be near π or 2π, block the match and split the track. Use `-rv::deltaTheta(measurement.yaw, predictedYaw)`, which is π-aware, and apply the `prepareYawMeasurement` speed gate (at 1 m/s or more the yaw is flipped by π toward the direction of travel and dropped if still more than 0.6 rad off), so yaw that the update drops does not gate either. Latent: neither service uses `Mahalanobis`. The legacy cost is also not χ²-calibrated (baseline 9.9): it returns ½·√d² and zeroes the yaw innovation instead of dropping the yaw row, so its threshold is no χ² confidence; calibrate it or document it as legacy. UT: ±π wrap and the speed gate.
+8. Wrap the yaw difference in the legacy `DistanceType::Mahalanobis` cost (`calculateMahalanobisDistance`, `ObjectMatching.cpp`; yaw review 3): the detection yaw is in (−π, π], the predicted yaw is unwrapped and can be off by π after the direction-of-travel flip, so the innovation can be near π or 2π, block the match and split the track. Use `-rv::deltaTheta(measurement.yaw, predictedYaw)`, which is π-aware, and apply the `prepareYawMeasurement` speed gate (at 1 m/s or more the yaw is flipped by π toward the direction of travel and dropped if still more than 0.6 rad off), so yaw that the update drops does not gate either. Latent: neither service uses `Mahalanobis`. The legacy cost is also not χ²-calibrated (baseline 9.9): it returns ½·√d², so its threshold is no χ² confidence; calibrate it or document it as legacy (the yaw row is marginalised since `d3f3a520e`). Cache the inverse of S without yaw per track, as `PositionMahalanobis` caches its 2×2 inverse: `d3f3a520e` inverts it per track–detection pair (50 × 50 `match()` 0.08 → 4.7 ms). UT: ±π wrap and the speed gate.
 9. Assign or defer the open prob review issues; "decided" marks the ones with a chosen fix (several raised again by the Copilot review of #2037):
    - 1: the how-to's "Rollback to Euclidean" restores only the gate: PR 3's filter changes (IMM mixing, process noise, UKF fixes) stay, so `euclidean` does not reproduce `main`; say so in `how-to-configure-tracker.md`.
    - 7 (decided): document that `association_window` is drawn at the published (corrected) position, not the predicted one the gate uses: exact for a track without a detection in that frame, off by the Kalman correction otherwise (`data_formats.md`, design doc).
@@ -232,6 +237,7 @@ Open:
 - _[tuning required]_ Controller Immediate-mode jitter: find what in the filter gives the reduction streaming fusion gave, without double smoothing. Streaming fusion averaged each detection with the other cameras' cached detections (up to 250 ms old), a second smoothing layer on top of the filter; it was removed from PR 2 (#2061). After F-1 (Unity): Immediate rms_jerk +6 %, acceleration_variance +16 % (noise); time-chunking +39 % / +79 %; Tracker Service −15 % / −22 %.
 - _[tuning required]_ Constant offset in sustained turns (known issue): F-2 halved it, the car and person circles are within 0.15 m (a 3 m/s car on a 6 m circle 0.06 m behind, 0.10 m outside); the steady-turn window, dominated by the turn onset, is still 0.09 m behind and 0.15 m outside. Decide with the per-sensor detection noise ([E-2](../deprecated/prob-tracking-pr3-rv-tests-plan.md#e-2-constant-offset-in-sustained-turns); [tuning guide: measure the detection noise](prob-tracking-imm-tuning.md#measure-the-detection-noise)). Mechanism (measured before F-2, `d673ef83a`): under r = 0.2 CTRV holds about half of μ in a circle (CV / CA / CTRV .25 / .27 / .48), and mixing with CV and CA dilutes its turn rate (0.30 for 0.5 rad/s); CTRV alone has no offset (≤ 0.07 m). Only r moves it (r = 0.05: −0.09 / −0.18 m; r = 0.0025: −0.02 / −0.04 m, but CA then wins every turn, μ .75); sensor noise does not, and neither do Markov-predicted μ, dropping the floor rescale, CTRV keeping its own w in mixing, or the model sets {CV, CTRV} / {CA, CTRV}. Verification: un-skip C-12 (`SteadyCircleHasNoConstantOffset`, mean along / cross ≤ 0.15 m).
 - Known issue `SingleJumpingDetectionTracking` (skipped since F-2, `6277c8cf5`): a 2 m-per-frame jump, a 200-sigma innovation at r = 1e-4, goes into CTRV's turn rate and splits the track. Holding it needs an outlier-robust update ([tuning guide: robustness to jumps](prob-tracking-imm-tuning.md#robustness-to-jumps)); decide or mark won't fix.
+- Non-finite detections: the Controller accepts NaN in detection JSON (Python `json`, schema type `number`). A NaN detection starts a track with a NaN state, never reliable and dropped after `max_unreliable_time_s`; the existing track coasts; `a1883e810` does not change this. Reject non-finite detections at ingest in both services (check the Tracker's parsing and projections) + UT, and reword the `a1883e810` warning, which reports a NaN covariance as "not positive definite".
 - Python binding default `beta = 1.0` for the estimator (`extensions/tracking.cpp`) against 2.0 in C++ (baseline 9.10): Python code that builds an estimator directly gets other sigma-point weights than the services; align to 2.0 + UT.
 - Note (baseline 9.6): the low-score association stage never triggers. `splitByThreshold` scores a detection by `classification.maxCoeff()`, which is at least 0.5 for the Controller's `[c, 1−c]` and 1.0 for the Tracker's default, so every detection is high-score. Decide or mark won't fix before tuning `scoreThreshold`.
 
@@ -260,4 +266,4 @@ Calibrated at `8f1c0d9ef` (Release, fixed seed); C-7 re-calibrated after F-1 (`8
 
 #### Parallel 1: Dataset with diverse motion
 
-- Adopt a Tracker Evaluation dataset with more diverse motion (cars), merged into `feature/prob-tracking-extracted` for the final evaluation.
+- Adopt a Tracker Evaluation dataset with more diverse motion (cars), merged into `main` for the final evaluation.
