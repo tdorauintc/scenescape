@@ -7,11 +7,11 @@ SPDX-License-Identifier: Apache-2.0
 
 ## High level details
 
-- Branch: `tdorau/prob-tracking-stp-client-side` (checkout `scenescape-prob-tracking-3d-R`) @ `fc3a0dc02`; `origin` is at `40a0482fb`, so `fc3a0dc02` must be pushed first ([A1](#a1-push-and-record-the-legacy-baseline)).
+- Branch: `tdorau/prob-tracking-stp-client-side` (checkout `scenescape-prob-tracking-3d-R`) @ `fc3a0dc02`, pushed to `origin`.
 - PR: #2149 "ITEP-98103: [SPP] Tracker, Controller: experimental remote projection client" (draft). Base: `tdorau/prob-tracking-stp-tracker-refactor` (#2148 @ `b4c1e2e9d`), which is stacked on `feature/prob-tracking-extracted-3d-R`.
 - Observation processor service (server): `origin/ITEP-98099_observation_processor_service` @ `d73820192`, not on `main` yet.
 - Scope: fix review issue M1 (z reference vs measurement noise R), then rename "projection service" to "observation processor service" in all client-side names, and move the contract to `observation_processor/proto/observation_processor.proto`.
-- Status: review, decisions and the earlier fixes are done; M1 and the rename are not started.
+- Status: review, decisions, the earlier fixes, the plan approval and [A1](#a1-push-and-record-the-legacy-baseline) (push and legacy baselines) are done; A2–A9 and Phase B are not started.
 
 ### Context
 
@@ -43,24 +43,24 @@ Paths in backticks are relative to the PR branch checkout. Linked files are in t
 2. [Client fixes](#client-fixes-commits): validation performance, M2, timeout bound, pins, optional diagnostics, dense-R tests, latency test, startup connect (`0d45ed48e` … `fc3a0dc02`).
 3. [Copilot threads 1, 3, 4](#copilot-threads): fixed, reply texts prepared; the user posts them.
 4. [M1 analysis](#m1-analysis-and-decision): options A, B, U, U′ and U2 compared with a robot_vision simulation; option U chosen with constraints.
+5. [A1](#a1-push-and-record-the-legacy-baseline): `fc3a0dc02` pushed; reproducible legacy baselines of both services recorded on the PR base, with a local-only harness.
 
 ## Tasks In progress
 
-1. [Plan review](#plan-review): this plan, waiting for approval.
+None.
 
 ## Tasks Not started
 
 Phase A: M1, centre-of-mass tracker input (test-first).
 
-1. [A1](#a1-push-and-record-the-legacy-baseline): push `fc3a0dc02`, then record legacy reference outputs of both services on the base branch.
-2. [A2](#a2-tracker-tests-red): Tracker unit tests for the z conversion and the experimental/legacy modes (red).
-3. [A3](#a3-tracker-implementation-green): Tracker implementation (green).
-4. [A4](#a4-controller-tests-red): Controller unit tests, including real robot_vision characterization (red).
-5. [A5](#a5-controller-implementation-green): Controller implementation (green).
-6. [A6](#a6-tracker-service-tests): Tracker service tests for 3D translation and local fallback in both modes.
-7. [A7](#a7-documentation): document the internal z reference, the 3D centre-of-mass assumption and the consequences.
-8. [A8](#a8-verification-and-commit): full test matrix, legacy bit-exact differential, lint, complexity, commit.
-9. [A9](#a9-copilot-threads-2-and-5): reply to Copilot threads 2 and 5 after the push.
+1. [A2](#a2-tracker-tests-red): Tracker unit tests for the z conversion and the experimental/legacy modes (red).
+2. [A3](#a3-tracker-implementation-green): Tracker implementation (green).
+3. [A4](#a4-controller-tests-red): Controller unit tests, including real robot_vision characterization (red).
+4. [A5](#a5-controller-implementation-green): Controller implementation (green).
+5. [A6](#a6-tracker-service-tests): Tracker service tests for 3D translation and local fallback in both modes.
+6. [A7](#a7-documentation): document the internal z reference, the 3D centre-of-mass assumption and the consequences.
+7. [A8](#a8-verification-and-commit): full test matrix, legacy bit-exact differential, lint, complexity, commit.
+8. [A9](#a9-copilot-threads-2-and-5): reply to Copilot threads 2 and 5 after the push.
 
 Phase B: rename "projection service" to "observation processor service" and every pipeline Project/Projection name to Process/Processing, in the Tracker and Controller (no behaviour change).
 
@@ -225,34 +225,27 @@ Constraints added by the user:
 - Keep the functional z-tracking test unchanged and cover centre of mass in controller unit and tracker service tests.
 - Rename to "observation processor" and use the server proto at its location.
 
+#### A1. Push and record the legacy baseline
+
+- Pushed `fc3a0dc02`; `origin/tdorau/prob-tracking-stp-client-side` is at the PR head.
+- Baselines recorded on the PR base `b4c1e2e9d` in the local worktree `/tmp/m1-base`, by two recorders that are local only and never committed (see the local baseline context document that accompanies this plan):
+  - Controller: real `IntelLabsTracking` with production robot_vision settings, through `trackCategory()` and `trackCategoryBatched()`; 1,500 frames, 7,691 robot_vision inputs (1,230 `zMeasured`), 10,498 published objects (7,509 with z exactly 0, the planar tracks). Inputs: planar pixel boxes with per-frame heights, AprilTag objects with hover z, 3D `translation` objects; observation processor unset.
+  - Tracker: legacy `TrackingWorker` constructor with a fixed clock; 300 chunks × 2 scopes. Scope A is mixed (cam-1 planar boxes plus 3D detections from both cameras), scope B is planar only; every 50th chunk is empty. Track IDs are normalised by first appearance, and every value is recorded as hexfloat.
+  - Each baseline was reproduced by three identical runs.
+- Sanity check: both recorders on the PR head `fc3a0dc02` give output bit-identical to the base, so legacy mode is already bit-exact today and any later difference comes from the M1 work.
+- Re-check: `check_legacy.sh [tree]` in the local harness folder reruns both recorders and diffs them against the baselines (about 1 minute with an up-to-date Tracker build).
+- Note 1: pixel boxes must end below the horizon. The camera model intersects the box foot with the ground, so a box whose bottom is above the principal point (`y + height < cy`, 360 px for the 1280×720 test cameras) projects thousands of metres away. Objects built from such boxes then "move" at tens of m/s and never become reliable tracks. This made the first recordings useless, and it applies to every new test that feeds pixel boxes and needs realistic positions or motion. Use boxes such as `{x, 400, 55, 150}` (foot 190 px below the horizon, about 14 m from a camera 3 m high looking straight down). Stationary boxes are unaffected, so the existing service-test boxes `BBOX` and `GRID_BOXES` work but their local projections are far away.
+- Note 2: the Tracker recording takes planar boxes from `cam-1` only. Planar boxes of two differently posed cameras overlap in world coordinates, the associations flip between frames and no track becomes reliable. Multi-camera fusion in the Tracker recording is covered by 3D detections from both cameras. The multi-camera planar path is covered by the Controller recording only.
+
 ### Tasks In progress
 
-#### Plan review
-
-- Waiting for the user to approve this plan, including the names and exclusions in [Rename](#rename-scope-and-names) and [B2](#b2-tracker-renames)–[B4](#b4-tests-mocks-compose-and-docs-renames).
-- Decided:
-  - Every Project/Projection name in the Tracker and Controller pipeline is renamed, local terms from #2148 included.
-  - The recording harnesses stay local and are never committed.
+None.
 
 ### Tasks Not started
 
-#### A1. Push and record the legacy baseline
-
-- Push: `git push origin tdorau/prob-tracking-stp-client-side` (`fc3a0dc02`, after user approval).
-- The recording harnesses are local only and never committed. They exist only for the bit-exactness check in A8 and B5.
-- Legacy references, recorded on the PR base (`git merge-base HEAD origin/tdorau/prob-tracking-stp-tracker-refactor`, currently `b4c1e2e9d`) in a separate worktree (`git worktree add /tmp/m1-base <sha>`):
-  - Tracker:
-    - Add an untracked gtest `legacy_recorder_test.cpp` to both trees and register it locally in `tracker/test/unit/CMakeLists.txt`. Revert that CMake change before any commit.
-    - It drives `TrackingWorker` (legacy constructor, fixed `ClockFn`) with about 300 deterministic chunks: 2 cameras with pixel boxes plus `translation` detections with sizes, two scopes.
-    - It captures every `publish_callback` track (id, translation, velocity, size, rotation) as hexfloat lines.
-  - Controller:
-    - A script outside the repo, e.g. in `/tmp`, runs `IntelLabsTracking.update_tracks()` and `update_tracks_batched()` with real robot_vision (`tests/.venv`, `PYTHONPATH=<tree>/controller/src:<tree>/scene_common/src:<tree>/reid/src`). `remote_projection` stays unset or None.
-    - Inputs: planar objects with per-frame heights, AprilTag-like hover z, `translation` objects, about 1500 frames.
-    - It records the location, velocity and size of every published object via `float.hex`.
-- Acceptance: both recordings exist and are reproducible (two runs on the base produce identical files).
-
 #### A2. Tracker tests (red)
 
+- Pixel boxes in the new tests end below the horizon ([A1 note 1](#a1-push-and-record-the-legacy-baseline)). With the worker-test camera (3 m high, straight down, `cy = 360`) use e.g. `{600, 420, 55, 150}`. The box `{10, 20, 50, 100}` of the older worker tests projects thousands of metres away and is unsuitable here.
 - New `tracker/test/unit/z_reference_test.cpp` (register in `tracker/test/unit/CMakeLists.txt`) for new helpers in `tracker/inc/z_reference.hpp`:
   - `ZReference { FootprintBase, CentreOfMass }`.
   - `toCentreOfMass(std::span<std::vector<rv::tracking::TrackedObject>>)`: objects with `zMeasured == false` get `z += height / 2`; `zMeasured` objects are untouched; height 0 gives no change.
@@ -314,7 +307,8 @@ All in `tests/sscape_tests/remote_projection/test_remote_projection.py`:
 
 #### A6. Tracker service tests
 
-`tracker/test/service/test_remote_projection.py`:
+- New tests that need realistic local positions or moving boxes use boxes that end below the horizon ([A1 note 1](#a1-push-and-record-the-legacy-baseline)), e.g. `{x, 400, 55, 150}` for the 1280×720 `atag-qcam*` cameras. The existing stationary `BBOX` and `GRID_BOXES` stay as they are; their local projections are far from the scene, which does not affect those tests.
+  `tracker/test/service/test_remote_projection.py`:
 
 - Existing `test_remote_projection_measurements_drive_tracks`: expectations are unchanged (mock centre z = `HEIGHT_M / 2`, published base z = 0). Update the docstring ("centre of mass fed to the tracker, base published").
 - New `test_translation_detection_z_reference`:
@@ -340,7 +334,7 @@ All in `tests/sscape_tests/remote_projection/test_remote_projection.py`:
 #### A8. Verification and commit
 
 - Run the full matrix from [Verification](#verification-commands-and-environment): tracker unit, `lint-cpp`, `lint-python`, the tracker service suite (custom image), the Python suites, complexity, indent and prettier.
-- Legacy bit-exact differential: rerun the local A1 recorders on HEAD; `diff` against the base recordings must be empty for both services. Before committing, check that `git status` shows neither the harness nor its CMake registration.
+- Legacy bit-exact differential: run the local `check_legacy.sh` on HEAD (see [A1](#a1-push-and-record-the-legacy-baseline)); both recordings must be identical to the base ones. The script installs the Tracker recorder temporarily and removes it on exit; before committing, check that `git status` shows neither the harness nor its CMake registration. Multi-camera planar fusion is covered only by the Controller recording ([A1 note 2](#a1-push-and-record-the-legacy-baseline)).
 - Commits (each with the `Co-authored-by` trailer), in test-first order:
   - "Tracker: feed centre-of-mass positions to robot_vision with the observation processor"
   - "Controller: feed centre-of-mass positions to robot_vision with the observation processor"
@@ -468,7 +462,7 @@ Remote service:
 #### B5. Verification, commit and PR update
 
 - Full matrix as in A8, including both image builds and the tracker service suite.
-- The legacy bit-exact differential must stay empty. Rerun the local recorders, with their symbol names updated to Phase B, against the A1 base recordings. They are still not committed.
+- The legacy bit-exact differential must stay empty: run `check_legacy.sh` again against the A1 baselines. The recorders use none of the renamed identifiers (`TrackingWorker` legacy constructor, `Track`, `Detection`, `DetectionBatch`, `Chunk`, `ObjectClassConfig`, `Camera`, `IntelLabsTracking`, `MovingObject`, `ATagObject`), so they should compile unchanged; if one does not, adjust only the renamed identifier, never the recorded inputs. They are still not committed.
 - Commit as one rename commit, or one per service if large: "Tracker, Controller: rename projection to observation processing".
 - Update the PR title and description, keeping the repository PR template. Mention the new env vars and CLI flag, the contract location and the plaintext server note.
 
