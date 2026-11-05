@@ -7,7 +7,7 @@ SPDX-License-Identifier: Apache-2.0
 
 ## High level details
 
-- Branch: `tdorau/prob-tracking-stp-client-side` (checkout `scenescape-prob-tracking-3d-R`) @ `fc3a0dc02`, pushed to `origin`.
+- Branch: `tdorau/prob-tracking-stp-client-side` (checkout `scenescape-prob-tracking-3d-R`) @ `c3ca618f1`: `fc3a0dc02` (pushed to `origin`) plus a temporary local commit that adds the observation processor proto (not pushed).
 - PR: #2149 "ITEP-98103: [SPP] Tracker, Controller: experimental remote projection client" (draft). Base: `tdorau/prob-tracking-stp-tracker-refactor` (#2148 @ `b4c1e2e9d`), which is stacked on `feature/prob-tracking-extracted-3d-R`.
 - Observation processor service (server): `origin/ITEP-98099_observation_processor_service` @ `d73820192`, not on `main` yet.
 - Scope: fix review issue M1 (z reference vs measurement noise R), then rename "projection service" to "observation processor service" in all client-side names, and move the contract to `observation_processor/proto/observation_processor.proto`.
@@ -30,7 +30,8 @@ Paths in backticks are relative to the PR branch checkout. Linked files are in t
 
 - [Post-review plan](prob-tracking-post-review-plan.md): the `feature/prob-tracking` split this PR builds on (PR 6 added 3D detection input and `zMeasured`).
 - [IMM tuning guide](prob-tracking-imm-tuning.md): robot_vision noise and R background (default R = 0.2, hard-coded production noises).
-- `observation_processor/proto/observation_processor.proto`: target contract. Untracked copy in the checkout, byte-identical to the server branch.
+- `observation_processor/proto/observation_processor.proto`: target contract. Committed temporarily on the PR branch (`c3ca618f1`, byte-identical to the server branch, not used by the build yet).
+- [Context for starting A2](context/observation-processor-client-A2-start.md): the legacy baselines, the local-only harness and how to re-run the bit-exact check; for a new session.
 - `api/projection/v1/projection.proto`: current contract copy. Same fields, old names; removed by [B1](#b1-switch-to-the-observation-processor-contract).
 - `observation_processor/README.md` on the server branch: port 50052, plaintext gRPC, `OBSERVATION_PROCESSOR_*` env vars.
 - `tracker/docs/implementation.md`, `docs/design/tracker-service.md`, `docs/user-guide/microservices/controller/how-to-configure-tracker.md`: client behaviour docs to update.
@@ -228,7 +229,7 @@ Constraints added by the user:
 #### A1. Push and record the legacy baseline
 
 - Pushed `fc3a0dc02`; `origin/tdorau/prob-tracking-stp-client-side` is at the PR head.
-- Baselines recorded on the PR base `b4c1e2e9d` in the local worktree `/tmp/m1-base`, by two recorders that are local only and never committed (see the local baseline context document that accompanies this plan):
+- Baselines recorded on the PR base `b4c1e2e9d` in the local worktree `/tmp/m1-base`, by two recorders that are local only and never committed (see [the context document](context/observation-processor-client-A2-start.md)):
   - Controller: real `IntelLabsTracking` with production robot_vision settings, through `trackCategory()` and `trackCategoryBatched()`; 1,500 frames, 7,691 robot_vision inputs (1,230 `zMeasured`), 10,498 published objects (7,509 with z exactly 0, the planar tracks). Inputs: planar pixel boxes with per-frame heights, AprilTag objects with hover z, 3D `translation` objects; observation processor unset.
   - Tracker: legacy `TrackingWorker` constructor with a fixed clock; 300 chunks × 2 scopes. Scope A is mixed (cam-1 planar boxes plus 3D detections from both cameras), scope B is planar only; every 50th chunk is empty. Track IDs are normalised by first appearance, and every value is recorded as hexfloat.
   - Each baseline was reproduced by three identical runs.
@@ -347,7 +348,7 @@ All in `tests/sscape_tests/remote_projection/test_remote_projection.py`:
 
 #### B1. Switch to the observation processor contract
 
-- `git add observation_processor/proto/observation_processor.proto`. Verify it is byte-identical to `origin/ITEP-98099_observation_processor_service:observation_processor/proto/observation_processor.proto`, so the later merge is a clean add/add. Delete `api/projection/` (and `api/` if empty).
+- The proto is already on the PR branch as the temporary commit `c3ca618f1` (no `git add` needed). Verify it is still byte-identical to `origin/ITEP-98099_observation_processor_service:observation_processor/proto/observation_processor.proto`, so the later merge is a clean add/add. Delete `api/projection/` (and `api/` if empty).
 - Tracker CMake (`tracker/CMakeLists.txt`):
   - Import dir `${CMAKE_CURRENT_LIST_DIR}/../observation_processor/proto`.
   - Target `tracker_projection_proto` → `tracker_observation_processor_proto`.
