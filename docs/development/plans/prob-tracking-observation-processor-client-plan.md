@@ -11,7 +11,7 @@ SPDX-License-Identifier: Apache-2.0
 - PR: #2149 "ITEP-98103: [SPP] Tracker, Controller: experimental remote projection client" (draft). Base: `tdorau/prob-tracking-stp-tracker-refactor` (#2148 @ `b4c1e2e9d`), which is stacked on `feature/prob-tracking-extracted-3d-R`.
 - Observation processor service (server): `origin/ITEP-98099_observation_processor_service` @ `d73820192`, not on `main` yet.
 - Scope: fix review issue M1 (z reference vs measurement noise R), then rename "projection service" to "observation processor service" in all client-side names, and move the contract to `observation_processor/proto/observation_processor.proto`.
-- Status: review, decisions, the earlier fixes, the plan approval, [A1](#a1-push-and-record-the-legacy-baseline) and A2–A9 and B1–B5 (pushed, PR head `8d97ccafd`) are done except the PR title and description update (draft ready, to be applied on approval).
+- Status: review, decisions, the earlier fixes, the plan approval, [A1](#a1-push-and-record-the-legacy-baseline) and A2–A9 and B1–B5 (pushed, PR head `8d97ccafd`; PR title and description updated) are done; Phase C (C1) is decided: no change in #2149, a robot_vision follow-up instead.
 
 ### Context
 
@@ -55,17 +55,14 @@ Paths in backticks are relative to the PR branch checkout. Linked files are in t
 13. [B3](#b3-controller-renames): `d5ec6116d`. Module `observation_processor.py`, classes, env vars, CLI flag, metric and log messages renamed; the Controller tests use the new names. Python suites 562, complexity and indent pass, Controller image builds, imports with `-W error` and shows `--experimental-observation-processor`. The test folder `tests/sscape_tests/remote_projection/` and its test file keep their names for B4.
 14. [B4](#b4-tests-mocks-compose-and-docs-renames): `8d97ccafd`. Test folders and files, the mock service (port 50052), compose service, profile and env vars, and the Tracker and Controller docs renamed. The residual check over the 62 files of this PR leaves only geometric names (`CoordinateTransformer` internals, `project_to_map`), pinhole-math prose, the per-category footprint settings comments, `compose_project_name` and the pose-adjustment help text.
 15. [A9](#a9-copilot-threads-2-and-5): done; the user replied on threads 2 and 5.
-16. [B5](#b5-verification-commit-and-pr-update): verified on `8d97ccafd`: Tracker unit 623/623, `lint-cpp`, `lint-python`, Python suites 562, complexity, indent, prettier on every changed doc and config file, both images built from HEAD (Controller stubs import with `-W error`), Tracker service suite 16/16 (4:51), legacy differential bit-identical for both services with the recorders compiled unchanged. Commits were made per step instead of one rename commit.
+16. [B5](#b5-verification-commit-and-pr-update): verified on `8d97ccafd`: Tracker unit 623/623, `lint-cpp`, `lint-python`, Python suites 562, complexity, indent, prettier on every changed doc and config file, both images built from HEAD (Controller stubs import with `-W error`), Tracker service suite 16/16 (4:51), legacy differential bit-identical for both services with the recorders compiled unchanged. Commits were made per step instead of one rename commit. PR title and description updated by the user.
+17. [C1] 2D vs 3D birth clustering in robot_vision (Phase C). Decision: no change in #2149; the robot_vision fix is a follow-up in the [post-review plan](prob-tracking-post-review-plan.md#follow-up-work). A birth cluster keeps the `zMeasured` of its first detection, and its fused z averages every member, including pixel boxes without measured z. Probe (production settings; a pixel-box camera and two 3D sensors seeing two floors at the same XY; all 6 camera orders): 3 orders merge the floors at birth and 1 attaches the pixel box to the wrong floor, in legacy mode and for #2149 local-fallback inputs alike; the track splits after 1-2 frames. Remote measurements carry measured z, so they are unaffected (0 of 6).
 
 ## Tasks In progress
 
-1. [B5](#b5-verification-commit-and-pr-update): PR title and description update (draft ready).
+None.
 
 ## Tasks Not started
-
-Phase C: 3D tracking considerations:
-
-1. [C1] 2D vs 3D Birth clustering in robot-vision: after #2149 one case may remain. If the first detection in a cluster has no measured z, the cluster keeps zMeasured = false. Two 3D detections on different floors can then still merge in XY. No action taken.
 
 Phase D: follow-ups, out of scope.
 
