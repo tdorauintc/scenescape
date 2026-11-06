@@ -44,7 +44,7 @@ Deprecated, for back-tracking only; the tasks below do not depend on them:
 
 ## Tasks In progress
 
-1. [PR 4](#pr-4-mahalanobis-association): Mahalanobis association (#2037); scenario tests, the test broken by the PR 3 merge and the Copilot review threads, coverage and the legacy Mahalanobis yaw done; evaluation and config fixes open; the filter settings moved to PR 8.
+1. [PR 4](#pr-4-mahalanobis-association): Mahalanobis association (#2037); scenario tests, the test broken by the PR 3 merge and the Copilot review threads, coverage, the legacy Mahalanobis yaw and the prob review issues done; evaluation, yaw publish hysteresis and ADR gaps open; the filter settings moved to PR 8.
 2. [PR 5](#pr-5-non-planar-z-tracking): Non-planar Z / `vz` tracking (#2109); port done, conditional z gating, `vz` noise and evaluation open.
 3. [PR 7](#pr-7-per-detection-measurement-noise-r): Per-detection measurement noise R (#2129); consumption done, producer and opt-in switch open.
 
@@ -177,12 +177,10 @@ Done:
 
 Open:
 
-4. Evaluate on Unity and Wildtrack, `position_mahalanobis` against `euclidean` ([Context](#context)): the baseline for PR 5 and for every noise change. Replace the stale Phase 1 notes in `.github/plans/plan-probabilistic-tracking.md` (prob review 25): they cite artefacts under `/tmp/phase1-*` that are gone, and accept Wildtrack IDSW +23 (over the +5 % budget) and Controller time-chunking rms_jerk +17 % (over +10 %) for Phase 1.
+4. Evaluate on Unity and Wildtrack, `position_mahalanobis` against `euclidean` ([Context](#context)): the baseline for PR 5 and for every noise change. Replace the stale Phase 1 notes in `.github/plans/plan-probabilistic-tracking.md` (prob review 25): they cite artefacts under `/tmp/phase1-*` that are gone, and accept Wildtrack IDSW +23 (over the +5 % budget) and Controller time-chunking rms_jerk +17 % (over +10 %) for Phase 1. Also fix its file touch list, which puts `MultiModelKalmanEstimator.*` in Phase 3 only (prob review 26).
 
-<!-- Open items 5 and 7 moved to PR 8, 6 and 8 are done, see Done; the numbers stay stable. -->
+<!-- Open items 5 and 7 moved to PR 8, 6, 8 and 9 are done, see Done; the numbers stay stable. -->
 
-9. Assign or defer the open prob review issues; "decided" marks the ones with a chosen fix (several raised again by the Copilot review of #2037):
-   - 26 (rest): the `.github/plans` file touch list, which puts `MultiModelKalmanEstimator.*` in Phase 3 only, goes with item 4.
 10. Hysteresis on the yaw publish switch + UT in both services (yaw review 4; moved from PR 3, where it was "yaw thresholding when unreliable"): the Controller's `_kalman_yaw_disagrees_with_velocity` and the Tracker's `select_track_rotation` use single cutoffs (1 m/s, 0.6 rad), so the published rotation can jump by 0.6 rad or more near either. Reuse `SPEED_THRESHOLD_ON` / `OFF` (1.0 / 0.5 m/s) and add an angle off-threshold, chosen now that F-2 changed how far Kalman yaw lags the heading. Also decide whether the fallback may publish the direction of travel where `rotation_from_velocity` is disabled; it does today, undocumented. The thresholds are defined twice and are not configurable (yaw review 7): robot_vision `MIN_SPEED_FOR_YAW_GATE` / `MAX_YAW_VELOCITY_RESIDUAL` (`OrientationAttributes.hpp`, also used by the Tracker) and the Controller's `SPEED_THRESHOLD_ON` (`moving_object.py`) / `YAW_VELOCITY_DISAGREE_RAD` (`ilabs_tracking.py`); expose the robot_vision values to Python or pin them with a test. UT: switch near both thresholds, and `rotation_from_velocity` off on a track that has seen orientation.
 
 <!-- Open item 11 is done, see Done; the numbers stay stable. -->
