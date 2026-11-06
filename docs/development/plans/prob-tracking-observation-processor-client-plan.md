@@ -11,7 +11,7 @@ SPDX-License-Identifier: Apache-2.0
 - PR: #2149 "ITEP-98103: [SPP] Tracker, Controller: experimental remote projection client" (draft). Base: `tdorau/prob-tracking-stp-tracker-refactor` (#2148 @ `b4c1e2e9d`), which is stacked on `feature/prob-tracking-extracted-3d-R`.
 - Observation processor service (server): `origin/ITEP-98099_observation_processor_service` @ `d73820192`, not on `main` yet.
 - Scope: fix review issue M1 (z reference vs measurement noise R), then rename "projection service" to "observation processor service" in all client-side names, and move the contract to `observation_processor/proto/observation_processor.proto`.
-- Status: review, decisions, the earlier fixes, the plan approval and [A1](#a1-push-and-record-the-legacy-baseline) (push and legacy baselines) are done; A2–A9 and Phase B are not started.
+- Status: review, decisions, the earlier fixes, the plan approval, [A1](#a1-push-and-record-the-legacy-baseline) and A2–A5 (Tracker `21271d8f2`, Controller `e504e0699`, pushed) are done; A6 is in progress; A7–A9 and Phase B are not started.
 
 ### Context
 
@@ -45,23 +45,20 @@ Paths in backticks are relative to the PR branch checkout. Linked files are in t
 3. [Copilot threads 1, 3, 4](#copilot-threads): fixed, reply texts prepared; the user posts them.
 4. [M1 analysis](#m1-analysis-and-decision): options A, B, U, U′ and U2 compared with a robot_vision simulation; option U chosen with constraints.
 5. [A1](#a1-push-and-record-the-legacy-baseline): `fc3a0dc02` pushed; reproducible legacy baselines of both services recorded on the PR base, with a local-only harness.
+6. [A2](#a2-tracker-tests-red) + [A3](#a3-tracker-implementation-green): `21271d8f2` (Tracker, one commit). Tracker unit tests 623/623, `lint-cpp` clean, legacy differential bit-identical. Deviations: no `TrackingWorker::zReference()` getter (the scheduler tests assert the published z instead); a legacy pixel box publishes z = −2.8·10⁻¹⁸, not exactly 0, so the test allows 1e-9.
+7. [A4](#a4-controller-tests-red) + [A5](#a5-controller-implementation-green): `e504e0699` (Controller, one commit). Python suites 562 passed, complexity and indent checks pass, legacy differential bit-identical. The output conversion is a helper, `_publishedPoint()`, because `from_tracked_object()` is at its complexity baseline (21). Legacy planar z is about 1e-17 in Python too, so the tests allow 1e-9 in both modes.
 
 ## Tasks In progress
 
-None.
+1. [A6](#a6-tracker-service-tests): Tracker service tests, within a runtime budget for the PR's service tests (below 5 minutes).
 
 ## Tasks Not started
 
 Phase A: M1, centre-of-mass tracker input (test-first).
 
-1. [A2](#a2-tracker-tests-red): Tracker unit tests for the z conversion and the experimental/legacy modes (red).
-2. [A3](#a3-tracker-implementation-green): Tracker implementation (green).
-3. [A4](#a4-controller-tests-red): Controller unit tests, including real robot_vision characterization (red).
-4. [A5](#a5-controller-implementation-green): Controller implementation (green).
-5. [A6](#a6-tracker-service-tests): Tracker service tests for 3D translation and local fallback in both modes.
-6. [A7](#a7-documentation): document the internal z reference, the 3D centre-of-mass assumption and the consequences.
-7. [A8](#a8-verification-and-commit): full test matrix, legacy bit-exact differential, lint, complexity, commit.
-8. [A9](#a9-copilot-threads-2-and-5): reply to Copilot threads 2 and 5 after the push.
+1. [A7](#a7-documentation): document the internal z reference, the 3D centre-of-mass assumption and the consequences.
+2. [A8](#a8-verification-and-commit): full test matrix, legacy bit-exact differential, lint, complexity, commit.
+3. [A9](#a9-copilot-threads-2-and-5): reply to Copilot threads 2 and 5 after the push.
 
 Phase B: rename "projection service" to "observation processor service" and every pipeline Project/Projection name to Process/Processing, in the Tracker and Controller (no behaviour change).
 
@@ -312,15 +309,14 @@ All in `tests/sscape_tests/remote_projection/test_remote_projection.py`:
 
 #### A6. Tracker service tests
 
-- New tests that need realistic local positions or moving boxes use boxes that end below the horizon ([A1 note 1](#a1-push-and-record-the-legacy-baseline)), e.g. `{x, 400, 55, 150}` for the 1280×720 `atag-qcam*` cameras. The existing stationary `BBOX` and `GRID_BOXES` stay as they are; their local projections are far from the scene, which does not affect those tests.
-  `tracker/test/service/test_remote_projection.py`:
-
-- Existing `test_remote_projection_measurements_drive_tracks`: expectations are unchanged (mock centre z = `HEIGHT_M / 2`, published base z = 0). Update the docstring ("centre of mass fed to the tracker, base published").
-- New `test_translation_detection_z_reference`:
-  - Send the same `translation` detection with size `[0.5, 0.5, 1.8]` in legacy mode (`remote=False`) and in experimental mode (mock running).
-  - Assert `z_experimental == z_legacy - 0.9` (±0.01) and identical XY (±0.01).
-- New `test_local_fallback_publishes_base_z`: experimental mode with the mock returning `UNAVAILABLE`, constant pixel boxes; published |z| < 0.01. Local inputs are converted even when every call fails.
-- Acceptance: the tracker service suite is green against a custom-tagged image.
+- Runtime budget (user decision): the PR's service tests, `tracker/test/service/test_remote_projection.py`, stay below 5 minutes. Each compose environment costs about 20–30 s, so A6 starts no new environment:
+  - `test_remote_projection_measurements_drive_tracks` (experimental) also sends the same 3D `translation` in two categories, with heights 1.8 m and 0.2 m. The published z differ by −0.8 m (z = centre − h/2) and XY are equal (±0.01). This replaces the planned `test_translation_detection_z_reference` (one legacy and one experimental environment); legacy `translation` z is covered by the Tracker unit tests and the A8 differential.
+  - `test_remote_projection_failure_keeps_local_projection` (unavailable and deadline) asserts |z| < 0.01 on the local track: local inputs are converted even when every call fails. This replaces the planned `test_local_fallback_publishes_base_z`.
+  - `mock-projection` gets `init: true` in `tracker/test/service/compose.yml`. The mock server ran as PID 1 and ignored SIGTERM, so each `compose down` waited for the 10 s stop timeout; 7 of the 9 environments start the mock.
+  - Measured (5 tests, this machine): 4:38 with the folded checks before the `init` fix, 3:23 after. The two latency tests take 145 s (3 environments each). The plan as written would have added 3 environments, about 1–1.5 minutes.
+- Pixel boxes: new tests that need realistic local positions or moving boxes use boxes that end below the horizon ([A1 note 1](#a1-push-and-record-the-legacy-baseline)), e.g. `{x, 400, 55, 150}` for the 1280×720 `atag-qcam*` cameras. The existing stationary `BBOX` and `GRID_BOXES` stay as they are; their local projections are far from the scene, which does not affect these tests.
+- Docstrings of the module and of the two tests: centre of mass fed to the tracker, footprint base published.
+- Acceptance: `test_remote_projection.py` green against a custom-tagged image; the full service suite runs in A8.
 
 #### A7. Documentation
 
