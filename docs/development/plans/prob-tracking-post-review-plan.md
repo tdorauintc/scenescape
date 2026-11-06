@@ -152,6 +152,7 @@ Done:
   - `data_formats.md` and the `scene-data` schema say the window is drawn at the corrected `translation`, not the predicted position the gate uses (issue 7, `5022ed7c6`).
 - Second Copilot review of #2037, one commit each:
   - A `match()` threshold above the rejection cost (1000) let a pair beyond `max_radius_m` or with a degenerate `S_xy` be assigned, e.g. Euclidean with threshold 2000 and `max_radius_m` 2 took a detection 3 m away; the threshold is capped at 1000 + UT (`823bb0fc3`). Neither service reaches it (Euclidean threshold `max_radius_m` or `tracking_radius`, Mahalanobis at most 41.4); production unchanged.
+  - A Tracker JSON `gate_probability` of 0 or below passed the schema (RapidJSON validates draft-04, which ignores the numeric `exclusiveMinimum`) and became a 2e-9 gate that associated nothing; the loader checks (0, 1] as for the env override and fails startup + UT (`0036f15dd`).
 - Entering-target tests (open item 2, `0d48d3c09`): `RunnerEnteringGetsOneTrack` is a regression scenario (Mahalanobis keeps entries up to 6 m/s at 10 fps; 8 m/s fails 2 of 3 seeds); `CarEnteringAtSpeedGetsOneTrack` and `CarPullingAwayKeepsOneTrack` stay known issues for [PR 8](#pr-8-dataset-and-testing), their comments updated.
 - Coverage (open item 3; prob review G4, G6, G7, G12, G13, G15); each new test fails on a mutated implementation:
   - `PositionMahalanobisPrefersAlongTrackAxis` (C++ and Python) asserts through `match()`: in a wide gate the along-track detection wins, at χ²(0.99) only it is inside the gate (G7, `4a4c26826`).
