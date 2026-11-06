@@ -233,6 +233,7 @@ Open:
 6. Scenario tests with R, as paired runs with and without R: one camera, two cameras at 90°, mixed with and without R, wrong `reportedScale`. In a trial with two ground-plane cameras, R lowered the position error on 19 of 20 seeds.
 7. Investigate the track restarts in that trial: at 0.005 rad with R and `position_mahalanobis`, tracks restarted through the whole run (about 2-3 per run); without R or with `euclidean`, extra tracks started only in the first 3 s. Check how the tests generate R and whether it is too small for the gate (0.06 m across the ray at 12 m).
 8. Optional: draw the per-detection gate `HPHt + R` in the visualization tools.
+9. Fused R drops the geometry–yaw cross-covariance (Copilot review of #2129): `fuseGeometry` fills the 6×6 geometry block and `applyOrientingYaw` the selected detection's yaw variance, so the cross terms stay 0, but Cov(geometry_f, yaw_s) = R_f · R_s,geom⁻¹ · R_s[geometry, yaw] (two detections with unit x variance and Cov(x, yaw) = 0.8 in the selected one: 0.4). A single detection keeps its cross terms. No effect until a producer sets correlated R (Option B's 7×7 frustum Σ; Option A gives Σ_xy only). Fix in the multi-detection path only + fusion UT with correlated geometry and yaw.
 
 ### Tasks Not started
 
