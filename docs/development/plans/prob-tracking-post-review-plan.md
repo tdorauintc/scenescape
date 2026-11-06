@@ -51,7 +51,8 @@ Deprecated, for back-tracking only; the tasks below do not depend on them:
 ## Tasks Not started
 
 1. [PR 8](#pr-8-dataset-and-testing): Tuning items from PR 3, final accuracy and performance evaluation of the stack, then merge to `main`.
-2. [Parallel 1](#parallel-1-dataset-with-diverse-motion): Tracker Evaluation dataset with more diverse motion (cars).
+2. [Follow-up work](#follow-up-work): items after the stack is on `main`.
+3. [Parallel 1](#parallel-1-dataset-with-diverse-motion): Tracker Evaluation dataset with more diverse motion (cars).
 
 ## Details
 
@@ -163,6 +164,7 @@ Done:
   - `match()` inverts S and S without yaw once per track (pinning test `f423c1761`, `a5256da30`) instead of S without yaw per pair; `predict()` no longer inverts every track's 7×7 S for this cost only (1.8 µs per track, about 0.37 ms per 200-track frame). `TrackedObject::predictedMeasurementCovInv` is gone: PR 5 and PR 7 still read it and resolve it on their next merge.
   - The cost stays ½·√d², not χ²-calibrated; comments mark it, `MultiClassEuclidean`, `MCEMahalanobis`, their Python docstrings and UT as legacy, and `calculatePositionMahalanobisSquaredDistance` as unused (`3b5f42409`).
   - Production bit-exact: neither service uses these costs, and the `RV_SCENARIO_DIR` recordings (state, P, μ) are unchanged, `prepareYawMeasurement` included.
+- Rollback to Euclidean (open item 9, prob review 1): PR 3's filter changes are on `main`, so the gap was the Scene Controller's gate. `main` gated and clustered births on the frame's average object `tracking_radius` (Object Library, 10 m for the default `vehicle` asset); `euclidean` used a fixed 2 m and ignored `tracking_radius` silently. Now `euclidean` without `max_radius_m` (normalized to None) gates, clusters births and draws the window on that average, as `main` (`5f3d75086`; failing tests first, `841103fb2`); with `max_radius_m` every class uses it, births stay at 2 m, and an ignored `tracking_radius` is warned about. The batched `track()` takes `birthClusterRadiusM` (default 2 m; Python `birth_cluster_radius_m`, `d93e2be93`). How-to, object-properties how-to and design doc updated. The Tracker Service's `euclidean` was already `main`'s fixed 2 m; aligning it with the Controller is [follow-up work](#follow-up-work).
 
 Open:
 
@@ -171,7 +173,6 @@ Open:
 <!-- Open items 5 and 7 moved to PR 8, 6 and 8 are done, see Done; the numbers stay stable. -->
 
 9. Assign or defer the open prob review issues; "decided" marks the ones with a chosen fix (several raised again by the Copilot review of #2037):
-   - 1: the how-to's "Rollback to Euclidean" restores only the gate: PR 3's filter changes (IMM mixing, process noise, UKF fixes) stay, so `euclidean` does not reproduce `main`; say so in `how-to-configure-tracker.md`.
    - 9: the services handle an invalid `method` differently, and the how-to ("Invalid `method` values fail startup (Controller raises; Tracker throws)") describes neither: the Controller's `extractTrackerConfigData` logs, drops the method and continues with the default (its test asserts the fallback); the Tracker throws. Align them and fix the how-to.
    - 19: with an invalid `method` the Controller keeps the other fields of the block (a test asserts that `max_radius_m` 7.0 survives `method: 'bogus'`); a malformed block should fall back to all defaults. Decide with 9.
    - 12: d² is unbounded and can exceed the matcher's `kDefaultClassBoundValue` (1000): 9 m from a track with S ≈ 0.04 m² gives about 2000. Probably benign, since pairs are compared against the χ² threshold, but untested; clamp with `std::min(d², kDefaultClassBoundValue)` + UT.
@@ -218,13 +219,16 @@ Done:
 - A correct without R after one with R, before the next predict, no longer reuses the earlier R + UT.
 - [Visualization plan](../deprecated/prob-tracking-viz-plan.md): with R the `S_xy` ellipse is not the gate for that detection.
 - Scenario test support (`d2039588f`): `Sensor::positionCovariance` draws the error from a covariance (`groundPlaneCamera`, `depthCamera`, `fixedCovariance`) and reports it as R; the recorder writes R per detection and `HPHt` per step.
+- Updated with PR 5 (`f87d9d092`), which brought PR 3's reduced yaw update (`6277c8cf5`; yaw review 2) and the #2036 follow-ups (open item 4): `correct(measurement, observedRows, R)` sets Syy = H P Hᵀ + R and updates the observed rows only, so R's yaw row is left out for detections without orientation, in the UKF update and the IMM likelihood; the legacy `Mahalanobis` gate uses H P Hᵀ + R with and without yaw (`d3f3a520e`) + UT. robot_vision: all pass but `PositionMahalanobisPrefersAlongTrackAxis` (fixed in PR 4 `7b93ad99f`, not yet in PR 5) and `PersonAppearingBesideOccludedPersonGetsOwnTrack` (PR 5 open item 1), both red on PR 5 too.
 
 Open:
 
 1. Decide and wire the R producer on `main` + UT. Option A, Tracker `CoordinateTransformer` ([design](../../design/probabilistic-tracking-association.md) §5.3): σ_px = max(min_pixel_sigma, α · bbox height in px · f(confidence)), Σ_xy = J Σ_pixel Jᵀ with J the 2×2 Jacobian of the pixel-to-ground projection, optionally scaled by the incidence angle; α calibrated offline (maximise AssA with LocA at least the baseline); settings under `measurement_uncertainty.*`. Option B, the Controller observation pipeline (7×7 frustum Σ, as on `feat/full-v2-tracking-pipeline-R-aware`).
 2. Decide the switch: the design adds an opt-in `position_mahalanobis_combined` (S = S_pred + R_meas, Phase 1 behaviour for detections without R) and flips the default in Phase 3 after evaluation (§5.3, §8); this branch uses R whenever a detection carries it. Update design §5.3, §5.4 (`correct(measurement, R_optional)`), §8 and the ADR-0017 Phase 2 / 3 status (both still "proposed").
 3. Apply PR 5's z gating (PR 5 open item 1: measured z on both sides, χ² df per pair) to the per-pair R gate (z review Z1, Z2).
-4. Combine with PR 3's reduced yaw update for detections without orientation (`6277c8cf5`; yaw review 2): both change the UKF correct, so the per-pair R must apply to the observed rows only.
+
+<!-- Open item 4 is done, see Done; the numbers stay stable. -->
+
 5. Evaluate impact on Wildtrack and Unity against PR 5 once a producer sets R.
 6. Scenario tests with R, as paired runs with and without R: one camera, two cameras at 90°, mixed with and without R, wrong `reportedScale`. In a trial with two ground-plane cameras, R lowered the position error on 19 of 20 seeds.
 7. Investigate the track restarts in that trial: at 0.005 rad with R and `position_mahalanobis`, tracks restarted through the whole run (about 2-3 per run); without R or with `euclidean`, extra tracks started only in the first 3 s. Check how the tests generate R and whether it is too small for the gate (0.06 m across the ray at 12 m).
@@ -279,6 +283,10 @@ Calibrated at `8f1c0d9ef` (Release, fixed seed); C-7 re-calibrated after F-1 (`8
 | F-1 `StraightLineMatchesConstantVelocityFilter`               | ratio ≤ 1.1 (1.05 / 1.07 / 1.03; a single seed varies by about 0.2)                                                                                                                                                                                                                                                           | PR 8     |
 | E-1 `CtrvPredictionKeepsGaussianMeanUnderTurnRateUncertainty` | 1.82 ± 0.05 m/s (1.839; κ = 0: 2.51)                                                                                                                                                                                                                                                                                          | κ change |
 | C-13 `CameraOnlyTurningYawStaysBounded`                       | yaw variance ≤ 0.2 rad² (0.13), model yaw spread ≤ 0.3 rad (0.17)                                                                                                                                                                                                                                                             | PR 8     |
+
+#### Follow-up work
+
+- Align the Tracker Service's `euclidean` association with the Scene Controller (from PR 4 open item 9, prob review 1): without `max_radius_m` the Controller gates and clusters births on the frame's average object `tracking_radius` (`5f3d75086`), the Tracker on a fixed 2 m (`kDefaultAssociationMaxRadiusM`), so the same config gives a vehicle a 10 m gate in one service and 2 m in the other. The Tracker already reads the Object Library asset list from the Manager when `scenes.source` is `api` (for shift type), so it could read `tracking_radius` too and pass it as gate and `birth_cluster_radius_m`. Decide per class (the Tracker's per-category tracking) or the Controller's per-frame average, which mixes classes; or instead deprecate `tracking_radius` in both, as ADR-0017 plans. UT for config parsing and forwarding; how-to and the object-properties how-to.
 
 #### Parallel 1: Dataset with diverse motion
 
