@@ -71,9 +71,13 @@ Phase B: rename "projection service" to "observation processor service" and ever
 4. [B4](#b4-tests-mocks-compose-and-docs-renames): tests, mock service, compose, docs, Agents.md; zero residual old names.
 5. [B5](#b5-verification-commit-and-pr-update): full test matrix, image builds, commit, PR title and description.
 
-Phase C: follow-ups, out of scope.
+Phase C: 3D tracking considerations:
 
-1. [C1](#c1-follow-ups): server TLS (the server is plaintext), end-to-end accuracy evaluation with a real server, and planar z/vz noise if it matters to consumers.
+1. [C1] 2D vs 3D Birth clustering in robot-vision: after #2149 one case may remain. If the first detection in a cluster has no measured z, the cluster keeps zMeasured = false. Two 3D detections on different floors can then still merge in XY. No action taken.
+
+Phase D: follow-ups, out of scope.
+
+1. [D1](#c1-follow-ups): server TLS (the server is plaintext), end-to-end accuracy evaluation with a real server, and planar z/vz noise if it matters to consumers.
 
 ## Details
 
