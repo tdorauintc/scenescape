@@ -168,6 +168,7 @@ Done:
 - Malformed association block (open item 9, prob review 9 and 19): the Scene Controller drops an unknown `method` together with the block's other fields, and a block that is not an object no longer stops startup with `ValueError`; both log an error and use the default block (`d97a484bc`; failing tests first, `55fcf4a2f`). Each service keeps its policy: the Controller logs and uses defaults, the Tracker Service fails startup; the how-to says so.
 - Association warnings once (open item 9, prob review 13): the ignored `tracking_radius` warning fired every frame, 10 times a second per tracker with the default config and the default `vehicle` asset (10 m), and the tight-ceiling warning of `normalize_association_config` once per object per frame. `warn_association_config` logs the latter once when the tracker config is loaded, the former once per tracker (`31aab50d9`; failing tests first, `b8674a875`). Normalization stays per call: 0.24 µs, about 50 µs per 200-object frame.
 - d² above the matcher's bound (open item 9, prob review 12): benign, no change. The gated Hungarian matcher replaces every cost at or above the threshold with `bound_value` (1000) before optimizing and drops assignments with an invalid cost, and the `PositionMahalanobis` threshold is at most χ²(1 − 1e-9, 2) ≈ 41.4, so a d² above 1000 never reaches the optimizer. Its `CHECK(bound ≥ threshold)` is compiled out; only a Euclidean gate above 1000 m could rank valid pairs below rejected ones.
+- Convenience `track()` ceiling (open item 9, prob review 15): `MultipleObjectTracker` takes `maxRadiusM` in its constructor (default ∞; Python `max_radius_m`), which the `track()` overloads without a distance type use (`72ae67b77`); before, `mMaxRadiusM` was never set, so a tracker built with `PositionMahalanobis` had no ceiling through them. The services use the explicit overloads.
 
 Open:
 
@@ -176,7 +177,6 @@ Open:
 <!-- Open items 5 and 7 moved to PR 8, 6 and 8 are done, see Done; the numbers stay stable. -->
 
 9. Assign or defer the open prob review issues; "decided" marks the ones with a chosen fix (several raised again by the Copilot review of #2037):
-   - 15: `MultipleObjectTracker::mMaxRadiusM` is never assigned (always ∞) but the convenience `track(objects, timestamp, scoreThreshold)` overloads pass it, so a tracker built with `PositionMahalanobis` and called through them has no ceiling. Set it in the constructor or stop using it.
    - 16: remaining dead code: `calculatePositionMahalanobisSquaredDistance` (`ObjectMatching.cpp`, a copy of the cached path that PR 5 extends to 3×3; z review Z7), the Python aliases `DEFAULT_ASSOCIATION_MAX_RADIUS_M` / `RECOMMENDED_MAHALANOBIS_MAX_RADIUS_M` (`ilabs_tracking.py`), and `TimeChunkedIntelLabsTracking.applyAssociationConfig`, which only calls `super()`.
    - 22 (decided): per-category colours in the 3D view, which uses one colour (`0x33cc66`) for all; the 2D default stroke is done.
    - 23: switching the UI toggle on shows nothing until the next MQTT message, because `updateAssociationWindow` (2D `marks.js`, 3D `assetmanager.js`) creates geometry only while the toggle is on; redraw from the last message.
