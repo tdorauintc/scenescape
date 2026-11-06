@@ -154,7 +154,7 @@ Done:
 - Coverage (open item 3; prob review G4, G6, G7, G12, G13, G15); each new test fails on a mutated implementation:
   - `PositionMahalanobisPrefersAlongTrackAxis` (C++ and Python) asserts through `match()`: in a wide gate the along-track detection wins, at χ²(0.99) only it is inside the gate (G7, `4a4c26826`).
   - `max_radius_m` rejects a pair inside the χ² gate, 0 rejects any offset, ∞ is the default; the same on the Euclidean branch (G4, `4eaece944`).
-  - A degenerate `S_xy` (`|det| < 1e-12`: zero, rank one, 1e-14) is never assigned; det 1e-10 is (G6, `b907d869a`). PR 5's 3×3 path must keep it (PR 5 open item 7).
+  - A degenerate `S_xy` (`|det| < 1e-12`: zero, rank one, 1e-14) is never assigned; det 1e-10 is (G6, `b907d869a`). PR 5's 3×3 paths keep it (`9cfa9b1b2`).
   - The Controller's `update_tracks()` and `update_tracks_batched()` forward distance type, threshold and `max_radius_m` to `track()` (G12, `a7b5e3944`).
   - Tracker `buildAssociationWindow` UT: circle, rotated `S_xy` (axes, order, angle mod π), negative-eigenvalue clamp (G13, `5c33d37a9`); the safety net for open item 6.
   - Benchmark (G15): Mahalanobis against Euclidean per `track()` call −1.7 to +6.1 %, median +1.8 % (12 cases: time-chunking and Immediate, 50 / 200 people, 1–2 cameras; one pinned thread, median of 7, CV ≤ 2 %), e.g. time-chunking with 200 people 31.5 → 32.3 ms; part of it is different association outcomes, not the 2×2 inverse. The baseline for PR 7's per-pair S.
@@ -166,6 +166,8 @@ Done:
   - Production bit-exact: neither service uses these costs, and the `RV_SCENARIO_DIR` recordings (state, P, μ) are unchanged, `prepareYawMeasurement` included.
 - Rollback to Euclidean (open item 9, prob review 1): PR 3's filter changes are on `main`, so the gap was the Scene Controller's gate. `main` gated and clustered births on the frame's average object `tracking_radius` (Object Library, 10 m for the default `vehicle` asset); `euclidean` used a fixed 2 m and ignored `tracking_radius` silently. Now `euclidean` without `max_radius_m` (normalized to None) gates, clusters births and draws the window on that average, as `main` (`5f3d75086`; failing tests first, `841103fb2`); with `max_radius_m` every class uses it, births stay at 2 m, and an ignored `tracking_radius` is warned about. The batched `track()` takes `birthClusterRadiusM` (default 2 m; Python `birth_cluster_radius_m`, `d93e2be93`). How-to, object-properties how-to and design doc updated. The Tracker Service's `euclidean` was already `main`'s fixed 2 m; aligning it with the Controller is [follow-up work](#follow-up-work).
 - Malformed association block (open item 9, prob review 9 and 19): the Scene Controller drops an unknown `method` together with the block's other fields, and a block that is not an object no longer stops startup with `ValueError`; both log an error and use the default block (`d97a484bc`; failing tests first, `55fcf4a2f`). Each service keeps its policy: the Controller logs and uses defaults, the Tracker Service fails startup; the how-to says so.
+- Association warnings once (open item 9, prob review 13): the ignored `tracking_radius` warning fired every frame, 10 times a second per tracker with the default config and the default `vehicle` asset (10 m), and the tight-ceiling warning of `normalize_association_config` once per object per frame. `warn_association_config` logs the latter once when the tracker config is loaded, the former once per tracker (`31aab50d9`; failing tests first, `b8674a875`). Normalization stays per call: 0.24 µs, about 50 µs per 200-object frame.
+- d² above the matcher's bound (open item 9, prob review 12): benign, no change. The gated Hungarian matcher replaces every cost at or above the threshold with `bound_value` (1000) before optimizing and drops assignments with an invalid cost, and the `PositionMahalanobis` threshold is at most χ²(1 − 1e-9, 2) ≈ 41.4, so a d² above 1000 never reaches the optimizer. Its `CHECK(bound ≥ threshold)` is compiled out; only a Euclidean gate above 1000 m could rank valid pairs below rejected ones.
 
 Open:
 
@@ -174,8 +176,6 @@ Open:
 <!-- Open items 5 and 7 moved to PR 8, 6 and 8 are done, see Done; the numbers stay stable. -->
 
 9. Assign or defer the open prob review issues; "decided" marks the ones with a chosen fix (several raised again by the Copilot review of #2037):
-   - 12: d² is unbounded and can exceed the matcher's `kDefaultClassBoundValue` (1000): 9 m from a track with S ≈ 0.04 m² gives about 2000. Probably benign, since pairs are compared against the χ² threshold, but untested; clamp with `std::min(d², kDefaultClassBoundValue)` + UT.
-   - 13: `normalize_association_config()` runs on every `association_match_params()` call (per frame) and every `build_association_window()` call (per object per frame); with `position_mahalanobis` and `max_radius_m` ≤ 2 m its warning is logged per object per frame, and `_warn_deprecated_tracking_radius` warns every frame. Normalise once at construction and warn once.
    - 15: `MultipleObjectTracker::mMaxRadiusM` is never assigned (always ∞) but the convenience `track(objects, timestamp, scoreThreshold)` overloads pass it, so a tracker built with `PositionMahalanobis` and called through them has no ceiling. Set it in the constructor or stop using it.
    - 16: remaining dead code: `calculatePositionMahalanobisSquaredDistance` (`ObjectMatching.cpp`, a copy of the cached path that PR 5 extends to 3×3; z review Z7), the Python aliases `DEFAULT_ASSOCIATION_MAX_RADIUS_M` / `RECOMMENDED_MAHALANOBIS_MAX_RADIUS_M` (`ilabs_tracking.py`), and `TimeChunkedIntelLabsTracking.applyAssociationConfig`, which only calls `super()`.
    - 22 (decided): per-category colours in the 3D view, which uses one colour (`0x33cc66`) for all; the 2D default stroke is done.
@@ -195,9 +195,10 @@ Carried over from `feat/tracking-z-axis`: `vz` in a 13-state UKF with named `Sta
 Done:
 
 - 13-state filter tests, `constexpr StateSize` checked against `StateIndex`, `std::numbers::pi`, cached χ²(3) threshold (z review E2, I2, Z7).
-- Updated with PR 4 including #2050 (`d20bb3775`); `zMeasured` on the Tracker translation path + `TrackingWorker` tests (`9b2879806`); Tracker z-tracking docs (`d0ce0a7d9`) (z review E5).
+- Updated with PR 4 including #2050 (`d20bb3775`); `zMeasured` on the Tracker translation path + `TrackingWorker` tests (`9b2879806`); Tracker z-tracking docs (`d0ce0a7d9`) (z review E5). Updated again with PR 4's review threads, coverage, legacy `Mahalanobis` cache and birth-clustering radius (`9cfa9b1b2`): birth clustering is `EuclideanBirth` with the configurable radius; the forwarded Controller threshold is χ²(p, 3), the drawn window χ²(p, 2). robot_vision: all pass but `PersonAppearingBesideOccludedPersonGetsOwnTrack` (item 1); tracker unit tests pass.
 - Merged #2056 (`270b72b7f`): `StateSize = 13` kept, `processNoiseCov` on `StateIndex` with `Q(vz) = q_vel·dt` (z review I2).
 - Association scenarios with the services' χ²(p, 3) gate (`f00f03023`; Copilot review of #2109): one scenario red until item 1.
+- Near-singular guard in the 3×3 `PositionMahalanobis` paths (open item 7; z review Z7; `9cfa9b1b2`): `|det S| < 1e-12` gives the bound cost, as the 2×2 gate did; `cv::invert(S, Sinv, cv::DECOMP_LU) == 0` alone caught only an exactly singular S. PR 4's `PositionMahalanobisNeverAssignsTrackWithDegenerateCovariance` pins it (S_zz = 1, so det S = det S_xy).
 
 Open:
 
@@ -207,7 +208,8 @@ Open:
 4. Docs still describe a 2×2 / 2-DOF gate (z review Z9): `how-to-configure-tracker.md` (`gate_probability`: "2 DOF"), the design doc, ADR-0017 and the `association_window` description in `data_formats.md`; the Z section of `.github/plans/plan-probabilistic-tracking.md` still cites `feat/tracking-z-axis` hashes. Also document that the Controller sets `zMeasured = 'translation' in info`, which is true for child-scene and external-source objects whose z is a planar ground point, so birth clustering uses XYZ for them (z review Z6; benign today).
 5. Coverage (z review Z10): the new filter tests use a single CV model; add production IMM {CV, CA, CTRV} with vertical motion, mixed planar / 3D association (item 1), a noisy-z coast (item 3) and the window df (item 2). Run the functional `tests/functional/test_z_tracking.py` (needs the container stack; never run).
 6. Evaluate on Wildtrack and Unity against PR 4 (z review Z2); after item 1, planar scenes must match PR 4.
-7. Restore a near-singular guard in the 3×3 `PositionMahalanobis` paths (z review Z7): PR 5 replaced `|det S| < 1e-12` with `cv::invert(S, Sinv, cv::DECOMP_LU) == 0` (`ObjectMatching.cpp`), which only catches an exactly singular S; check the determinant or the condition number + UT with a near-singular S; PR 4's `PositionMahalanobisNeverAssignsTrackWithDegenerateCovariance` pins the 2×2 behaviour.
+
+<!-- Open item 7 is done, see Done; the numbers stay stable. -->
 
 #### PR 7: Per-detection measurement noise R
 
@@ -218,7 +220,7 @@ Done:
 - A correct without R after one with R, before the next predict, no longer reuses the earlier R + UT.
 - [Visualization plan](../deprecated/prob-tracking-viz-plan.md): with R the `S_xy` ellipse is not the gate for that detection.
 - Scenario test support (`d2039588f`): `Sensor::positionCovariance` draws the error from a covariance (`groundPlaneCamera`, `depthCamera`, `fixedCovariance`) and reports it as R; the recorder writes R per detection and `HPHt` per step.
-- Updated with PR 5 (`f87d9d092`), which brought PR 3's reduced yaw update (`6277c8cf5`; yaw review 2) and the #2036 follow-ups (open item 4): `correct(measurement, observedRows, R)` sets Syy = H P Hᵀ + R and updates the observed rows only, so R's yaw row is left out for detections without orientation, in the UKF update and the IMM likelihood; the legacy `Mahalanobis` gate uses H P Hᵀ + R with and without yaw (`d3f3a520e`) + UT. robot_vision: all pass but `PositionMahalanobisPrefersAlongTrackAxis` (fixed in PR 4 `7b93ad99f`, not yet in PR 5) and `PersonAppearingBesideOccludedPersonGetsOwnTrack` (PR 5 open item 1), both red on PR 5 too.
+- Updated with PR 5 (`f87d9d092`), which brought PR 3's reduced yaw update (`6277c8cf5`; yaw review 2) and the #2036 follow-ups (open item 4): `correct(measurement, observedRows, R)` sets Syy = H P Hᵀ + R and updates the observed rows only, so R's yaw row is left out for detections without orientation, in the UKF update and the IMM likelihood; the legacy `Mahalanobis` gate uses H P Hᵀ + R with and without yaw (`d3f3a520e`) + UT. Updated again with PR 5 (`b276b91a6`), which brought PR 4's legacy `Mahalanobis` cache and the 3×3 determinant guard: a detection with R gets a per-pair cache from H P Hᵀ + R, and the per-pair `PositionMahalanobis` S keeps the guard. robot_vision: all pass but `PersonAppearingBesideOccludedPersonGetsOwnTrack` (PR 5 open item 1); tracker unit tests pass.
 
 Open:
 
@@ -286,6 +288,7 @@ Calibrated at `8f1c0d9ef` (Release, fixed seed); C-7 re-calibrated after F-1 (`8
 #### Follow-up work
 
 - Align the Tracker Service's `euclidean` association with the Scene Controller (from PR 4 open item 9, prob review 1): without `max_radius_m` the Controller gates and clusters births on the frame's average object `tracking_radius` (`5f3d75086`), the Tracker on a fixed 2 m (`kDefaultAssociationMaxRadiusM`), so the same config gives a vehicle a 10 m gate in one service and 2 m in the other. The Tracker already reads the Object Library asset list from the Manager when `scenes.source` is `api` (for shift type), so it could read `tracking_radius` too and pass it as gate and `birth_cluster_radius_m`. Decide per class (the Tracker's per-category tracking) or the Controller's per-frame average, which mixes classes; or instead deprecate `tracking_radius` in both, as ADR-0017 plans. UT for config parsing and forwarding; how-to and the object-properties how-to.
+- Birth clustering with measured and unmeasured z (from #2149 C1; with PR 5 open item 1 and PR 7 open item 3, which use the same `zMeasured` flag): a birth cluster keeps the `zMeasured` of its first detection, and `fuseGeometry` averages z over every member, including pixel boxes without measured z. With a pixel-box camera and two 3D sensors seeing two floors at the same XY, 3 of 6 camera orders merge the floors into one track at birth and 1 of 6 attaches the pixel box to the wrong floor; the track splits after 1-2 frames (production settings, legacy and #2149 local-fallback inputs alike; remote measurements, which carry measured z, are unaffected). Fix in `MultipleObjectTracker::track()` (batched birth loop): a cluster becomes `zMeasured` once a measured detection joins, and its z is fused from the measured members only (zero z information for unmeasured members in the R path, measured-only mean otherwise) + a robot_vision UT over all 6 camera orders. It changes the birth z of mixed planar + 3D clusters in legacy mode, so re-record the #2149 legacy baselines.
 
 #### Parallel 1: Dataset with diverse motion
 
