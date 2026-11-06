@@ -211,7 +211,7 @@ Open:
 
 Done:
 
-- A correct without R after one with R, before the next predict, no longer reuses the earlier R + UT.
+- A correct without R after one with R, before the next predict, no longer reuses the earlier R + UT; this covers every UKF `correct` overload, including the base-class `correct(z)` (`496fac6fc`; Copilot review of #2129). Production calls only the overload with R, and the recordings are unchanged.
 - [Visualization plan](../deprecated/prob-tracking-viz-plan.md): with R the `S_xy` ellipse is not the gate for that detection.
 - Scenario test support (`d2039588f`): `Sensor::positionCovariance` draws the error from a covariance (`groundPlaneCamera`, `depthCamera`, `fixedCovariance`) and reports it as R; the recorder writes R per detection and `HPHt` per step.
 - Updated with PR 5 (`f87d9d092`), which brought PR 3's reduced yaw update (`6277c8cf5`; yaw review 2) and the #2036 follow-ups (open item 4): `correct(measurement, observedRows, R)` sets Syy = H P Hᵀ + R and updates the observed rows only, so R's yaw row is left out for detections without orientation, in the UKF update and the IMM likelihood; the legacy `Mahalanobis` gate uses H P Hᵀ + R with and without yaw (`d3f3a520e`) + UT. Updated again with PR 5 (`b276b91a6`), which brought PR 4's legacy `Mahalanobis` cache and the 3×3 determinant guard: a detection with R gets a per-pair cache from H P Hᵀ + R, and the per-pair `PositionMahalanobis` S keeps the guard. robot_vision: all pass but `PersonAppearingBesideOccludedPersonGetsOwnTrack` (PR 5 open item 1); tracker unit tests pass.
