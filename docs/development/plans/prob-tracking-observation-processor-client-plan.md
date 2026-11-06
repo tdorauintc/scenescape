@@ -11,7 +11,7 @@ SPDX-License-Identifier: Apache-2.0
 - PR: #2149 "ITEP-98103: [SPP] Tracker, Controller: experimental remote projection client" (draft). Base: `tdorau/prob-tracking-stp-tracker-refactor` (#2148 @ `b4c1e2e9d`), which is stacked on `feature/prob-tracking-extracted-3d-R`.
 - Observation processor service (server): `origin/ITEP-98099_observation_processor_service` @ `d73820192`, not on `main` yet.
 - Scope: fix review issue M1 (z reference vs measurement noise R), then rename "projection service" to "observation processor service" in all client-side names, and move the contract to `observation_processor/proto/observation_processor.proto`.
-- Status: review, decisions, the earlier fixes, the plan approval, [A1](#a1-push-and-record-the-legacy-baseline) and A2–A8 (pushed, PR head `5943773ef`) are done; A9 replies are prepared for the user; Phase B is not started.
+- Status: review, decisions, the earlier fixes, the plan approval, [A1](#a1-push-and-record-the-legacy-baseline) and A2–A8, B1 and B2 (pushed, PR head `e40b88e5f`) are done; A9 replies are prepared for the user; B3 is in progress; B4 and B5 are not started.
 
 ### Context
 
@@ -50,20 +50,20 @@ Paths in backticks are relative to the PR branch checkout. Linked files are in t
 8. [A6](#a6-tracker-service-tests): `aa7e16b1c` (mock stops without the 10 s timeout) and `a843ec833` (z-reference checks folded into existing environments). Remote projection service tests 5/5 in 3:23 (was 4:38).
 9. [A7](#a7-documentation): `5943773ef`. Tracker implementation notes, Tracker design, "Height Reference of Tracked Objects" in the tracker how-to, `translation` notes in the data formats, adapter how-to and skill.
 10. [A8](#a8-verification-and-commit): verified on `5943773ef`: Tracker unit 623/623, `lint-cpp`, `lint-python`, Tracker service suite 16/16 (5:11, image built from `e504e0699`; later commits change no Tracker source), Python suites 562, complexity, indent, prettier (only an ignored local evaluation output is flagged), legacy differential bit-identical for both services. Commits were made per step instead of the three planned at the end.
+11. [B1](#b1-switch-to-the-observation-processor-contract): `623dac291` (deletes `api/projection`) and `0c021a9de` (CMake, Dockerfiles, CI filter, codegen, imports, mock and compose switched to the server proto). The first commit alone does not build; the pair does. Both images built, stubs import with `python3 -W error`, Tracker unit 623/623, Python suites 562, remote service tests 5/5.
+12. [B2](#b2-tracker-renames): `e40b88e5f`. Tracker pipeline types, files, config keys, env vars, metric and log messages renamed; geometric projection names kept. Tracker unit 623/623, `lint-cpp` and `lint-python` clean, remote service tests 5/5 (3:22). The mock folder, `mock_projection.py`, the compose service `mock-projection` and `test_remote_projection.py` keep their names for B4.
 
 ## Tasks In progress
 
 1. [A9](#a9-copilot-threads-2-and-5): replies to Copilot threads 2 and 5 prepared; the user posts them.
+2. [B3](#b3-controller-renames): Controller renames.
 
 ## Tasks Not started
 
 Phase B: rename "projection service" to "observation processor service" and every pipeline Project/Projection name to Process/Processing, in the Tracker and Controller (no behaviour change).
 
-1. [B1](#b1-switch-to-the-observation-processor-contract): replace `api/projection` with `observation_processor/proto/observation_processor.proto`; codegen, Dockerfiles, CI.
-2. [B2](#b2-tracker-renames): Tracker C++ pipeline and service names (e.g. `DetectionProjector` → `ObservationProcessor`), files, config keys, env vars, metric, logs.
-3. [B3](#b3-controller-renames): Controller module, classes, env vars, CLI flag, metric, logs.
-4. [B4](#b4-tests-mocks-compose-and-docs-renames): tests, mock service, compose, docs, Agents.md; zero residual old names.
-5. [B5](#b5-verification-commit-and-pr-update): full test matrix, image builds, commit, PR title and description.
+1. [B4](#b4-tests-mocks-compose-and-docs-renames): tests, mock service, compose, docs, Agents.md; zero residual old names.
+2. [B5](#b5-verification-commit-and-pr-update): full test matrix, image builds, commit, PR title and description.
 
 Phase C: 3D tracking considerations:
 
