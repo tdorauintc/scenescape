@@ -11,7 +11,7 @@ SPDX-License-Identifier: Apache-2.0
 - PR: #2149 "ITEP-98103: [SPP] Tracker, Controller: experimental remote projection client" (draft). Base: `tdorau/prob-tracking-stp-tracker-refactor` (#2148 @ `b4c1e2e9d`), which is stacked on `feature/prob-tracking-extracted-3d-R`.
 - Observation processor service (server): `origin/ITEP-98099_observation_processor_service` @ `d73820192`, not on `main` yet.
 - Scope: fix review issue M1 (z reference vs measurement noise R), then rename "projection service" to "observation processor service" in all client-side names, and move the contract to `observation_processor/proto/observation_processor.proto`.
-- Status: review, decisions, the earlier fixes, the plan approval, [A1](#a1-push-and-record-the-legacy-baseline) and A2–A5 (Tracker `21271d8f2`, Controller `e504e0699`, pushed) are done; A6 is in progress; A7–A9 and Phase B are not started.
+- Status: review, decisions, the earlier fixes, the plan approval, [A1](#a1-push-and-record-the-legacy-baseline) and A2–A8 (pushed, PR head `5943773ef`) are done; A9 replies are prepared for the user; Phase B is not started.
 
 ### Context
 
@@ -47,18 +47,15 @@ Paths in backticks are relative to the PR branch checkout. Linked files are in t
 5. [A1](#a1-push-and-record-the-legacy-baseline): `fc3a0dc02` pushed; reproducible legacy baselines of both services recorded on the PR base, with a local-only harness.
 6. [A2](#a2-tracker-tests-red) + [A3](#a3-tracker-implementation-green): `21271d8f2` (Tracker, one commit). Tracker unit tests 623/623, `lint-cpp` clean, legacy differential bit-identical. Deviations: no `TrackingWorker::zReference()` getter (the scheduler tests assert the published z instead); a legacy pixel box publishes z = −2.8·10⁻¹⁸, not exactly 0, so the test allows 1e-9.
 7. [A4](#a4-controller-tests-red) + [A5](#a5-controller-implementation-green): `e504e0699` (Controller, one commit). Python suites 562 passed, complexity and indent checks pass, legacy differential bit-identical. The output conversion is a helper, `_publishedPoint()`, because `from_tracked_object()` is at its complexity baseline (21). Legacy planar z is about 1e-17 in Python too, so the tests allow 1e-9 in both modes.
+8. [A6](#a6-tracker-service-tests): `aa7e16b1c` (mock stops without the 10 s timeout) and `a843ec833` (z-reference checks folded into existing environments). Remote projection service tests 5/5 in 3:23 (was 4:38).
+9. [A7](#a7-documentation): `5943773ef`. Tracker implementation notes, Tracker design, "Height Reference of Tracked Objects" in the tracker how-to, `translation` notes in the data formats, adapter how-to and skill.
+10. [A8](#a8-verification-and-commit): verified on `5943773ef`: Tracker unit 623/623, `lint-cpp`, `lint-python`, Tracker service suite 16/16 (5:11, image built from `e504e0699`; later commits change no Tracker source), Python suites 562, complexity, indent, prettier (only an ignored local evaluation output is flagged), legacy differential bit-identical for both services. Commits were made per step instead of the three planned at the end.
 
 ## Tasks In progress
 
-1. [A6](#a6-tracker-service-tests): Tracker service tests, within a runtime budget for the PR's service tests (below 5 minutes).
+1. [A9](#a9-copilot-threads-2-and-5): replies to Copilot threads 2 and 5 prepared; the user posts them.
 
 ## Tasks Not started
-
-Phase A: M1, centre-of-mass tracker input (test-first).
-
-1. [A7](#a7-documentation): document the internal z reference, the 3D centre-of-mass assumption and the consequences.
-2. [A8](#a8-verification-and-commit): full test matrix, legacy bit-exact differential, lint, complexity, commit.
-3. [A9](#a9-copilot-threads-2-and-5): reply to Copilot threads 2 and 5 after the push.
 
 Phase B: rename "projection service" to "observation processor service" and every pipeline Project/Projection name to Process/Processing, in the Tracker and Controller (no behaviour change).
 
@@ -344,7 +341,7 @@ All in `tests/sscape_tests/remote_projection/test_remote_projection.py`:
 
 #### A9. Copilot threads 2 and 5
 
-- After the push, the user posts on both threads: "Fixed in <sha>: in experimental mode the clients feed robot_vision the contract's centre-of-mass mean with its R unchanged, and convert z to the footprint base only on output, so R needs no transform."
+- After the push, the user posts on both threads: "Fixed in 21271d8f2 (Tracker) and e504e0699 (Controller): in experimental mode the clients feed robot_vision the contract's centre-of-mass mean with its R unchanged, and convert z to the footprint base only on output, so R needs no transform."
 
 #### B1. Switch to the observation processor contract
 
