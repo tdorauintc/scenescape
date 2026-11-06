@@ -173,6 +173,7 @@ Done:
 - Per-category window colours in the 3D view (open item 9, prob review 22): moved to [follow-up work](#follow-up-work).
 - UI toggle redraw (open item 9, prob review 23): benign, no change. Both views draw windows on the next scene message, which streams while objects are tracked, so they appear within one message period (about 0.1 s); without tracks there is nothing to draw.
 - `association_window` in ADR-0017 and the design doc (open item 9, prob review 26): an ADR decision bullet and a §5.2 "UI visualization" row, both saying the window is drawn at the corrected position, not the predicted one the gate uses; `data_formats.md`: without `max_radius_m` the Controller's circle is the average `tracking_radius` (`1df7e36fa`).
+- Benchmark hygiene (open item 9, prob review 10 and 17): google/benchmark is pinned by its v1.9.5 commit in `FetchContent` and the `compare_benchmarks.sh` clone, and `requirements-compare.txt` says so (`e157709ee`); `--association-config` is read with `cv::FileStorage` (JSON, top-level keys, errors for malformed JSON or wrong types) instead of the string scanner (`28ad493ef`).
 
 Open:
 
@@ -182,7 +183,6 @@ Open:
 
 9. Assign or defer the open prob review issues; "decided" marks the ones with a chosen fix (several raised again by the Copilot review of #2037):
    - 26 (rest): the `.github/plans` file touch list, which puts `MultiModelKalmanEstimator.*` in Phase 3 only, goes with item 4.
-   - Benchmark hygiene: 10 (decided): pin google/benchmark by commit in `FetchContent` and in the `compare_benchmarks.sh` clone, and `requirements-compare.txt` with it. 17: `--association-config` is parsed by about 70 lines of string scanning (`jsonStringField`, `jsonNumberField`) that mis-parse nested objects, escaped quotes or a key inside a comment; use a JSON parser (RapidJSON is in the Tracker's conan build, not in robot_vision) or document the flat format.
 10. Hysteresis on the yaw publish switch + UT in both services (yaw review 4; moved from PR 3, where it was "yaw thresholding when unreliable"): the Controller's `_kalman_yaw_disagrees_with_velocity` and the Tracker's `select_track_rotation` use single cutoffs (1 m/s, 0.6 rad), so the published rotation can jump by 0.6 rad or more near either. Reuse `SPEED_THRESHOLD_ON` / `OFF` (1.0 / 0.5 m/s) and add an angle off-threshold, chosen now that F-2 changed how far Kalman yaw lags the heading. Also decide whether the fallback may publish the direction of travel where `rotation_from_velocity` is disabled; it does today, undocumented. The thresholds are defined twice and are not configurable (yaw review 7): robot_vision `MIN_SPEED_FOR_YAW_GATE` / `MAX_YAW_VELOCITY_RESIDUAL` (`OrientationAttributes.hpp`, also used by the Tracker) and the Controller's `SPEED_THRESHOLD_ON` (`moving_object.py`) / `YAW_VELOCITY_DISAGREE_RAD` (`ilabs_tracking.py`); expose the robot_vision values to Python or pin them with a test. UT: switch near both thresholds, and `rotation_from_velocity` off on a track that has seen orientation.
 
 <!-- Open item 11 is done, see Done; the numbers stay stable. -->
