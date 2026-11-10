@@ -9,7 +9,7 @@ SPDX-License-Identifier: Apache-2.0
 
 - Branch: `feature/prob-tracking` @ `188c40e79`, split into PRs 1–8, so the accuracy and performance impact of each can be evaluated separately.
 - PRs: #1979, #2028, #2050, #2036 (merged to `main`); #2056 (merged into PR 3 before it); #2037 (merged to `release-2026.3.0`); #2109, #2129 (open). Branch stack: [Details / Context](#context-1).
-- Status: PRs 1, 2, 3 and 6 done; PRs 4, 5 and 7 in progress; PR 8 not started.
+- Status: PRs 1, 2, 3, 4 and 6 done; PRs 5 and 7 in progress; PR 8 not started.
 
 ### Context
 
@@ -41,12 +41,12 @@ Deprecated, for back-tracking only; the tasks below do not depend on them:
 2. [PR 2](#pr-2-multi-camera-geometry-fusion): Multi-camera geometry fusion with time-chunking only, merged to `main` (#2028).
 3. [PR 6](#pr-6-tracker-service-3d-detection-input): Tracker Service 3D detection input, merged to `main` (#2050) and into all feature branches.
 4. [PR 3](#pr-3-imm-ukf): IMM-UKF fixes, merged to `main` (#2036, `3f0814c6f`) with three follow-ups; tuning items moved to PR 8.
+5. [PR 4](#pr-4-mahalanobis-association): Mahalanobis association, merged to `release-2026.3.0` (#2037, `14da20a22`); the filter settings moved to PR 8, the yaw publish hysteresis to follow-up work.
 
 ## Tasks In progress
 
-1. [PR 4](#pr-4-mahalanobis-association): Mahalanobis association (#2037); scenario tests, the test broken by the PR 3 merge and the Copilot review threads, coverage, the legacy Mahalanobis yaw and the prob review issues, the ADR gaps, Euclidean shipped configs, the performance comparison and the update with `main` done; the accuracy evaluation and the implementation plan update done, no open items; the filter settings moved to PR 8, the yaw publish hysteresis to follow-up work.
-2. [PR 5](#pr-5-non-planar-z-tracking): Non-planar Z / `vz` tracking (#2109); port done, conditional z gating, `vz` noise and evaluation open.
-3. [PR 7](#pr-7-per-detection-measurement-noise-r): Per-detection measurement noise R (#2129); consumption done, producer and opt-in switch open.
+1. [PR 5](#pr-5-non-planar-z-tracking): Non-planar Z / `vz` tracking (#2109); port done, conditional z gating, `vz` noise and evaluation open.
+2. [PR 7](#pr-7-per-detection-measurement-noise-r): Per-detection measurement noise R (#2129); consumption done, producer and opt-in switch open.
 
 ## Tasks Not started
 
@@ -122,11 +122,9 @@ Won't fix:
 
 Open: None
 
-### Tasks In progress
-
 #### PR 4: Mahalanobis association
 
-Carried over: Mahalanobis association (`ObjectMatching.cpp`), association config pass-down and association window in the Controller and Tracker Service, Tracker Evaluation configs, Manager UI window, docs, benchmark fix, fixed birth-clustering radius.
+Merged to `release-2026.3.0` as `14da20a22` (#2037, squash). Carried over: Mahalanobis association (`ObjectMatching.cpp`), association config pass-down and association window in the Controller and Tracker Service, Tracker Evaluation configs, Manager UI window, docs, benchmark fix, fixed birth-clustering radius.
 
 Done:
 
@@ -195,6 +193,8 @@ Done:
 Open: none.
 
 <!-- Open items 5 and 7 moved to PR 8 and 10 to follow-up work; 4, 6, 8, 9, 11 and 12 are done, see Done; the numbers stay stable. -->
+
+### Tasks In progress
 
 #### PR 5: Non-planar Z tracking
 
