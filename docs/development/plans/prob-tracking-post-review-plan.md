@@ -8,13 +8,13 @@ SPDX-License-Identifier: Apache-2.0
 ## High level details
 
 - Branch: `feature/prob-tracking` @ `188c40e79`, split into PRs 1–8, so the accuracy and performance impact of each can be evaluated separately.
-- PRs: #1979, #2028, #2050, #2036 (merged to `main`); #2056 (merged into PR 3 before it); #2037, #2109, #2129 (open). Branch stack: [Details / Context](#context-1).
+- PRs: #1979, #2028, #2050, #2036 (merged to `main`); #2056 (merged into PR 3 before it); #2037 (merged to `release-2026.3.0`); #2109, #2129 (open). Branch stack: [Details / Context](#context-1).
 - Status: PRs 1, 2, 3 and 6 done; PRs 4, 5 and 7 in progress; PR 8 not started.
 
 ### Context
 
 - "PR N" (also "step N" or "item N" in other documents) is item N of this plan.
-- PRs 1, 2, 3 and 6 are on `main`; PRs 4 → 5 → 7 are feature branches stacked on `main`; PR 8 evaluates the stack and merges it to `main`.
+- PRs 1, 2, 3 and 6 are on `main`, PR 4 on `release-2026.3.0`; PRs 5 → 7 are feature branches stacked on `release-2026.3.0`; PR 8 evaluates the stack and merges it to `release-2026.3.0`.
 - Review findings are cited by the short names in [Related documents](#related-documents), e.g. "prob review G9", "yaw review E2", "z review Z1", "delta 9.1", "baseline 9.4".
 - This plan and the [tuning guide](prob-tracking-imm-tuning.md) are the single source of truth: each task in [Details](#details) carries the context needed to do it. The other documents are kept for back-tracking only; finding IDs point to them, and C-n (coverage test), F-n (fix + verification test) and E-n (evaluation) to the PR 3 test plan, which keeps the test-level history (mechanisms, before / after values, sweeps).
 - robot_vision fixes are test-first: the failing test lands first, then the fix with before / after values in its commit message. Verify with `make -C tracker test-robot-vision`, `RobotVisionTests --gtest_filter=...` while iterating, and `RV_SCENARIO_DIR` to record scenarios. Build from a clean build directory: one configured from `main` keeps `RV_CXX_STANDARD=17` in its cache, and the tests fail on C++20 features.
@@ -50,26 +50,26 @@ Deprecated, for back-tracking only; the tasks below do not depend on them:
 
 ## Tasks Not started
 
-1. [PR 8](#pr-8-dataset-and-testing): Tuning items from PR 3, final accuracy and performance evaluation of the stack, then merge to `main`.
-2. [Follow-up work](#follow-up-work): items after the stack is on `main`.
+1. [PR 8](#pr-8-dataset-and-testing): Tuning items from PR 3, final accuracy and performance evaluation of the stack, then merge to `release-2026.3.0`.
+2. [Follow-up work](#follow-up-work): items after the stack is on `release-2026.3.0`.
 3. [Parallel 1](#parallel-1-dataset-with-diverse-motion): Tracker Evaluation dataset with more diverse motion (cars).
 
 ## Details
 
 ### Context
 
-| PR  | Branch                                        | Base                                          | GitHub        |
-| --- | --------------------------------------------- | --------------------------------------------- | ------------- |
-| 1   | `tracker-eval-projection-shift`               | `main`                                        | #1979, merged |
-| 2   | `multi-camera-geometry-fusion`                | `main`                                        | #2028, merged |
-| 3   | `feature/prob-tracking-extracted` (deleted)   | `main`                                        | #2036, merged |
-| 4   | `feature/prob-tracking-extracted-association` | `main`                                        | #2037, open   |
-| 5   | `feature/prob-tracking-extracted-3d`          | `feature/prob-tracking-extracted-association` | #2109, open   |
-| 6   | `ITEP-97104_tracker_3d_detections`            | `main`                                        | #2050, merged |
-| 7   | `feature/prob-tracking-extracted-3d-R`        | `feature/prob-tracking-extracted-3d`          | #2129, open   |
-| 8   | –                                             | `feature/prob-tracking-extracted-3d`          | –             |
+| PR  | Branch                                                  | Base                                 | GitHub        |
+| --- | ------------------------------------------------------- | ------------------------------------ | ------------- |
+| 1   | `tracker-eval-projection-shift`                         | `main`                               | #1979, merged |
+| 2   | `multi-camera-geometry-fusion`                          | `main`                               | #2028, merged |
+| 3   | `feature/prob-tracking-extracted` (deleted)             | `main`                               | #2036, merged |
+| 4   | `feature/prob-tracking-extracted-association` (deleted) | `release-2026.3.0`                   | #2037, merged |
+| 5   | `feature/prob-tracking-extracted-3d`                    | `release-2026.3.0`                   | #2109, open   |
+| 6   | `ITEP-97104_tracker_3d_detections`                      | `main`                               | #2050, merged |
+| 7   | `feature/prob-tracking-extracted-3d-R`                  | `feature/prob-tracking-extracted-3d` | #2129, open   |
+| 8   | –                                                       | `feature/prob-tracking-extracted-3d` | –             |
 
-- Each feature branch merges its base after every upstream change; PR 4 merges `main`, its base since `feature/prob-tracking-extracted` was deleted after #2036.
+- Each feature branch merges its base after every upstream change. PR 4 was squash-merged into `release-2026.3.0` as `14da20a22`, now PR 5's base. PRs 5, 7 and 8 merge into `release-2026.3.0`; PR 7 and PR 8 stay on PR 5 until it is merged.
 - Streaming (Controller Immediate mode) fusion was removed from PR 2 (#2061): the Controller is to be deprecated and the Tracker Service uses time-chunking only.
 
 ### Tasks Done
@@ -232,7 +232,7 @@ Done:
 
 Open:
 
-1. Decide and wire the R producer on `main` + UT. Option A, Tracker `CoordinateTransformer` ([design](../../design/probabilistic-tracking-association.md) §5.3): σ_px = max(min_pixel_sigma, α · bbox height in px · f(confidence)), Σ_xy = J Σ_pixel Jᵀ with J the 2×2 Jacobian of the pixel-to-ground projection, optionally scaled by the incidence angle; α calibrated offline (maximise AssA with LocA at least the baseline); settings under `measurement_uncertainty.*`. Option B, the Controller observation pipeline (7×7 frustum Σ, as on `feat/full-v2-tracking-pipeline-R-aware`).
+1. Decide and wire the R producer on `release-2026.3.0` + UT. Option A, Tracker `CoordinateTransformer` ([design](../../design/probabilistic-tracking-association.md) §5.3): σ_px = max(min_pixel_sigma, α · bbox height in px · f(confidence)), Σ_xy = J Σ_pixel Jᵀ with J the 2×2 Jacobian of the pixel-to-ground projection, optionally scaled by the incidence angle; α calibrated offline (maximise AssA with LocA at least the baseline); settings under `measurement_uncertainty.*`. Option B, the Controller observation pipeline (7×7 frustum Σ, as on `feat/full-v2-tracking-pipeline-R-aware`).
 2. Decide the switch: the design adds an opt-in `position_mahalanobis_combined` (S = S_pred + R_meas, Phase 1 behaviour for detections without R) and flips the default in Phase 3 after evaluation (§5.3, §8); this branch uses R whenever a detection carries it. Update design §5.3, §5.4 (`correct(measurement, R_optional)`), §8 and the ADR-0019 Phase 2 / 3 status (both still "proposed").
 3. Apply PR 5's z gating (PR 5 open item 1: measured z on both sides, χ² df per pair) to the per-pair R gate (z review Z1, Z2).
 
@@ -248,7 +248,7 @@ Open:
 
 #### PR 8: Dataset and testing
 
-- Base `feature/prob-tracking-extracted-3d`: final accuracy and performance evaluation, then merge to `main`.
+- Base `feature/prob-tracking-extracted-3d`: final accuracy and performance evaluation, then merge to `release-2026.3.0`.
 - Re-measure the [pinned test bounds](#pinned-test-bounds) after each tuning change and tighten them.
 - Expose the filter settings and the birth-clustering radius in both services (from PR 4 open item 7), before the tuning items so their sweeps change configs only; global and read at startup, as the design doc's `filter` block (§5.5) next to `association`: Controller `tracker-config*.json`, Tracker `tracking.filter` and `tracking.association` with schema and env overrides (`TRACKER_FILTER_*`, `TRACKER_ASSOCIATION_BIRTH_CLUSTER_RADIUS_M`). Neither service, nor `main`, reads the filter settings from a config today.
   - `filter.process_noise` (q, `kProductionProcessNoise` 1e-4): scales all process noise: velocity density q·1000·(1 + speed) along the track and 1 % of q·1000 across, the same for CA acceleration, CTRV turn-rate density q·1000, yaw q·0.01; no position or size noise. One value moves all of them; the tuning may split it ([tuning guide: separate noise roles](prob-tracking-imm-tuning.md#separate-noise-roles)).
@@ -304,4 +304,4 @@ Calibrated at `8f1c0d9ef` (Release, fixed seed); C-7 re-calibrated after F-1 (`8
 
 #### Parallel 1: Dataset with diverse motion
 
-- Adopt a Tracker Evaluation dataset with more diverse motion (cars), merged into `main` for the final evaluation.
+- Adopt a Tracker Evaluation dataset with more diverse motion (cars), merged into `release-2026.3.0` for the final evaluation.
