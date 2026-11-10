@@ -66,7 +66,7 @@ None.
 
 Phase D: follow-ups, out of scope.
 
-1. [D1](#c1-follow-ups): server TLS (the server is plaintext), end-to-end accuracy evaluation with a real server, and planar z/vz noise if it matters to consumers.
+1. [D1](#c1-follow-ups): server TLS (the server is plaintext), end-to-end accuracy evaluation with a real server, and planar z/vz noise if it matters to consumers, and one z reference in legacy mode.
 
 ## Details
 
@@ -464,3 +464,4 @@ Remote service:
 - Server TLS: the server serves plaintext only; decide a TLS rollout or document `*_INSECURE=true` for the experimental phase.
 - End-to-end evaluation in experimental mode with a real server: Tracker Evaluation black-box runs, base vs experimental, for HOTA, IDF1, DIST_T and z/vz statistics.
 - If planar z/vz noise in experimental mode bothers consumers: options are a per-category constant height for planar inputs, or smoothing; each needs a new decision.
+- One z reference in legacy mode: option U applies only with the observation processor, so in legacy mode a track fed by a pixel camera (ground point) and a 3D sensor (box centre) still fuses a midpoint height and gets spurious `vz` when sensors alternate. Association no longer splits on it: #2109 gates z only when the track and the detection both have `zMeasured` (`dec3b387f`). Options and status: [post-review plan, follow-up work](prob-tracking-post-review-plan.md#follow-up-work).
