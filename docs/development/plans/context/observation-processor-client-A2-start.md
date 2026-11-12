@@ -6,6 +6,11 @@ It is the context for a new session that starts at task A2. The recorders, harne
 **local-only artifacts that are never committed**, and the paths below are specific to this machine. Task A1 of the plan is done;
 A8 and B5 reuse what is described here.
 
+> **Update:** the baselines described below (base `b4c1e2e9d`, 19,689 and 3,101 lines) were replaced after #2148 moved to `7ab5d765c`.
+> The new ones are 19,439 lines (Controller, 10,248 published objects) and 3,101 lines (Tracker), recorded in the same way; the old ones are kept in the harness
+> folder under `b4c1e2e9d/`. `check_legacy.sh` defaults to the `scenescape-prob-tracking-client` checkout. See
+> [E1 in the plan](../prob-tracking-observation-processor-client-plan.md#e1-merge-of-the-updated-base). Paths and commands below are otherwise unchanged.
+
 ## 1. What the baselines are for
 
 - The plan feeds robot_vision centre-of-mass positions and publishes the footprint base **only in experimental mode**.

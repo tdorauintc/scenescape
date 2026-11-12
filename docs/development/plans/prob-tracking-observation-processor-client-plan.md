@@ -12,6 +12,7 @@ SPDX-License-Identifier: Apache-2.0
 - Observation processor service (server): `origin/ITEP-98099_observation_processor_service` @ `d73820192`, not on `main` yet.
 - Scope: fix review issue M1 (z reference vs measurement noise R), then rename "projection service" to "observation processor service" in all client-side names, and move the contract to `observation_processor/proto/observation_processor.proto`.
 - Status: review, decisions, the earlier fixes, the plan approval, [A1](#a1-push-and-record-the-legacy-baseline) and A2–A9 and B1–B5 (pushed, PR head `8d97ccafd`; PR title and description updated) are done; Phase C (C1) is decided: no change in #2149, a robot_vision follow-up instead.
+- Base update: #2148 moved from `b4c1e2e9d` to `7ab5d765c` (merged probabilistic tracking stack). The merge into the PR branch is committed locally as `db078b140` (parents `8d97ccafd` and `7ab5d765c`), pushed to `origin` (PR head); see [E1](#e1-merge-of-the-updated-base).
 
 ### Context
 
@@ -57,6 +58,7 @@ Paths in backticks are relative to the PR branch checkout. Linked files are in t
 15. [A9](#a9-copilot-threads-2-and-5): done; the user replied on threads 2 and 5.
 16. [B5](#b5-verification-commit-and-pr-update): verified on `8d97ccafd`: Tracker unit 623/623, `lint-cpp`, `lint-python`, Python suites 562, complexity, indent, prettier on every changed doc and config file, both images built from HEAD (Controller stubs import with `-W error`), Tracker service suite 16/16 (4:51), legacy differential bit-identical for both services with the recorders compiled unchanged. Commits were made per step instead of one rename commit. PR title and description updated by the user.
 17. [C1] 2D vs 3D birth clustering in robot_vision (Phase C). Decision: no change in #2149; the robot_vision fix is a follow-up in the [post-review plan](prob-tracking-post-review-plan.md#follow-up-work). A birth cluster keeps the `zMeasured` of its first detection, and its fused z averages every member, including pixel boxes without measured z. Probe (production settings; a pixel-box camera and two 3D sensors seeing two floors at the same XY; all 6 camera orders): 3 orders merge the floors at birth and 1 attaches the pixel box to the wrong floor, in legacy mode and for #2149 local-fallback inputs alike; the track splits after 1-2 frames. Remote measurements carry measured z, so they are unaffected (0 of 6).
+18. [E1](#e1-merge-of-the-updated-base): merge of #2148 `7ab5d765c` into the PR branch. 12 conflicted files resolved, depth boxes (`distance`) kept local, legacy baselines re-recorded on the new base. Tracker unit 633/633, `tests/sscape_tests` 3748 passed, complexity, `lint-cpp`, prettier pass; legacy output of both services bit-identical to the new baselines. The merge commit is `db078b140`, pushed (PR head).
 
 ## Tasks In progress
 
@@ -222,6 +224,7 @@ Constraints added by the user:
 #### A1. Push and record the legacy baseline
 
 - Pushed `fc3a0dc02`; `origin/tdorau/prob-tracking-stp-client-side` is at the PR head.
+- The baselines below were recorded on `b4c1e2e9d` and are superseded by the ones recorded on `7ab5d765c`; see [E1](#e1-merge-of-the-updated-base). The workflow is unchanged.
 - Baselines recorded on the PR base `b4c1e2e9d` in the local worktree `/tmp/m1-base`, by two recorders that are local only and never committed (see [the context document](context/observation-processor-client-A2-start.md)):
   - Controller: real `IntelLabsTracking` with production robot_vision settings, through `trackCategory()` and `trackCategoryBatched()`; 1,500 frames, 7,691 robot_vision inputs (1,230 `zMeasured`), 10,498 published objects (7,509 with z exactly 0, the planar tracks). Inputs: planar pixel boxes with per-frame heights, AprilTag objects with hover z, 3D `translation` objects; observation processor unset.
   - Tracker: legacy `TrackingWorker` constructor with a fixed clock; 300 chunks × 2 scopes. Scope A is mixed (cam-1 planar boxes plus 3D detections from both cameras), scope B is planar only; every 50th chunk is empty. Track IDs are normalised by first appearance, and every value is recorded as hexfloat.
@@ -230,6 +233,30 @@ Constraints added by the user:
 - Re-check: `check_legacy.sh [tree]` in the local harness folder reruns both recorders and diffs them against the baselines (about 1 minute with an up-to-date Tracker build).
 - Note 1: pixel boxes must end below the horizon. The camera model intersects the box foot with the ground, so a box whose bottom is above the principal point (`y + height < cy`, 360 px for the 1280×720 test cameras) projects thousands of metres away. Objects built from such boxes then "move" at tens of m/s and never become reliable tracks. This made the first recordings useless, and it applies to every new test that feeds pixel boxes and needs realistic positions or motion. Use boxes such as `{x, 400, 55, 150}` (foot 190 px below the horizon, about 14 m from a camera 3 m high looking straight down). Stationary boxes are unaffected, so the existing service-test boxes `BBOX` and `GRID_BOXES` work but their local projections are far away.
 - Note 2: the Tracker recording takes planar boxes from `cam-1` only. Planar boxes of two differently posed cameras overlap in world coordinates, the associations flip between frames and no track becomes reliable. Multi-camera fusion in the Tracker recording is covered by 3D detections from both cameras. The multi-camera planar path is covered by the Controller recording only.
+
+#### E1. Merge of the updated base
+
+- Base: #2148 moved from `b4c1e2e9d` to `7ab5d765c`. Merge commit `db078b140` in the `scenescape-prob-tracking-client` checkout; it includes the depth-box change and the test fix below. It brings the probabilistic tracking stack: Mahalanobis association (ADR-0019), PTZ pose consumption, moving external objects and `track=false`, nested camera observations of external sources, depth boxes (`distance`), the tracker `_lifecycle_lock` and the `tracking_radius` gate with a birth cluster radius. `robot_vision` is not changed by the PR, so the merged tree uses the base's.
+- 12 files conflicted. Resolutions:
+  - `ilabs_tracking.py`: keep `_toTrackerReference()` and `_publishedPoint()`; take the base's `_association_kwargs()`, `_birth_cluster_radius()` and `_warn_ignored_tracking_radius()`. `update_tracks()` and `update_tracks_batched()` call `_toTrackerReference()` first, then `track(**self._association_kwargs(...))`. The old `_warn_deprecated_tracking_radius()` and the `association_match_params()` calls in the two update methods are gone.
+  - `tracking.py` and `time_chunking.py`: take the base's `_lifecycle_lock` / `_joined` structure and keep `tracker.observation_processor = getattr(self, 'observation_processor', None)` inside the lock, so a category tracker created while the scene is bound still inherits the processor.
+  - `metrics.py`, `controller-cmd`, `Agents.md`, `controller.md`: keep both sides (observation processor and PTZ).
+  - `tracker/config/tracker.json`: the base's `"association": {"method": "euclidean"}` (the base reverted the shipped configs to Euclidean) plus `experimental_observation_processor` and `observation_processor_mode`. `config_loader.hpp`: the base's ADR-0019 comment plus the two fields.
+  - `data_formats.md`, the adapter how-to and the adapter skill: the base's text (nested camera observations in camera-local metres, `track=false` rules) plus the centre-of-mass note. `data_formats.md` also says that `track=false` objects bypass the tracker and keep the reported `z`, so they are not converted.
+- Indirect changes:
+  - Depth boxes: a pixel box with `distance` has `zMeasured == false` and a bottom-centre location, so option U handles it (input `+h/2`, output `-h/2`). But the service would replace the sensor depth and size with the monocular estimate, and a failed call would keep the depth placement, so the result would depend on the service. `_pixel_box()` now skips objects with `metric_distance`, like measured-z objects, and `test_sends_only_pixel_boxes_of_scene_cameras` covers it. The Tracker service has no `distance` support, so nothing changes there.
+  - The test `test_category_trackers_inherit_scene_processor` builds the tracker with `__new__`; it now sets `_joined` and `_lifecycle_lock`, which `_createTrackers()` needs.
+  - Moving external objects (`track=false`) never reach robot_vision, so they get no z conversion in either mode.
+- Legacy baselines re-recorded on `7ab5d765c` (local worktree `/tmp/m1-base2`, removed afterwards; same recorders, each run twice and reproducible). The association change alters the legacy output, so the old baselines no longer apply:
+  - Controller: 1,500 frames, 7,691 robot_vision inputs (1,230 `zMeasured`), 10,248 published objects (was 10,498), 19,439 lines.
+  - Tracker: 300 chunks × 2 scopes, 3,101 lines.
+  - The old recordings are kept in the harness folder under `b4c1e2e9d/`. `check_legacy.sh` now defaults to the `scenescape-prob-tracking-client` checkout and its `tests/.venv` (the venv of the old `3d-R` checkout has an outdated `robot_vision`).
+- Verification on the resolved tree:
+  - Tracker unit 633/633 (the base added tests), `lint-cpp` and `lint-python` clean.
+  - `tests/sscape_tests`: 3748 passed, 15 skipped; the four PR suites alone: 984 passed.
+  - `make complexity-check SERVICE=controller` passes (490 functions, 25 allowances), `make prettier-check` passes, `checkIndent` passes on every changed Python file. `make indent-check` over the whole tree fails before the merge commit (it lists files that the merge deletes or renames) and passes on `db078b140`.
+  - `check_legacy.sh`: Controller and Tracker output bit-identical to the new baselines.
+  - Not run: Tracker service suite (needs images built from the merged tree).
 
 ### Tasks In progress
 
