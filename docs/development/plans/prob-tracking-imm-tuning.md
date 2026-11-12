@@ -160,7 +160,7 @@ What affects what:
 
 #### Separate noise roles
 
-- r should be a measured sensor property per deployment; velocity, acceleration and turn-rate noise are target dynamics, not on r's scale. Their meaning is documented in the robot_vision README "Kalman filter settings" and the Python docstrings (`4ac31c2f7`; prob review 4). Remaining: r per deployment once [the detection noise is measured](#measure-the-detection-noise), and exposing q, r and P0 in the service configs ([post-review plan PR 8](prob-tracking-post-review-plan.md#pr-8-dataset-and-testing)).
+- r should be a measured sensor property per deployment; velocity, acceleration and turn-rate noise are target dynamics, not on r's scale. Their meaning is documented in the robot_vision README "Kalman filter settings" and the Python docstrings (`4ac31c2f7`; prob review 4). Remaining: r per deployment once [the detection noise is measured](#measure-the-detection-noise), and exposing q, r and P0 in the service configs ([post-review plan PR 7](prob-tracking-post-review-plan.md#pr-7-per-detection-measurement-noise-r) open item 0).
 
 ### Tasks Not started
 
