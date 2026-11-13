@@ -46,7 +46,7 @@ Deprecated, for back-tracking only; the tasks below do not depend on them:
 
 ## Tasks In progress
 
-1. [PR 7](#pr-7-per-detection-measurement-noise-r): Per-detection measurement noise R (#2129); consumption and the filter settings in both services done, producer and opt-in switch open.
+1. [PR 7](#pr-7-per-detection-measurement-noise-r): Per-detection measurement noise R (#2129); consumption and the filter settings in both services done, producer open.
 
 ## Tasks Not started
 
@@ -258,10 +258,12 @@ Done:
   - Bit-exactness: robot_vision is unchanged. Golden replays recorded on the unchanged branch head with the same drivers (Controller 2244 lines, 3 association configs × Immediate / batched, `tracking_replay.py`; Tracker 420 lines, `euclidean` and `position_mahalanobis`, `TRACKER_REPLAY_GOLDEN`) are byte-identical after the change (`cmp`), hexfloat per track field; and the production values written out are identical to the defaults in both services. RapidJSON's default parse returns the constants' bits for `1e-4`, `0.0001`, `1E-4`, `0.2`, `1.0` and `2.0`, so no full-precision flag is needed (the loader test pins it); the env path (`std::stod`) and Python (`orjson`) are exact. Not run: the Tracker Evaluation black-box stack (needs the containers).
   - Results: Tracker unit 588/588 (569 before), `lint-cpp` clean, Python `scenescape` + `scene_pytest` + `robot_vision` 1037 passed and 1 failed, `test_updateScene_recovers_lla_transform_after_failed_hydration`, which fails without these changes too; harness tests 175/175. The `tests/.venv` robot_vision wheel was rebuilt from this branch (it predated PR 5).
 
+- Switch decided (open item 2): no `position_mahalanobis_combined` method. A detection that carries R is gated on `S_pred + R` per pair and updates the filter with R; whether the producer sets R (item 1) is the opt-in, and without R every path is Phase 1 and bit-identical. The design doc's separate method would only have switched association, while the update uses R either way, and would have added a method to both services' config, schema and the Controller normaliser. Docs updated: design §5.2 methods table, §5.3, §5.4, §5.5 example, §8; ADR-0019 phase note; `.github/plans/plan-probabilistic-tracking.md` tasks and exit criteria. No code change; nothing sets R yet, so production is unchanged.
+
 Open:
 
-1. Decide and wire the R producer on `release-2026.3.0` + UT. Option A, Tracker `CoordinateTransformer` ([design](../../design/probabilistic-tracking-association.md) §5.3): σ_px = max(min_pixel_sigma, α · bbox height in px · f(confidence)), Σ_xy = J Σ_pixel Jᵀ with J the 2×2 Jacobian of the pixel-to-ground projection, optionally scaled by the incidence angle; α calibrated offline (maximise AssA with LocA at least the baseline); settings under `measurement_uncertainty.*`. Option B, the Controller observation pipeline (7×7 frustum Σ, as on `feat/full-v2-tracking-pipeline-R-aware`).
-2. Decide the switch: the design adds an opt-in `position_mahalanobis_combined` (S = S_pred + R_meas, Phase 1 behaviour for detections without R) and flips the default in Phase 3 after evaluation (§5.3, §8); this branch uses R whenever a detection carries it. Update design §5.3, §5.4 (`correct(measurement, R_optional)`), §8 and the ADR-0019 Phase 2 / 3 status (both still "proposed").
+1. Decide and wire the R producer on `release-2026.3.0` + UT. Option A, Tracker `CoordinateTransformer` ([design](../../design/probabilistic-tracking-association.md) §5.3): σ_px = max(min_pixel_sigma, α · bbox height in px · f(confidence)), Σ_xy = J Σ_pixel Jᵀ with J the 2×2 Jacobian of the pixel-to-ground projection, optionally scaled by the incidence angle; α calibrated offline (maximise AssA with LocA at least the baseline); settings under `measurement_uncertainty.*`. Option B, the Controller observation pipeline (7×7 frustum Σ, as on `feat/full-v2-tracking-pipeline-R-aware`). Either way the producer sets R only when opted in (see Done: switch).
+<!-- Item 2 (the switch) moved to Done. -->
 3. Apply PR 5's z handling to the R paths (z review Z1, Z2). Done: the per-pair R gate and the update rows with R (see Done). Left, with the follow-ups "measured-only z fusion" and "expire `z_measured`": zero z information for unmeasured members in the R-weighted `fuseGeometry`.
 
 <!-- Open items 0 (moved here from PR 8) and 4 are done, see Done; the numbers stay stable. -->
@@ -270,7 +272,7 @@ Open:
 6. Scenario tests with R, as paired runs with and without R: one camera, two cameras at 90°, mixed with and without R, wrong `reportedScale`. In a trial with two ground-plane cameras, R lowered the position error on 19 of 20 seeds.
 7. Investigate the track restarts in that trial (since the merge of PR 5 they are more frequent for planar pairs, see Done: 10 of 20 seeds with one camera, 16 of 20 with two, 0 without R): at 0.005 rad with R and `position_mahalanobis`, tracks restarted through the whole run (about 2-3 per run); without R or with `euclidean`, extra tracks started only in the first 3 s. Check how the tests generate R and whether it is too small for the gate (0.06 m across the ray at 12 m).
 8. Optional: draw the per-detection gate `HPHt + R` in the visualization tools.
-9. Fused R drops the geometry–yaw cross-covariance (Copilot review of #2129): `fuseGeometry` fills the 6×6 geometry block and `applyOrientingYaw` the selected detection's yaw variance, so the cross terms stay 0, but Cov(geometry_f, yaw_s) = R_f · R_s,geom⁻¹ · R_s[geometry, yaw] (two detections with unit x variance and Cov(x, yaw) = 0.8 in the selected one: 0.4). A single detection keeps its cross terms. No effect until a producer sets correlated R (Option B's 7×7 frustum Σ; Option A gives Σ_xy only). Fix in the multi-detection path only + fusion UT with correlated geometry and yaw.
+9. Fused R drops the geometry–yaw cross-covariance ([Copilot review of #2129](https://github.com/open-edge-platform/scenescape/pull/2129#discussion_r4453855175); verified, deferred): `fuseGeometry` fills the 6×6 geometry block and `applyOrientingYaw` the selected detection's yaw variance, so the cross terms stay 0, but Cov(geometry_f, yaw_s) = R_f · R_s,geom⁻¹ · R_s[geometry, yaw] (two detections with unit x variance and Cov(x, yaw) = 0.8 in the selected one: 0.4). A single detection keeps its cross terms. No effect until a producer sets correlated R (Option B's 7×7 frustum Σ; Option A gives Σ_xy only). Fix in the multi-detection path only + fusion UT with correlated geometry and yaw.
 
 ### Tasks Not started
 
