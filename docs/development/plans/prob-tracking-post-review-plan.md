@@ -267,6 +267,7 @@ Done:
 - Controller config diagnostics formatted before logging ([review](https://github.com/open-edge-platform/scenescape/pull/2129#discussion_r4562552967), `ec2360fd7`): `scene_common.log` does not substitute `%s` / `%r`; the 9 calls in `ilabs_tracking.py` use f-strings.
 - Geometry–yaw covariance in the fused R (open item 9; [review](https://github.com/open-edge-platform/scenescape/pull/2129#discussion_r4453855175), `d363dd051`): `applyOrientingYaw` sets Cov(geometry_f, yaw_s) = R_f · I_s · R_s[geometry, yaw], I_s the information the fusion took from s (without z for a planar s); the review's example 0 → 0.4. No production effect: no orienting detection carries R.
 - Per-detection gate in the visualization (open item 8, `2b8c62d28`): `render_video.py --detection-gates` draws `HPHt + R` per detection with R in the zoom videos; off by default, χ²(p, 2) as the track's ellipse.
+- Track restarts with R (open item 7): not a defect. Probe (one or two ground-plane cameras at 0.005 rad, 20 seeds, 30 s): R is consistent with the gate (mean d²ₓᵧ 1.88, 0.67 % outside χ²(0.99, 2)); each miss starts an unreliable track that dies unpublished, 0 published with R (without R 8, Euclidean 6). p 0.999 / 0.9999 or R × 2 remove them; more frequent since PR 5 because planar pairs went from χ²(p, 3) to χ²(p, 2). Tuning: item 5.
 
 Open:
 
@@ -276,9 +277,9 @@ Open:
 
 <!-- Open items 0 (moved here from PR 8) and 4 are done, see Done; the numbers stay stable. -->
 
-5. Evaluate impact on Wildtrack and Unity against PR 5 once a producer sets R.
-6. Scenario tests with R, as paired runs with and without R: one camera, two cameras at 90°, mixed with and without R, wrong `reportedScale`. In a trial with two ground-plane cameras, R lowered the position error on 19 of 20 seeds.
-7. Investigate the track restarts in that trial (since the merge of PR 5 they are more frequent for planar pairs, see Done: 10 of 20 seeds with one camera, 16 of 20 with two, 0 without R): at 0.005 rad with R and `position_mahalanobis`, tracks restarted through the whole run (about 2-3 per run); without R or with `euclidean`, extra tracks started only in the first 3 s. Check how the tests generate R and whether it is too small for the gate (0.06 m across the ray at 12 m).
+5. Evaluate impact on Wildtrack and Unity against PR 5 once a producer sets R. Tune p (or a minimum R) for detections with R on that data: with calibrated R a 0.99 gate misses about 1 % of true detections (item 7).
+6. Scenario tests with R, as paired runs with and without R: one camera, two cameras at 90°, mixed with and without R, wrong `reportedScale`. In a trial with two ground-plane cameras, R lowered the position error on 19 of 20 seeds. Count published tracks: `TrackerRun::identityErrors` also counts unreliable births that die unpublished (item 7).
+<!-- Item 7 (track restarts with R) moved to Done. -->
 <!-- Item 8 (per-detection gate in the visualization) moved to Done. -->
 <!-- Item 9 (geometry–yaw cross-covariance) moved to Done. -->
 
