@@ -13,6 +13,7 @@ SPDX-License-Identifier: Apache-2.0
 - Scope: fix review issue M1 (z reference vs measurement noise R), then rename "projection service" to "observation processor service" in all client-side names, and move the contract to `observation_processor/proto/observation_processor.proto`.
 - Status: review, decisions, the earlier fixes, the plan approval, [A1](#a1-push-and-record-the-legacy-baseline) and A2–A9 and B1–B5 (pushed, PR head `8d97ccafd`; PR title and description updated) are done; Phase C (C1) is decided: no change in #2149, a robot_vision follow-up instead.
 - Base update: #2148 moved from `b4c1e2e9d` to `7ab5d765c` (merged probabilistic tracking stack). The merge into the PR branch is committed locally as `db078b140` (parents `8d97ccafd` and `7ab5d765c`), pushed to `origin` (PR head); see [E1](#e1-merge-of-the-updated-base).
+- Second base update: #2148 moved on to `c85677373` (Kalman filter settings, birth-clustering radius, non-planar Z with sticky `z_measured`, robot_vision field rename `zMeasured` → `z_measured`). The merge into the PR branch is staged locally, not committed; see [E2](#e2-merge-of-the-updated-base-again).
 
 ### Context
 
@@ -59,6 +60,7 @@ Paths in backticks are relative to the PR branch checkout. Linked files are in t
 16. [B5](#b5-verification-commit-and-pr-update): verified on `8d97ccafd`: Tracker unit 623/623, `lint-cpp`, `lint-python`, Python suites 562, complexity, indent, prettier on every changed doc and config file, both images built from HEAD (Controller stubs import with `-W error`), Tracker service suite 16/16 (4:51), legacy differential bit-identical for both services with the recorders compiled unchanged. Commits were made per step instead of one rename commit. PR title and description updated by the user.
 17. [C1] 2D vs 3D birth clustering in robot_vision (Phase C). Decision: no change in #2149; the robot_vision fix is a follow-up in the [post-review plan](prob-tracking-post-review-plan.md#follow-up-work). A birth cluster keeps the `zMeasured` of its first detection, and its fused z averages every member, including pixel boxes without measured z. Probe (production settings; a pixel-box camera and two 3D sensors seeing two floors at the same XY; all 6 camera orders): 3 orders merge the floors at birth and 1 attaches the pixel box to the wrong floor, in legacy mode and for #2149 local-fallback inputs alike; the track splits after 1-2 frames. Remote measurements carry measured z, so they are unaffected (0 of 6).
 18. [E1](#e1-merge-of-the-updated-base): merge of #2148 `7ab5d765c` into the PR branch. 12 conflicted files resolved, depth boxes (`distance`) kept local, legacy baselines re-recorded on the new base. Tracker unit 633/633, `tests/sscape_tests` 3748 passed, complexity, `lint-cpp`, prettier pass; legacy output of both services bit-identical to the new baselines. The merge commit is `db078b140`, pushed (PR head).
+19. [E2](#e2-merge-of-the-updated-base-again): merge of #2148 `c85677373` into the PR branch (staged, not committed). 7 conflicted files resolved, `zMeasured` renamed to `z_measured` in the client code, legacy baselines re-recorded on the new base. Tracker unit 653/653, `tests/sscape_tests` 3892 passed, Tracker service suite 16/16, complexity, `lint-cpp`, `lint-python` and indent pass; legacy output of both services bit-identical to the new baselines.
 
 ## Tasks In progress
 
@@ -257,6 +259,18 @@ Constraints added by the user:
   - `make complexity-check SERVICE=controller` passes (490 functions, 25 allowances), `make prettier-check` passes, `checkIndent` passes on every changed Python file. `make indent-check` over the whole tree fails before the merge commit (it lists files that the merge deletes or renames) and passes on `db078b140`.
   - `check_legacy.sh`: Controller and Tracker output bit-identical to the new baselines.
   - Not run: Tracker service suite (needs images built from the merged tree).
+
+#### E2. Merge of the updated base again
+
+- Base: #2148 moved from `7ab5d765c` to `c85677373`. New: Kalman filter settings and the birth-clustering radius in both services (`filter` block, `birth_cluster_radius_m`), non-planar Z / vz with sticky `z_measured`, `position_gate` helpers, the black-box configs back to `euclidean`, and the robot_vision field rename `zMeasured` → `z_measured` (C++ and Python).
+- 7 files conflicted, all resolved by keeping both sides: `scene.py` (imports), `config_loader.hpp` (fields and constants), `config_loader.cpp` (the observation processor env, then the base's birth-radius and filter env), `observation_processor.hpp` and `tracker/docs/implementation.md` (our names, `z_measured`), `how-to-configure-tracker.md` (Kalman Filter Settings, then Experimental Observation Processor; prettier-formatted), `tracking_worker_test.cpp` (the base's `BuildTrackerConfigTest` block plus our `CallbackProcessor`).
+- Indirect changes:
+  - `zMeasured` → `z_measured` everywhere the client touches robot_vision: `ilabs_tracking.py` (`_toTrackerReference`), `observation_processor.py`, `z_reference.hpp`, `remote_observation_processor.cpp`, their tests and the docs. These merged without a conflict and failed at runtime or compile time. The comment in `observation_processor.proto` stays: the file is byte-identical to the server's.
+  - Option U still holds with sticky `z_measured`: a track that has measured z (remote measurement or 3D detection) ignores z of later planar updates, so a fallback pixel box (raised by `h/2`) no longer pulls it. New test `test_planar_fallback_does_not_pull_a_measured_z_track`; one sentence added to the how-to and the Tracker implementation notes.
+  - The doc numbers for planar-only tracks (z noise, vz noise) are unchanged: the same simulation on the old and the new robot_vision gives identical values (planar-only tracks never set `z_measured`).
+  - The old robot_vision in `tests/.venv` had no `position_chi2`; it was rebuilt from the merged tree.
+- Legacy baselines re-recorded on `c85677373` (local worktree `/tmp/m1-base3`, removed afterwards; each run twice, reproducible): Controller 1,500 frames, 7,691 inputs, 10,171 published objects (was 10,248), 19,362 lines; Tracker 3,101 lines. `py_record.py` reads `z_measured`. The previous recordings are kept in the harness folder under `7ab5d765c/`.
+- Verification on the merged working tree (staged, not committed): Tracker unit 653/653 (1 skipped golden writer), `lint-cpp`, `lint-python`; `tests/sscape_tests` 3892 passed, 15 skipped; `make complexity-check SERVICE=controller` (494 functions), `make indent-check`; Tracker service suite 16/16 (image built from the merged tree, 3:36); `check_legacy.sh`: Controller and Tracker output bit-identical. `make prettier-check` fails only on `docs/design/probabilistic-tracking-association.md`, which the base already ships unformatted.
 
 ### Tasks In progress
 
