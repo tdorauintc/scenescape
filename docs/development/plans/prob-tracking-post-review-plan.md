@@ -277,7 +277,7 @@ Open:
 
 <!-- Open items 0 (moved here from PR 8) and 4 are done, see Done; the numbers stay stable. -->
 
-5. Evaluate impact on Wildtrack and Unity against PR 5 once a producer sets R. Tune p (or a minimum R) for detections with R on that data: with calibrated R a 0.99 gate misses about 1 % of true detections (item 7).
+<!-- Item 5 (evaluation with R) moved to PR 8. -->
 6. Scenario tests with R, as paired runs with and without R: one camera, two cameras at 90°, mixed with and without R, wrong `reportedScale`. In a trial with two ground-plane cameras, R lowered the position error on 19 of 20 seeds. Count published tracks: `TrackerRun::identityErrors` also counts unreliable births that die unpublished (item 7).
 <!-- Item 7 (track restarts with R) moved to Done. -->
 <!-- Item 8 (per-detection gate in the visualization) moved to Done. -->
@@ -289,6 +289,7 @@ Open:
 
 - Base `release-2026.3.0` (PR 5 merged as `eca1efe8a`): final accuracy and performance evaluation, then merge to `release-2026.3.0`.
 - The filter settings and the birth-clustering radius are exposed in both services by [PR 7](#pr-7-per-detection-measurement-noise-r) (done there), so the tuning sweeps below change configs only: the Tracker Evaluation configs carry the `filter` block and the black-box harness forwards it. Per-category q comes with the tuning items.
+- Evaluate R (from PR 7 open item 5): Wildtrack and Unity against PR 5 once #2149 sets R. Tune p (or a minimum R) for detections with R on that data: with calibrated R a 0.99 gate misses about 1 % of true detections (PR 7 item 7).
 - Evaluate PR 5 (from PR 5 open item 2; z review Z2): Wildtrack and Unity, `eca1efe8a` against its parent `2120cf451` (PR 4 and the release updates). Planar scenes must match: planar pairs are gated on χ²(p, 2) since `dec3b387f`, and planar-only tracks keep the floor lock since `17192142a`. The robot-vision benchmark is in [PR 5](#pr-5-non-planar-z-tracking) (+4 to +9 % time per frame).
 - Re-measure the [pinned test bounds](#pinned-test-bounds) after each tuning change and tighten them.
 - _[tuning required]_ Unobserved yaw variance of camera-only tracks keeps growing since F-2 (`6277c8cf5`): a standing car reaches 4 rad² after 1 min and 41 rad² after 10 min (straight driving 0.17, a circle 0.55 rad² after 10 min), driven by CTRV's turn-rate noise. Covariances stay positive definite and the yaw is not published for such tracks. Cap the yaw variance or lower the turn-rate noise of standing tracks.
