@@ -46,7 +46,7 @@ Deprecated, for back-tracking only; the tasks below do not depend on them:
 
 ## Tasks In progress
 
-1. [PR 7](#pr-7-per-detection-measurement-noise-r): Per-detection measurement noise R (#2129); consumption and the filter settings in both services done, producer open.
+1. [PR 7](#pr-7-per-detection-measurement-noise-r): Per-detection measurement noise R (#2129); consumption and the filter settings in both services done, the producer is #2149.
 
 ## Tasks Not started
 
@@ -259,10 +259,11 @@ Done:
   - Results: Tracker unit 588/588 (569 before), `lint-cpp` clean, Python `scenescape` + `scene_pytest` + `robot_vision` 1037 passed and 1 failed, `test_updateScene_recovers_lla_transform_after_failed_hydration`, which fails without these changes too; harness tests 175/175. The `tests/.venv` robot_vision wheel was rebuilt from this branch (it predated PR 5).
 
 - Switch decided (open item 2): no `position_mahalanobis_combined` method. A detection that carries R is gated on `S_pred + R` per pair and updates the filter with R; whether the producer sets R (item 1) is the opt-in, and without R every path is Phase 1 and bit-identical. The design doc's separate method would only have switched association, while the update uses R either way, and would have added a method to both services' config, schema and the Controller normaliser. Docs updated: design §5.2 methods table, §5.3, §5.4, §5.5 example, §8; ADR-0019 phase note; `.github/plans/plan-probabilistic-tracking.md` tasks and exit criteria. No code change; nothing sets R yet, so production is unchanged.
+- R producer decided (open item 1): none in this PR. The producer is the observation processor client of [#2149](https://github.com/open-edge-platform/scenescape/pull/2149) (draft, stacked on this branch via #2148; [plan](prob-tracking-observation-processor-client-plan.md)): the Tracker and the Controller send the pixel boxes to the observation processor service, which returns each position with a 7×7 R that is fed to robot_vision as `measurement_noise_covariance`; experimental, the server is not on `main` yet. Not built: Option A (Tracker `CoordinateTransformer` Σ_xy from the pixel noise; an R about 55× below the default 0.2 m² at 12 m would make the filter trust the detections far more, needing an α and q calibration) and Option B (the Controller observation pipeline lives on `feat/full-v2-tracking-pipeline`, not on `release-2026.3.0`). Until #2149 lands, nothing sets R and production is unchanged. Open items 5–7 and 9 stay as they are.
 
 Open:
 
-1. Decide and wire the R producer on `release-2026.3.0` + UT. Option A, Tracker `CoordinateTransformer` ([design](../../design/probabilistic-tracking-association.md) §5.3): σ_px = max(min_pixel_sigma, α · bbox height in px · f(confidence)), Σ_xy = J Σ_pixel Jᵀ with J the 2×2 Jacobian of the pixel-to-ground projection, optionally scaled by the incidence angle; α calibrated offline (maximise AssA with LocA at least the baseline); settings under `measurement_uncertainty.*`. Option B, the Controller observation pipeline (7×7 frustum Σ, as on `feat/full-v2-tracking-pipeline-R-aware`). Either way the producer sets R only when opted in (see Done: switch).
+<!-- Item 1 (the R producer) moved to Done. -->
 <!-- Item 2 (the switch) moved to Done. -->
 3. Apply PR 5's z handling to the R paths (z review Z1, Z2). Done: the per-pair R gate and the update rows with R (see Done). Left, with the follow-ups "measured-only z fusion" and "expire `z_measured`": zero z information for unmeasured members in the R-weighted `fuseGeometry`.
 
