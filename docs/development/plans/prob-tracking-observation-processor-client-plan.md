@@ -7,12 +7,15 @@ SPDX-License-Identifier: Apache-2.0
 
 ## High level details
 
-- Branch: `tdorau/prob-tracking-stp-client-side` (checkout `scenescape-prob-tracking-3d-R`) @ `c3ca618f1`: `fc3a0dc02` (pushed to `origin`) plus a temporary local commit that adds the observation processor proto (not pushed).
+- Branch: `tdorau/prob-tracking-stp-client-side` (checkout `scenescape-prob-tracking-3d-R`) : the observation processor service (#2163) is now merged through the base, so the temporary proto commit is replaced by the server's file (see [E3](#e3-merge-of-the-base-with-the-observation-processor-service)).
 - PR: #2149 "ITEP-98103: [SPP] Tracker, Controller: experimental remote projection client" (draft). Base: `tdorau/prob-tracking-stp-tracker-refactor` (#2148 @ `b4c1e2e9d`), which is stacked on `feature/prob-tracking-extracted-3d-R`.
-- Observation processor service (server): `origin/ITEP-98099_observation_processor_service` @ `d73820192`, not on `main` yet.
+- Observation processor service (server): #2163 (`5cc7f08a8`), merged into `release-2026.3.0` and reaching the PR through the base. Plaintext gRPC needs `OBSERVATION_PROCESSOR_INSECURE=1` (TLS is the default).
 - Scope: fix review issue M1 (z reference vs measurement noise R), then rename "projection service" to "observation processor service" in all client-side names, and move the contract to `observation_processor/proto/observation_processor.proto`.
 - Status: review, decisions, the earlier fixes, the plan approval, [A1](#a1-push-and-record-the-legacy-baseline) and A2–A9 and B1–B5 (pushed, PR head `8d97ccafd`; PR title and description updated) are done; Phase C (C1) is decided: no change in #2149, a robot_vision follow-up instead.
+- Scope extension: [Phase F](#f-track-location-uncertainty-in-the-output), track location uncertainty in the output (high-level plan item 12), is planned and decided; not started.
 - Base update: #2148 moved from `b4c1e2e9d` to `7ab5d765c` (merged probabilistic tracking stack). The merge into the PR branch is committed locally as `db078b140` (parents `8d97ccafd` and `7ab5d765c`), pushed to `origin` (PR head); see [E1](#e1-merge-of-the-updated-base).
+- Fourth base update: #2148 moved on to `394887132` (`--association`, Mahalanobis black-box configs, robot_vision validates per-detection R); see [E4](#e4-merge-of-the-base-with-mahalanobis-evaluation-and-r-validation).
+- Third base update: #2148 moved on to `a082ab1e5` (includes #2163 via `release-2026.3.0`); merge `47aa43934`, pushed; see [E3](#e3-merge-of-the-base-with-the-observation-processor-service).
 - Second base update: #2148 moved on to `c85677373` (Kalman filter settings, birth-clustering radius, non-planar Z with sticky `z_measured`, robot_vision field rename `zMeasured` → `z_measured`). The merge into the PR branch is staged locally, not committed; see [E2](#e2-merge-of-the-updated-base-again).
 
 ### Context
@@ -23,7 +26,8 @@ SPDX-License-Identifier: Apache-2.0
 - Experimental mode means the remote client is effectively in use (flag, host and port set, client created). Otherwise the service runs in legacy mode, which must stay bit-exact with the base branch. See [Gating](#gating-experimental-vs-legacy-mode).
 - Assumption: in experimental mode every 3D input (`translation` from cameras and external sources) is the object's centre of mass. This must be documented. See [Consequences](#consequences).
 - The contract is not changed semantically. The rename only switches to the server's file and names, and renames every Project/Projection name in the Tracker and Controller pipeline to Process/Processing. See [Rename](#rename-scope-and-names).
-- Not changed: robot_vision, Manager/UI, Analytics and other services. The UI already draws a track at its published `translation` lifted by `size.z / 2`, i.e. it expects the base.
+- Not changed: robot_vision, Manager/UI and other services. Analytics is unchanged by phases A–E; Phase F only passes the new `uncertainty` field through it. The UI already draws a track at its published `translation` lifted by `size.z / 2`, i.e. it expects the base.
+- Phase F: in experimental mode both services publish the covariance of the published track state (`translation`, `velocity`, filter `size`, filter yaw). See [Phase F](#f-track-location-uncertainty-in-the-output).
 - Test-first: every implementation task is preceded by a task that lands failing tests. See [Verification](#verification-commands-and-environment).
 
 ### Related documents
@@ -32,13 +36,14 @@ Paths in backticks are relative to the PR branch checkout. Linked files are in t
 
 - [Post-review plan](prob-tracking-post-review-plan.md): the `feature/prob-tracking` split this PR builds on (PR 6 added 3D detection input and `zMeasured`).
 - [IMM tuning guide](prob-tracking-imm-tuning.md): robot_vision noise and R background (default R = 0.2, hard-coded production noises).
-- `observation_processor/proto/observation_processor.proto`: target contract. Committed temporarily on the PR branch (`c3ca618f1`, byte-identical to the server branch, not used by the build yet).
+- `observation_processor/proto/observation_processor.proto`: the contract, now the server's file from the base (the temporary copy is gone).
 - [Context for starting A2](context/observation-processor-client-A2-start.md): the legacy baselines, the local-only harness and how to re-run the bit-exact check; for a new session.
 - `api/projection/v1/projection.proto`: current contract copy. Same fields, old names; removed by [B1](#b1-switch-to-the-observation-processor-contract).
 - `observation_processor/README.md` on the server branch: port 50052, plaintext gRPC, `OBSERVATION_PROCESSOR_*` env vars.
 - `tracker/docs/implementation.md`, `docs/design/tracker-service.md`, `docs/user-guide/microservices/controller/how-to-configure-tracker.md`: client behaviour docs to update.
 - `docs/user-guide/microservices/controller/data_formats.md`, `docs/user-guide/how-to-guides/publish-external-source-adapter.md`, `.github/skills/external-source-adapter/SKILL.md`: 3D `translation` docs that need the centre-of-mass assumption.
 - `controller/src/robot_vision/README.md`: per-detection R (`measurementNoiseCov`) in robot_vision.
+- `.github/plans/plan-probabilistic-tracking.md` (item 12, "Track location uncertainty in the output") and `docs/design/probabilistic-tracking-association.md` §5.7: the high-level task and design that [Phase F](#f-track-location-uncertainty-in-the-output) implements and updates.
 
 ## Tasks Done
 
@@ -61,6 +66,8 @@ Paths in backticks are relative to the PR branch checkout. Linked files are in t
 17. [C1] 2D vs 3D birth clustering in robot_vision (Phase C). Decision: no change in #2149; the robot_vision fix is a follow-up in the [post-review plan](prob-tracking-post-review-plan.md#follow-up-work). A birth cluster keeps the `zMeasured` of its first detection, and its fused z averages every member, including pixel boxes without measured z. Probe (production settings; a pixel-box camera and two 3D sensors seeing two floors at the same XY; all 6 camera orders): 3 orders merge the floors at birth and 1 attaches the pixel box to the wrong floor, in legacy mode and for #2149 local-fallback inputs alike; the track splits after 1-2 frames. Remote measurements carry measured z, so they are unaffected (0 of 6).
 18. [E1](#e1-merge-of-the-updated-base): merge of #2148 `7ab5d765c` into the PR branch. 12 conflicted files resolved, depth boxes (`distance`) kept local, legacy baselines re-recorded on the new base. Tracker unit 633/633, `tests/sscape_tests` 3748 passed, complexity, `lint-cpp`, prettier pass; legacy output of both services bit-identical to the new baselines. The merge commit is `db078b140`, pushed (PR head).
 19. [E2](#e2-merge-of-the-updated-base-again): merge of #2148 `c85677373` into the PR branch (staged, not committed). 7 conflicted files resolved, `zMeasured` renamed to `z_measured` in the client code, legacy baselines re-recorded on the new base. Tracker unit 653/653, `tests/sscape_tests` 3892 passed, Tracker service suite 16/16, complexity, `lint-cpp`, `lint-python` and indent pass; legacy output of both services bit-identical to the new baselines.
+20. [E3](#e3-merge-of-the-base-with-the-observation-processor-service): merge of #2148 `a082ab1e5` (with #2163) into the PR branch (staged, not committed). 4 conflicted files resolved, client tests renamed, harness adapted to the server's TLS default, legacy output unchanged.
+21. [E4](#e4-merge-of-the-base-with-mahalanobis-evaluation-and-r-validation): merge of #2148 `394887132` into the PR branch. Conflicts in 6 files resolved; the six new Mahalanobis black-box YAMLs got the observation processor block.
 
 ## Tasks In progress
 
@@ -68,9 +75,17 @@ None.
 
 ## Tasks Not started
 
+Phase F: track location uncertainty in the output, in scope of #2149.
+
+1. [F1](#f1-tests-red): failing tests in both services, and for the serialization and Analytics pass-through.
+2. [F2](#f2-tracker-implementation-green): Tracker `TrackUncertainty`, worker and publisher.
+3. [F3](#f3-controller-implementation-green): Controller helper, scene_common serialization, Analytics pass-through.
+4. [F4](#f4-documentation): data formats, schema, design §5.7, high-level plan item 12.
+5. [F5](#f5-verification-and-commits): full matrix, legacy differential, commits.
+
 Phase D: follow-ups, out of scope.
 
-1. [D1](#c1-follow-ups): server TLS (the server is plaintext), end-to-end accuracy evaluation with a real server, and planar z/vz noise if it matters to consumers, and one z reference in legacy mode.
+1. [D1](#c1-follow-ups): certificate provisioning for the TLS server, end-to-end accuracy evaluation with a real server, and planar z/vz noise if it matters to consumers, and one z reference in legacy mode.
 
 ## Details
 
@@ -164,7 +179,7 @@ Other cases:
 - Contract: use `observation_processor/proto/observation_processor.proto` from the server branch, at that location:
   - package `scenescape.observation_processor.v1`, service `ObservationProcessorService`, rpc `ProcessDetections`, messages `ProcessDetectionsRequest` / `ProcessDetectionsResponse`;
   - all other messages and fields are identical, including `include_diagnostics = 6`.
-- The server listens in plaintext (`add_insecure_port`) on port 50052 by default. The clients default to TLS, so deployments need `*_INSECURE=true` until [C1](#c1-follow-ups).
+- The server listens on port 50052 and uses TLS by default (`OBSERVATION_PROCESSOR_INSECURE=1` selects plaintext). The clients default to TLS too; the evaluation harness runs both sides plaintext.
 
 #### Verification commands and environment
 
@@ -271,6 +286,30 @@ Constraints added by the user:
   - The old robot_vision in `tests/.venv` had no `position_chi2`; it was rebuilt from the merged tree.
 - Legacy baselines re-recorded on `c85677373` (local worktree `/tmp/m1-base3`, removed afterwards; each run twice, reproducible): Controller 1,500 frames, 7,691 inputs, 10,171 published objects (was 10,248), 19,362 lines; Tracker 3,101 lines. `py_record.py` reads `z_measured`. The previous recordings are kept in the harness folder under `7ab5d765c/`.
 - Verification on the merged working tree (staged, not committed): Tracker unit 653/653 (1 skipped golden writer), `lint-cpp`, `lint-python`; `tests/sscape_tests` 3892 passed, 15 skipped; `make complexity-check SERVICE=controller` (494 functions), `make indent-check`; Tracker service suite 16/16 (image built from the merged tree, 3:36); `check_legacy.sh`: Controller and Tracker output bit-identical. `make prettier-check` fails only on `docs/design/probabilistic-tracking-association.md`, which the base already ships unformatted.
+
+#### E3. Merge of the base with the observation processor service
+
+- Base: #2148 moved from `c85677373` to `a082ab1e5`. New: #2163 (service, `spatial_performance_primitives`, server tests), `release-2026.3.0` fixes, and robot_vision changes (per-detection gate H Pᵀ + R, geometry-yaw R). No Tracker or Controller source changed.
+- 4 files conflicted:
+  - `observation_processor/proto/observation_processor.proto`: took the server's. Only comments differ (`axis_aware_sizing` default false, a per-request detection limit of 512, more FAILED_PRECONDITION cases). The clients set neither option; every error already falls back locally.
+  - `tests/sscape_tests/observation_processor/conftest.py`: took the server's and added `_alias_controller_stubs()`. The Controller's generated `scenescape_api.observation_processor.v1` stubs and the server's committed stubs register the same protobuf symbols, so loading both in one process fails with `duplicate symbol`. The tests now alias the `scenescape_api` imports to the server's stubs; the controller image still generates its own.
+  - `tools/tracker/evaluation/Agents.md` and `harnesses/tests/test_black_box_harness.py`: kept both sides (observation processor harness and the base's same-timestamp stagger and per-category dropped-frame check).
+- Indirect changes:
+  - Client tests renamed to `test_observation_processor_client.py` and documented as Controller-only; the folder now also holds the server tests.
+  - Harness: the service container gets `OBSERVATION_PROCESSOR_INSECURE=1` (the server defaults to TLS and would look for certificates); the test asserts it.
+  - `how-to-configure-tracker.md`: usable mesh wording, `OBSERVATION_PROCESSOR_INSECURE=1` for the service, and the 512-detection limit (such a frame falls back and counts as a failed call).
+  - This plan: the plaintext-server statements corrected.
+- Verification on the merged working tree (staged): `make setup-pytest` (robot_vision rebuilt); `make run_sscape_unit_suite` 4253 passed, 24 skipped (server and client tests in one process); harness tests 239 passed; Tracker unit 653/653; complexity (494 functions), prettier pass; `checkIndent` passes on the changed Python files (the whole-tree `make indent-check` lists the pre-rename path until the merge is committed). Legacy baselines re-recorded on `a082ab1e5` (`/tmp/m1-base4`, removed; each run twice): byte-identical to the `c85677373` recordings, so the robot_vision changes do not alter legacy output; `check_legacy.sh` on the merged tree is bit-identical for both services.
+- Not run: Tracker service suite (the proto changed only in comments and no Tracker source changed). Needs `grpcio-health-checking==1.71.2` in `tests/.venv` for the server tests (in `tests/requirements.txt`).
+
+#### E4. Merge of the base with Mahalanobis evaluation and R validation
+
+- Base: #2148 moved from `305f06fea` to `394887132`. New: `--association euclidean|mahalanobis|both` with six `*_mahalanobis.yaml` configs, `birth_cluster_radius_m` invalid values fall back to 2 m, and robot_vision rejects invalid per-detection R in `track()` and the Python setter (finite, symmetrized, positive definite). The behaviour reverts in `85e081898` left the validation in.
+- Conflicts (6 files) resolved by keeping both sides: `ilabs_tracking.py` (the base's `normalize_association_config`, our `_toTrackerReference`/`_publishedPoint`), `how-to-configure-tracker.md`, `Agents.md`, evaluation `README.md`, `run_black_box_evaluation.py` and its tests (`--association` next to `--observation-processor`).
+- Indirect changes:
+  - The six new Mahalanobis YAMLs had no `harness.config.observation_processor` block, so `--observation-processor` with `--association mahalanobis|both` raised `ValueError`. The block (disabled) was added to all six. The tests now check both association sets: disabled by default and enabling works for every shipped config. README wording updated.
+  - robot_vision R validation needs no client change: the Tracker (`isPositiveDefinite` after symmetrizing) and the Controller (setter) already apply the same contract before assigning R.
+- Verification: `make setup-pytest` (robot_vision rebuilt); `make run_sscape_unit_suite` 4254 passed, 24 skipped; evaluation and harness tests 336 passed, 1 xfailed; Tracker unit 653/653; prettier and indent checks pass; `check_legacy.sh`: Controller and Tracker legacy output bit-identical to the `c85677373` baselines (the robot_vision changes do not alter legacy output). Not run: Tracker service suite (the base bumped `paho-mqtt-cpp` to 1.6.0 and changed the CI workflow; no Tracker source changed).
 
 ### Tasks In progress
 
@@ -502,7 +541,106 @@ Remote service:
 
 #### C1. Follow-ups
 
-- Server TLS: the server serves plaintext only; decide a TLS rollout or document `*_INSECURE=true` for the experimental phase.
+- Server TLS: done upstream (#2163 serves TLS by default). Remaining: certificate provisioning for the Tracker and Controller deployments.
 - End-to-end evaluation in experimental mode with a real server: Tracker Evaluation black-box runs, base vs experimental, for HOTA, IDF1, DIST_T and z/vz statistics.
 - If planar z/vz noise in experimental mode bothers consumers: options are a per-category constant height for planar inputs, or smoothing; each needs a new decision.
 - One z reference in legacy mode: option U applies only with the observation processor, so in legacy mode a track fed by a pixel camera (ground point) and a 3D sensor (box centre) still fuses a midpoint height and gets spurious `vz` when sensors alternate. Association no longer splits on it: #2109 gates z only when the track and the detection both have `zMeasured` (`dec3b387f`). Options and status: [post-review plan, follow-up work](prob-tracking-post-review-plan.md#follow-up-work).
+
+#### F. Track location uncertainty in the output
+
+High-level plan item 12 and design §5.7, which so far say "position only" and leave "always published?" open. Both services publish only `association_window` today.
+
+Published track state, the same in both services: `translation`, `velocity`, `size`, `rotation`. Nothing else comes from the filter. `lat_long_alt`, `heading` and `prev_translation` are derived from it, and `confidence`, `metadata` and `association_window` are not state, so none of them gets an uncertainty.
+
+- Tracker: `TrackingWorker` builds `Track` from `rv_track`; `track_publisher.cpp` serializes it.
+- Controller: `IntelLabsTracking.from_tracked_object()` sets the point, velocity and rotation; `scene_common/detections_builder.py` `prepareObjDict()` serializes them.
+- Source: `TrackedObject::errorCovariance` (P, 13×13, IMM-combined, after the update or the coast prediction). Python exposes it as `error_covariance`. robot_vision is not changed.
+
+Decisions (user, 2026-11-17):
+
+| #   | Topic                   | Decision                                                                                                                                                                                                                                                                                                                  |
+| --- | ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | Scope vs design §5.7    | Update the design and the high-level plan to the scope here: position, velocity, size and yaw, published only in experimental mode.                                                                                                                                                                                       |
+| 2   | Field shape             | Per-object `uncertainty` object. Keys `translation`, `velocity`, `size` (row-major covariance blocks of P; m², m²/s², m²) and `yaw` (variance, rad²). Cross-block terms are not published. A block is symmetrized, and it is omitted if any value is non-finite.                                                          |
+| 3   | z without measured z    | `translation` and `velocity` are 3×3 for a track with `z_measured`, 2×2 (x, y) without. This is the design's z rule, extended to vz.                                                                                                                                                                                      |
+| 4   | Published z is the base | The block describes the published point z_pub = z − h/2 (J P Jᵀ): Var(z_pub) = P_zz − P_zh + P_hh/4, and Cov(x, z_pub) = P_xz − P_xh/2 (y alike). vz is published unchanged, so its block is unchanged.                                                                                                                   |
+| 5   | Controller `size`       | Unchanged behaviour: the Controller publishes the detection or object-class size, not the filter's (`MovingObject` `info['size']`, `tracking.py` class size). So it publishes no `size` block. The Tracker publishes the filter size and its block. Document the difference.                                              |
+| 6   | Yaw                     | `yaw` is published only when the published `rotation` is the filter yaw. It is omitted for the velocity-heading fallback (also when the filter yaw disagrees with the heading) and for the identity quaternion.                                                                                                           |
+| 7   | Analytics               | Pass `uncertainty` through like `association_window`: `scene_common/ingestion.py`, `analytics/src/analytics/analytics_models.py`, `analytics/src/analytics/event_serializer.py`.                                                                                                                                          |
+| 8   | Gating                  | Reuse the experimental-mode switch of option U, with no new config or env var. Tracker: `z_reference_ == ZReference::CentreOfMass` (injected-processor workers only). Controller: `observation_processor is not None`. Legacy mode publishes no field and adds no code to its path, so the legacy output stays bit-exact. |
+| -   | Association method      | The field does not depend on `association.method`; P exists for `euclidean` too.                                                                                                                                                                                                                                          |
+| -   | Controller early-return | `from_tracked_object()` refreshes `association_window` on an object taken from `all_tracker_objects`; it refreshes `uncertainty` the same way.                                                                                                                                                                            |
+
+State indices (`StateIndex`): x 0, y 1, vx 2, vy 3, z 6, vz 7, length/width/height 8–10, yaw 11.
+
+#### F1. Tests (red)
+
+- Tracker unit:
+  - New `tracker/test/unit/track_uncertainty_test.cpp` (register it in `tracker/test/unit/CMakeLists.txt`) for a dense known P:
+    - blocks equal to P;
+    - 2×2 without `z_measured`, 3×3 with it;
+    - the base-z transform from decision 4 in `CentreOfMass` mode;
+    - `yaw` only when the filter yaw is published;
+    - no `size` block when not requested;
+    - a non-finite block is omitted.
+  - `tracking_worker_test.cpp`: the legacy constructor publishes no `uncertainty`. The injected-processor constructor publishes it, equal to `rv_track.errorCovariance` blocks. A rotation-from-velocity track has no `yaw`.
+  - `track_publisher_test.cpp`: `uncertainty` is serialized when present, absent otherwise.
+- Tracker service: no new environment (5-minute budget, see [A6](#a6-tracker-service-tests)).
+  - `test_observation_processor.py`: the experimental test asserts that `uncertainty` is present with the expected keys and shapes.
+  - A legacy-mode test asserts that it is absent.
+- Controller, in `tests/sscape_tests/observation_processor/`:
+  - experimental `from_tracked_object()`: blocks equal `np.array(error_covariance)` (base z per decision 4), with no `size` key; `yaw` only when the filter yaw is published;
+  - the early-return path is refreshed;
+  - legacy: no attribute.
+- scene_common and Analytics: `prepareObjDict()` emits the field; `ingestion.py` and `event_serializer.py` pass it through unchanged.
+- Expected red: the new symbols are missing and the fields are absent.
+
+#### F2. Tracker implementation (green)
+
+- New header-only `tracker/inc/track_uncertainty.hpp`, following the pattern of `association_window.hpp`:
+  - `TrackUncertainty { translation, velocity, size (optional), yaw (optional) }`;
+  - `buildTrackUncertainty(const rv::tracking::TrackedObject&, ZReference, bool filter_yaw_published)`.
+- `tracker/inc/tracking_types.hpp`: `std::optional<TrackUncertainty> uncertainty` on `Track`.
+- `tracker/src/tracking_worker.cpp`:
+  - `select_track_rotation()` also reports whether it returned the filter yaw.
+  - In track building, set `track.uncertainty` only when `z_reference_ == ZReference::CentreOfMass`.
+- `tracker/src/track_publisher.cpp`: emit `uncertainty` after `association_window`.
+- Acceptance: `make -C tracker test-unit` green, `make -C tracker lint-cpp` clean.
+
+#### F3. Controller implementation (green)
+
+- `controller/src/controller/ilabs_tracking.py`: helper `_publishedUncertainty(tracked_object, filter_yaw_published)`.
+  - It returns `None` without an observation processor, and it never adds a `size` block.
+  - Call it from both `from_tracked_object()` paths. The helper keeps `from_tracked_object()` at its complexity baseline.
+  - The yaw flag is `use_kalman_yaw and not _kalman_yaw_disagrees_with_velocity(...)`.
+- `scene_common/src/scene_common/association.py` and `detections_builder.py`: `add_uncertainty()` copies the field, like `add_association_window()`.
+- Analytics pass-through (decision 7): `ingestion.py` reads `obj_data.get('uncertainty')`; `analytics_models.py` and `event_serializer.py` carry and emit it.
+- Acceptance: the Python suites from [Verification](#verification-commands-and-environment), `make complexity-check SERVICE=controller` and `make indent-check` pass.
+
+#### F4. Documentation
+
+- `docs/user-guide/microservices/controller/data_formats.md`: a row in "Common Output Track Fields" and a note covering:
+  - experimental mode only;
+  - keys and units;
+  - the 2×2 / 3×3 rule;
+  - z describes the published base;
+  - `yaw` only for the filter yaw;
+  - the Controller publishes no `size` block because its `size` is the detection's, not the filter's (decision 5).
+- `tracker/schema/scene-data.schema.json`: optional `uncertainty` property.
+- `docs/design/probabilistic-tracking-association.md`: §2 goal, §5.7 (quantity, dimensions, gating, the Controller size difference) and §10 (close the open question).
+- `.github/plans/plan-probabilistic-tracking.md`, item 12:
+  - status;
+  - task table (add scene_common and Analytics);
+  - exit criteria (experimental mode only; tests against P);
+  - rollout checklist.
+- `tracker/docs/implementation.md` and `how-to-configure-tracker.md` (experimental section): one paragraph each.
+- Acceptance: `make prettier-check` passes on the changed files.
+
+#### F5. Verification and commits
+
+- The full matrix from [A8](#a8-verification-and-commit): Tracker unit, `lint-cpp`, `lint-python`, the Tracker service suite (custom image), Python suites including Analytics, complexity, indent and prettier.
+- `check_legacy.sh` bit-identical for both services. The recorders are unchanged, and the legacy path publishes no field.
+- Commits in test-first order, each with the `Co-authored-by` trailer:
+  - "Tracker: publish track uncertainty with the observation processor"
+  - "Controller, Analytics: publish track uncertainty with the observation processor"
+  - "Docs: track location uncertainty in the output"
